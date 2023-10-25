@@ -104,6 +104,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar/GVNExpression.h"
 #include "llvm/Transforms/Utils/AssumeBundleBuilder.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/PredicateInfo.h"
 #include "llvm/Transforms/Utils/VNCoercion.h"
@@ -3517,11 +3518,9 @@ struct NewGVN::ValueDFS {
   int DFSOut = 0;
   int LocalNum = 0;
 
-  // Only one of Def and U will be set.
   // The bool in the Def tells us whether the Def is the stored value of a
   // store.
   PointerIntPair<Value *, 1, bool> Def;
-  Use *U = nullptr;
 
   bool operator<(const ValueDFS &Other) const {
     // It's not enough that any given field be less than - we have sets
@@ -3562,9 +3561,8 @@ struct NewGVN::ValueDFS {
     // but .val  and .u.
     // It does not matter what order we replace these operands in.
     // You will always end up with the same IR, and this is guaranteed.
-    return std::tie(DFSIn, DFSOut, LocalNum, Def, U) <
-           std::tie(Other.DFSIn, Other.DFSOut, Other.LocalNum, Other.Def,
-                    Other.U);
+    return std::tie(DFSIn, DFSOut, LocalNum, Def) <
+           std::tie(Other.DFSIn, Other.DFSOut, Other.LocalNum, Other.Def);
   }
 };
 
@@ -3619,36 +3617,19 @@ void NewGVN::convertClassToDFSOrdered(
     }
 
     unsigned int UseCount = 0;
-    // Now add the uses.
+    // // Now add the uses.
     for (auto &U : Def->uses()) {
       if (auto *I = dyn_cast<Instruction>(U.getUser())) {
         // Don't try to replace into dead uses
         if (InstructionsToErase.count(I))
           continue;
-        ValueDFS VDUse;
-        // Put the phi node uses in the incoming block.
-        BasicBlock *IBlock;
-        if (auto *P = dyn_cast<PHINode>(I)) {
-          IBlock = P->getIncomingBlock(U);
-          // Make phi node users appear last in the incoming block
-          // they are from.
-          VDUse.LocalNum = InstrDFS.size() + 1;
-        } else {
-          IBlock = getBlockForValue(I);
-          VDUse.LocalNum = InstrToDFSNum(I);
-        }
+        auto IBlock = getBlockForValue(I);
 
         // Skip uses in unreachable blocks, as we're going
         // to delete them.
         if (!ReachableBlocks.contains(IBlock))
           continue;
-
-        DomTreeNode *DomNode = DT->getNode(IBlock);
-        VDUse.DFSIn = DomNode->getDFSNumIn();
-        VDUse.DFSOut = DomNode->getDFSNumOut();
-        VDUse.U = &U;
         ++UseCount;
-        DFSOrderedSet.emplace_back(VDUse);
       }
     }
 
@@ -3911,11 +3892,11 @@ bool NewGVN::eliminateInstructions(Function &F) {
           int MemberDFSOut = VD.DFSOut;
           Value *Def = VD.Def.getPointer();
           bool FromStore = VD.Def.getInt();
-          Use *U = VD.U;
           // We ignore void things because we can't get a value from them.
-          if (Def && Def->getType()->isVoidTy())
+          if (Def->getType()->isVoidTy())
             continue;
           auto *DefInst = dyn_cast_or_null<Instruction>(Def);
+
           if (DefInst && AllTempInstructions.count(DefInst)) {
             auto *PN = cast<PHINode>(DefInst);
 
@@ -3941,14 +3922,13 @@ bool NewGVN::eliminateInstructions(Function &F) {
 
           LLVM_DEBUG(dbgs() << "Current DFS numbers are (" << MemberDFSIn << ","
                             << MemberDFSOut << ")\n");
-          // If the instruction we are trying to eliminate isn't dominated by
-          // the current leader then we
-          // know that there are no more instructions dominated by our current
-          // leader, this is because we are processing in DFS order.
-          // Therefore the instruction does not have a dominating leader
-          // and can't be replaced. However this instruction might be a
+          // If the instruction Def we are trying to eliminate isn't dominated
+          // by the current leader then we know that there are no more
+          // instructions dominated by our current leader, this is because we
+          // are processing in DFS order. Therefore Def does not have a
+          // dominating leader and can't be replaced. However Def might be a
           // dominating leader for some other instructions so we set it as our
-          // dominating leader.
+          // leader.
           if (!Leader || MemberDFSIn < LeaderDFSIn ||
               LeaderDFSOut < MemberDFSOut) {
             Leader = Def;
@@ -3956,91 +3936,61 @@ bool NewGVN::eliminateInstructions(Function &F) {
             LeaderDFSOut = MemberDFSOut;
           }
 
-          assert(Leader && "Should have a leader");
-
-          // Skip the Def's, we only want to eliminate on their uses.  But mark
-          // dominated defs as dead.
-          if (Def) {
-            // For anything in this case, what and how we value number
-            // guarantees that any side-effets that would have occurred (ie
-            // throwing, etc) can be proven to either still occur (because it's
-            // dominated by something that has the same side-effects), or never
-            // occur.  Otherwise, we would not have been able to prove it value
-            // equivalent to something else. For these things, we can just mark
-            // it all dead.  Note that this is different from the "ProbablyDead"
-            // set, which may not be dominated by anything, and thus, are only
-            // easy to prove dead if they are also side-effect free. Note that
-            // because stores are put in terms of the stored value, we skip
-            // stored values here. If the stored value is really dead, it will
-            // still be marked for deletion when we process it in its own class.
-            auto *DefI = dyn_cast<Instruction>(Def);
-            if (Leader != Def && DefI && !FromStore) {
-              // Even if the instruction is removed, we still need to update
-              // flags/metadata due to downstreams users of the leader.
-              if (!match(DefI, m_Intrinsic<Intrinsic::ssa_copy>()))
-                patchReplacementInstruction(DefI, Leader);
-
-              markInstructionForDeletion(DefI);
-            }
-            continue;
-          }
-          // At this point, we know it is a Use we are trying to possibly
-          // replace.
-
-          assert(isa<Instruction>(U->get()) &&
-                 "Current def should have been an instruction");
-          assert(isa<Instruction>(U->getUser()) &&
-                 "Current user should have been an instruction");
-
-          // If the thing we are replacing into is already marked to be dead,
-          // this use is dead.  Note that this is true regardless of whether
-          // we have anything dominating the use or not.  We do this here
-          // because we are already walking all the uses anyway.
-          Instruction *InstUse = cast<Instruction>(U->getUser());
-          if (InstructionsToErase.count(InstUse)) {
-            auto &UseCount = UseCounts[U->get()];
-            if (--UseCount == 0) {
-              ProbablyDead.insert(cast<Instruction>(U->get()));
-            }
-          }
-
           auto *II = dyn_cast<IntrinsicInst>(Leader);
           bool isSSACopy = II && II->getIntrinsicID() == Intrinsic::ssa_copy;
           if (isSSACopy)
             Leader = II->getOperand(0);
 
-          // Don't replace our existing users with ourselves.
-          if (U->get() == Leader)
-            continue;
-          LLVM_DEBUG(dbgs() << "Found replacement " << *Leader << " for "
-                            << *U->get() << " in " << *(U->getUser()) << "\n");
+          assert(Leader && "Should have a leader");
 
-          // If we replaced something in an instruction, handle the patching of
-          // metadata.  Skip this if we are replacing predicateinfo with its
-          // original operand, as we already know we can just drop it.
-          auto *ReplacedInst = cast<Instruction>(U->get());
-          auto *PI = PredInfo->getPredicateInfoFor(ReplacedInst);
-          if (!PI || Leader != PI->OriginalOp)
-            patchReplacementInstruction(ReplacedInst, Leader);
-          U->set(Leader);
-          // This is now a use of the dominating leader, which means if the
-          // dominating leader was dead, it's now live!
-          auto &LeaderUseCount = UseCounts[Leader];
-          // It's about to be alive again.
-          if (LeaderUseCount == 0 && isa<Instruction>(Leader))
-            ProbablyDead.erase(cast<Instruction>(Leader));
-          // For copy instructions, we use their operand as a leader,
-          // which means we remove a user of the copy and it may become dead.
-          if (isSSACopy) {
-            auto It = UseCounts.find(II);
-            if (It != UseCounts.end()) {
-              unsigned &IIUseCount = It->second;
-              if (--IIUseCount == 0)
-                ProbablyDead.insert(II);
+          // For anything in this case, what and how we value number
+          // guarantees that any side-effets that would have occurred (ie
+          // throwing, etc) can be proven to either still occur (because it's
+          // dominated by something that has the same side-effects), or never
+          // occur.  Otherwise, we would not have been able to prove it value
+          // equivalent to something else. For these things, we can just mark
+          // it all dead.  Note that this is different from the "ProbablyDead"
+          // set, which may not be dominated by anything, and thus, are only
+          // easy to prove dead if they are also side-effect free. Note that
+          // because stores are put in terms of the stored value, we skip
+          // stored values here. If the stored value is really dead, it will
+          // still be marked for deletion when we process it in its own class.
+          auto *DefI = dyn_cast<Instruction>(Def);
+          if (Leader != Def && DefI && !FromStore) {
+            // Even if the instruction is removed, we still need to update
+            // flags/metadata due to downstreams users of the leader.
+            auto *PI = PredInfo->getPredicateInfoFor(DefI);
+            if (!PI || Leader != PI->OriginalOp) {
+              patchReplacementInstruction(DefI, Leader);
             }
+
+            markInstructionForDeletion(DefI);
+            
+            auto It = UseCounts.find(DefI);
+            if (It == UseCounts.end() || !It->second)
+              continue;
+
+            DefI->replaceAllUsesWith(Leader);
+
+            // The uses of Def are now uses of the dominating leader, which
+            // means if the dominating leader was dead, it's now live!
+            auto &LeaderUseCount = UseCounts[Leader];
+            // It's about to be alive again.
+            if (LeaderUseCount == 0 && isa<Instruction>(Leader))
+              ProbablyDead.erase(cast<Instruction>(Leader));
+            // For copy instructions, we use their operand as a leader,
+            // which means we remove a user of the copy and it may become dead.
+            if (isSSACopy) {
+              auto It = UseCounts.find(II);
+              if (It != UseCounts.end()) {
+                unsigned &IIUseCount = It->second;
+                if (--IIUseCount == 0)
+                  ProbablyDead.insert(II);
+              }
+            }
+            LeaderUseCount += It->second;
+            AnythingReplaced = true;
           }
-          ++LeaderUseCount;
-          AnythingReplaced = true;
         }
       }
     }
