@@ -3495,6 +3495,7 @@ bool NewGVN::runGVN() {
     assert(ToErase->getParent() &&
            "BB containing ToErase deleted unexpectedly!");
     ToErase->eraseFromParent();
+    NumGVNInstrDeleted++;
   }
   Changed |= !InstructionsToErase.empty();
 
