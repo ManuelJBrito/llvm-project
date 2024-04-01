@@ -378,11 +378,11 @@ public:
         std::tie(Other->StoreCount, Other->RepLeader, Other->RepStoredValue,
                  Other->RepMemoryAccess))
       return false;
-    if (DefiningExpr != Other->DefiningExpr)
+                     if (DefiningExpr != Other->DefiningExpr)
       if (!DefiningExpr || !Other->DefiningExpr ||
           *DefiningExpr != *Other->DefiningExpr)
         return false;
-
+          
     if (Members.size() != Other->Members.size())
       return false;
 
@@ -808,6 +808,7 @@ private:
   Value *lookupOperandLeader(Value *) const;
   CongruenceClass *getClassForExpression(const Expression *E) const;
   void performCongruenceFinding(Instruction *, const Expression *);
+  void rollback(Instruction *, Value *, SmallPtrSetImpl<Value *> &);
   void moveValueToNewCongruenceClass(Instruction *, const Expression *,
                                      CongruenceClass *, CongruenceClass *);
   void moveMemoryToNewCongruenceClass(Instruction *, MemoryAccess *,
@@ -1186,7 +1187,7 @@ NewGVN::ExprResult NewGVN::createExpression(Instruction *I) const {
            "Wrong types on cmp instruction");
     assert((E->getOperand(0)->getType() == I->getOperand(0)->getType() &&
             E->getOperand(1)->getType() == I->getOperand(1)->getType()));
-    Value *V =
+        Value *V =
         simplifyCmpInst(Predicate, E->getOperand(0), E->getOperand(1), Q);
     if (auto Simplified = checkExprResults(E, I, V))
       return Simplified;
@@ -1888,7 +1889,7 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
     else if (CI->isFalseWhenEqual())
       return ExprResult::some(
           createConstantExpression(ConstantInt::getFalse(CI->getType())));
-  }
+      }
 
   // NOTE: Because we are comparing both operands here and below, and using
   // previous comparisons, we rely on fact that predicateinfo knows to mark
@@ -1953,7 +1954,7 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
 
           if (CmpInst::isImpliedFalseByMatchingCmp(BranchPredicate,
                                                    OurPredicate)) {
-            return ExprResult::some(
+                        return ExprResult::some(
                 createConstantExpression(ConstantInt::getFalse(CI->getType())),
                 PI);
           }
@@ -1961,7 +1962,7 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
           // Just handle the ne and eq cases, where if we have the same
           // operands, we may know something.
           if (BranchPredicate == OurPredicate) {
-            // Same predicate, same ops,we know it was false, so this is false.
+                        // Same predicate, same ops,we know it was false, so this is false.
             return ExprResult::some(
                 createConstantExpression(ConstantInt::getFalse(CI->getType())),
                 PI);
@@ -2020,7 +2021,7 @@ NewGVN::performSymbolicEvaluation(Instruction *I,
   case Instruction::ICmp:
   case Instruction::FCmp:
     return performSymbolicCmpEvaluation(I);
-    break;
+          break;
   case Instruction::FNeg:
   case Instruction::Add:
   case Instruction::FAdd:
@@ -2270,6 +2271,31 @@ void NewGVN::moveMemoryToNewCongruenceClass(Instruction *I,
   }
 }
 
+void NewGVN::rollback(Instruction *I, Value *replacement,
+                      SmallPtrSetImpl<Value *> &Visited) {
+  if (!Visited.insert(I).second)
+    return;
+
+  if (!replacement)
+    replacement = translateToGVNIR(I);
+
+  User::op_iterator OI, OE, OIdup;
+  for (User *U : I->users()) {
+    if (auto *UI = dyn_cast<Instruction>(U)) {
+      if (AllTempInstructions.count(UI))
+        continue;
+      Instruction *UIdup = VMap.lookup(UI);
+      for (OI = UI->op_begin(), OE = UI->op_end(), OIdup = UIdup->op_begin();
+           OI != OE; ++OI, ++OIdup) {
+        Value *op = *OI;
+        if (I == OI->get() && OIdup->get() != replacement)
+          *OIdup = (Value *)replacement;
+      }
+      rollback(UI, nullptr, Visited);
+    }
+  }
+}
+
 // Move a value, currently in OldClass, to be part of NewClass
 // Update OldClass and NewClass for the move (including changing leaders, etc).
 void NewGVN::moveValueToNewCongruenceClass(Instruction *I, const Expression *E,
@@ -2320,19 +2346,11 @@ void NewGVN::moveValueToNewCongruenceClass(Instruction *I, const Expression *E,
   if (InstMA)
     moveMemoryToNewCongruenceClass(I, InstMA, OldClass, NewClass);
   ValueToClass[I] = NewClass;
+
+  // Update the GVNIR 
+  SmallPtrSet<Value *, 2> Visited;
   Value *replacement = translateToGVNIR(lookupOperandLeader(I));
-  User::op_iterator OI, OE, OIdup;
-  for (User *U : I->users()) {
-    if (auto *UI = dyn_cast<Instruction>(U)) {
-      Instruction *UIdup = VMap.lookup(UI);
-      for (OI = UI->op_begin(), OE = UI->op_end(), OIdup = UIdup->op_begin();
-           OI != OE; ++OI, ++OIdup) {
-        Value *op = *OI;
-        if (op == I)
-          *OIdup = (Value *)replacement;
-      }
-    }
-  }
+  rollback(I, replacement, Visited);
 
   // See if we destroyed the class or need to swap leaders.
   if (OldClass->empty() && OldClass != TOPClass) {
@@ -2368,18 +2386,7 @@ void NewGVN::moveValueToNewCongruenceClass(Instruction *I, const Expression *E,
     }
     OldClass->setLeader(getNextValueLeader(OldClass));
     OldClass->resetNextLeader();
-    markValueLeaderChangeTouched(OldClass);
-    for (User *U : I->users()) {
-      if (auto *UI = dyn_cast<Instruction>(U)) {
-        Instruction *UIdup = VMap.lookup(UI);
-        for (OI = UI->op_begin(), OE = UI->op_end(), OIdup = UIdup->op_begin();
-             OI != OE; ++OI, ++OIdup) {
-          Value *op = *OI;
-          if (op == I)
-            *OIdup = (Value *)replacement;
-        }
-      }
-    }
+    markValueLeaderChangeTouched(OldClass); 
   }
 }
 
@@ -2957,12 +2964,10 @@ void NewGVN::createGVNIR(Function &F) {
     // Loop over all instructions, and copy them over.
     for (Instruction &I : BB) {
       Instruction *NewInst = I.clone();
-      if (auto *CI = dyn_cast<CallInst>(&I))
       if (I.hasName())
         NewInst->setName(I.getName() + NameSuffix);
 
       NewInst->insertBefore(*NewBB, NewBB->end());
-      NewInst->cloneDebugInfoFrom(&I);
 
       VMap.insert({&I, NewInst}); // Add instruction map to value.
       ReverseVMap.insert({NewInst, &I });
@@ -3433,7 +3438,7 @@ void NewGVN::verifyIterationSettled(Function &F) {
   std::map<const Value *, CongruenceClass> BeforeIteration;
 
   for (auto &KV : ValueToClass) {
-    if (auto *I = dyn_cast<Instruction>(KV.first))
+        if (auto *I = dyn_cast<Instruction>(KV.first))
       // Skip unused/dead instructions.
       if (InstrToDFSNum(I) == 0)
         continue;
@@ -3458,7 +3463,7 @@ void NewGVN::verifyIterationSettled(Function &F) {
     // Note that the classes can't change at this point, so we memoize the set
     // that are equal.
     if (!EqualClasses.count({BeforeCC, AfterCC})) {
-      assert(BeforeCC->isEquivalentTo(AfterCC) &&
+            assert(BeforeCC->isEquivalentTo(AfterCC) &&
              "Value number changed after main loop completed!");
       EqualClasses.insert({BeforeCC, AfterCC});
     }
@@ -3628,7 +3633,7 @@ bool NewGVN::runGVN() {
   createGVNIR(F);
   iterateTouchedInstructions();
   verifyMemoryCongruency();
-  verifyIterationSettled(F);
+    verifyIterationSettled(F);
   verifyStoreExpressions();
   destroyGVNIR(F);
 
@@ -4384,7 +4389,7 @@ PreservedAnalyses NewGVNPass::run(Function &F, AnalysisManager<Function> &AM) {
   auto &TLI = AM.getResult<TargetLibraryAnalysis>(F);
   auto &AA = AM.getResult<AAManager>(F);
   auto &MSSA = AM.getResult<MemorySSAAnalysis>(F).getMSSA();
-  bool Changed =
+    bool Changed =
       NewGVN(F, &DT, &AC, &TLI, &AA, &MSSA, F.getParent()->getDataLayout())
           .runGVN();
   if (!Changed)
