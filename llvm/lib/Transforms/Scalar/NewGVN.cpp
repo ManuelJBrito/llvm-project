@@ -1424,7 +1424,6 @@ const Expression *NewGVN::performSymbolicStoreEvaluation(Instruction *I) const {
   // If we are defined by ourselves, use the live on entry def.
   if (StoreRHS == StoreAccess)
     StoreRHS = MSSA->getLiveOnEntryDef();
-    
   if (SI->isSimple()) {
     // See if we are defined by a previous store expression, it already has a
     // value, and it's the same value as our current store. FIXME: Right now, we
@@ -2805,7 +2804,7 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
     if (!SamePHIBlock) {
       SamePHIBlock = getBlockForValue(OpPHI);
     } else if (SamePHIBlock != getBlockForValue(OpPHI)) {
-          LLVM_DEBUG(
+      LLVM_DEBUG(
           dbgs()
           << "PHIs for operands are not all in the same block, aborting\n");
       return nullptr;
@@ -2901,7 +2900,7 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
   sortPHIOps(PHIOps);
   auto *E = performSymbolicPHIEvaluation(PHIOps, I, PHIBlock);
   if (isa<ConstantExpression>(E) || isa<VariableExpression>(E)) {
-        LLVM_DEBUG(
+    LLVM_DEBUG(
         dbgs()
         << "Not creating real PHI of ops because it simplified to existing "
            "value or constant\n");
@@ -4185,7 +4184,7 @@ bool NewGVN::eliminateInstructions(Function &F) {
             // still be marked for deletion when we process it in its own class.
             auto *DefI = dyn_cast<Instruction>(Def);
             if (!EliminationStack.empty() && DefI && !FromStore) {
-                            Value *DominatingLeader = EliminationStack.back();
+              Value *DominatingLeader = EliminationStack.back();
               if (DominatingLeader != Def) {
                 // Even if the instruction is removed, we still need to update
                 // flags/metadata due to downstreams users of the leader.
