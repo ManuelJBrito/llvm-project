@@ -763,8 +763,9 @@ PreservedAnalyses GVNPass::run(Function &F, FunctionAnalysisManager &AM) {
   auto &LI = AM.getResult<LoopAnalysis>(F);
   auto *MSSA = AM.getCachedResult<MemorySSAAnalysis>(F);
   auto &ORE = AM.getResult<OptimizationRemarkEmitterAnalysis>(F);
-  bool Changed = runImpl(F, AC, DT, TLI, AA, MemDep, LI, &ORE,
-                         MSSA ? &MSSA->getMSSA() : nullptr);
+  bool Changed = false;
+  // runImpl(F, AC, DT, TLI, AA, MemDep, LI, &ORE,
+  //                        MSSA ? &MSSA->getMSSA() : nullptr);
   if (!Changed)
     return PreservedAnalyses::all();
   PreservedAnalyses PA;
