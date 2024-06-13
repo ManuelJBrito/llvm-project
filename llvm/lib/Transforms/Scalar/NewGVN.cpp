@@ -2686,6 +2686,10 @@ const Expression *NewGVN::performPRE(Instruction *I,
 
   if (!Visited.insert(I).second)
     return nullptr;
+
+  // Entry block has no predecessors.
+  if (I->getParent() == &F.getEntryBlock())
+    return nullptr;
   // For now, we require the instruction be cycle free because we don't
   // *always* create a phi of ops for instructions that could be done as phi
   // of ops, we only do it if we think it is useful.  If we did do it all the
@@ -2736,15 +2740,20 @@ const Expression *NewGVN::performPRE(Instruction *I,
       return nullptr;
   }
 
-  if (!OpPHI)
-    return nullptr;
-
   SmallVector<ValPair, 4> PHIOps;
   SmallPtrSet<Value *, 4> Deps;
-  auto *PHIBlock = getBlockForValue(OpPHI);
+  // If the instruction has a PHI operand then use that PHIs block as the
+  // starting point. Otherwise we won't be able to perform PHI-translation.
+  // This is correct because the PHI dominates I.
+  auto *PHIBlock = OpPHI ? getBlockForValue(OpPHI) : getBlockForValue(I);
+
+  // There is no point in performing this if PHIBlock has less than two
+  // predecessors. For #preds = 0 it produces a DeadExpression. For #preds = 1
+  // any leader we find already dominates I.
+  if (pred_size(PHIBlock) < 2)
+    return nullptr;
   RevisitOnReachabilityChange[PHIBlock].reset(InstrToDFSNum(I));
-  for (unsigned PredNum = 0; PredNum < OpPHI->getNumOperands(); ++PredNum) {
-    auto *PredBB = OpPHI->getIncomingBlock(PredNum);
+  for (BasicBlock *PredBB : predecessors(PHIBlock)) {
     Value *FoundVal = nullptr;
     SmallPtrSet<Value *, 4> CurrentDeps;
     // We could just skip unreachable edges entirely but it's tricky to do
@@ -2831,7 +2840,7 @@ const Expression *NewGVN::performPRE(Instruction *I,
   bool NewPHI = false;
   if (!ValuePHI) {
     ValuePHI =
-        PHINode::Create(I->getType(), OpPHI->getNumOperands(), "phiofops");
+        PHINode::Create(I->getType(), PHIOps.size(), "phiofops");
     addPhiOfOps(ValuePHI, PHIBlock, I);
     NewPHI = true;
     NumGVNPHIOfOpsCreated++;
@@ -3091,7 +3100,7 @@ void NewGVN::valueNumberInstruction(Instruction *I) {
 
       // Make a phi of ops if necessary
       if (Symbolized && !isa<ConstantExpression>(Symbolized) &&
-          !isa<VariableExpression>(Symbolized) && PHINodeUses.count(I)) {
+          !isa<VariableExpression>(Symbolized)) {
         auto *PHIE = performPRE(I, Visited);
         // If we created a phi of ops, use it.
         // If we couldn't create one, make sure we don't leave one lying around

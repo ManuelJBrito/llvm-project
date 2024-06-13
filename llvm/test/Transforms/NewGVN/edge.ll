@@ -67,6 +67,8 @@ bb2:
   ret i32 %foo
 }
 
+;; TODO : Phi of ops is useless here. On edge (bb1,bb2) %y is false. This  
+;; because of some ssa.copy and PRE shenanigans.
 declare void @g(i1)
 define void @f4(ptr %x)  {
 ; CHECK-LABEL: define void @f4(
@@ -77,7 +79,8 @@ define void @f4(ptr %x)  {
 ; CHECK:       bb1:
 ; CHECK-NEXT:    br label [[BB2]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    call void @g(i1 [[Y]])
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ [[Y]], [[BB0:%.*]] ], [ false, [[BB1]] ]
+; CHECK-NEXT:    call void @g(i1 [[PHIOFOPS]])
 ; CHECK-NEXT:    ret void
 ;
 bb0:
