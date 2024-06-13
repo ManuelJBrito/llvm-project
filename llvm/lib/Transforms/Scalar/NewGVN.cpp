@@ -764,7 +764,7 @@ private:
   }
 
   void initializeCongruenceClasses(Function &F);
-  const Expression *makePossiblePHIOfOps(Instruction *,
+  const Expression *performPRE(Instruction *,
                                          SmallPtrSetImpl<Value *> &);
   Value *findLeaderForInst(Instruction *ValueOp,
                            SmallPtrSetImpl<Value *> &Visited,
@@ -2697,9 +2697,8 @@ Value *NewGVN::findLeaderForInst(Instruction *TransInst,
 
 // When we see an instruction that is an op of phis, generate the equivalent phi
 // of ops form.
-const Expression *
-NewGVN::makePossiblePHIOfOps(Instruction *I,
-                             SmallPtrSetImpl<Value *> &Visited) {
+const Expression *NewGVN::performPRE(Instruction *I,
+                                     SmallPtrSetImpl<Value *> &Visited) {
   if (!okayForPHIOfOps(I))
     return nullptr;
 
@@ -3112,7 +3111,7 @@ void NewGVN::valueNumberInstruction(Instruction *I) {
       // Make a phi of ops if necessary
       if (Symbolized && !isa<ConstantExpression>(Symbolized) &&
           !isa<VariableExpression>(Symbolized) && PHINodeUses.count(I)) {
-        auto *PHIE = makePossiblePHIOfOps(I, Visited);
+        auto *PHIE = performPRE(I, Visited);
         // If we created a phi of ops, use it.
         // If we couldn't create one, make sure we don't leave one lying around
         if (PHIE) {
