@@ -154,6 +154,13 @@ static cl::opt<bool> EnableStoreRefinement("enable-store-refinement",
 static cl::opt<bool> EnablePhiOfOps("enable-phi-of-ops", cl::init(true),
                                     cl::Hidden);
 
+static cl::opt<bool> EnablePRE("newgvn-enable-pre", cl::init(true), cl::Hidden);
+static cl::opt<bool> EnableLoadPRE("newgvn-enable-load-pre", cl::init(true));
+static cl::opt<bool> EnableLoadInLoopPRE("newgvn-enable-load-in-loop-pre",
+                                         cl::init(true));
+static cl::opt<bool>
+    EnableSplitBackedgeInLoadPRE("newgvn-enable-split-backedge-in-load-pre",
+                                 cl::init(false));
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
 //===----------------------------------------------------------------------===//
