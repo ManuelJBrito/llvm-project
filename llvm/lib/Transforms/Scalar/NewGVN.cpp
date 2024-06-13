@@ -536,7 +536,6 @@ class NewGVN {
   // IR.
   SmallPtrSet<const Instruction *, 8> PHINodeUses;
 
-  DenseMap<const Value *, bool> OpSafeForPHIOfOps;
 
   // Map a temporary instruction we created to a parent block.
   DenseMap<const Value *, BasicBlock *> TempToBlock;
@@ -2607,21 +2606,14 @@ bool NewGVN::OpIsSafeForPHIOfOps(Value *V, const BasicBlock *PHIBlock,
     if (!isa<Instruction>(I))
       continue;
 
-    auto OISIt = OpSafeForPHIOfOps.find(I);
-    if (OISIt != OpSafeForPHIOfOps.end())
-      return OISIt->second;
 
     // Keep walking until we either dominate the phi block, or hit a phi, or run
     // out of things to check.
-    if (DT->properlyDominates(getBlockForValue(I), PHIBlock)) {
-      OpSafeForPHIOfOps.insert({I, true});
+    if (DT->properlyDominates(getBlockForValue(I), PHIBlock))
       continue;
-    }
     // PHI in the same block.
-    if (isa<PHINode>(I) && getBlockForValue(I) == PHIBlock) {
-      OpSafeForPHIOfOps.insert({I, false});
+    if (isa<PHINode>(I) && getBlockForValue(I) == PHIBlock)
       return false;
-    }
 
     auto *OrigI = cast<Instruction>(I);
     // When we hit an instruction that reads memory (load, call, etc), we must
@@ -2637,21 +2629,11 @@ bool NewGVN::OpIsSafeForPHIOfOps(Value *V, const BasicBlock *PHIBlock,
     for (auto *Op : OrigI->operand_values()) {
       if (!isa<Instruction>(Op))
         continue;
-      // Stop now if we find an unsafe operand.
-      auto OISIt = OpSafeForPHIOfOps.find(OrigI);
-      if (OISIt != OpSafeForPHIOfOps.end()) {
-        if (!OISIt->second) {
-          OpSafeForPHIOfOps.insert({I, false});
-          return false;
-        }
-        continue;
-      }
       if (!Visited.insert(Op).second)
         continue;
       Worklist.push_back(cast<Instruction>(Op));
     }
   }
-  OpSafeForPHIOfOps.insert({V, true});
   return true;
 }
 
@@ -2976,7 +2958,6 @@ void NewGVN::cleanupTables() {
   TempToBlock.clear();
   TempToMemory.clear();
   PHINodeUses.clear();
-  OpSafeForPHIOfOps.clear();
   ReachableBlocks.clear();
   ReachableEdges.clear();
 #ifndef NDEBUG
@@ -3302,7 +3283,6 @@ void NewGVN::verifyIterationSettled(Function &F) {
 
   TouchedInstructions.set();
   TouchedInstructions.reset(0);
-  OpSafeForPHIOfOps.clear();
   iterateTouchedInstructions();
   DenseSet<std::pair<const CongruenceClass *, const CongruenceClass *>>
       EqualClasses;
