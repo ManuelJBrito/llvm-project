@@ -161,6 +161,8 @@ static cl::opt<bool> EnableLoadInLoopPRE("newgvn-enable-load-in-loop-pre",
 static cl::opt<bool>
     EnableSplitBackedgeInLoadPRE("newgvn-enable-split-backedge-in-load-pre",
                                  cl::init(false));
+
+static cl::opt<unsigned> MaxPREInsertions("max-pre-insertions", cl::init(3));
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
 //===----------------------------------------------------------------------===//
@@ -515,6 +517,9 @@ class NewGVN {
 
   // RPOOrdering of basic blocks
   DenseMap<const DomTreeNode *, unsigned> RPOOrdering;
+
+  // Number of PRE insertions for each block
+  DenseMap<BasicBlock *, unsigned> NumPREInsertionsPerBlock;
 
   // Congruence class info.
 
@@ -2449,7 +2454,11 @@ void NewGVN::updateReachableEdge(BasicBlock *From, BasicBlock *To) {
       LLVM_DEBUG(dbgs() << "Block " << getBlockName(To)
                         << " marked reachable\n");
       const auto &InstRange = BlockInstRange.lookup(To);
-      TouchedInstructions.set(InstRange.first, InstRange.second);
+      unsigned NumInsertions = NumPREInsertionsPerBlock.lookup(To);
+      assert(NumInsertions <= MaxPREInsertions &&
+             "NumInsertions outside expected range");
+      TouchedInstructions.set(InstRange.first,
+                              InstRange.second + NumInsertions);
     } else {
       LLVM_DEBUG(dbgs() << "Block " << getBlockName(To)
                         << " was reachable, but new edge {"
@@ -2825,7 +2834,7 @@ const Expression *NewGVN::performPRE(Instruction *I,
       FoundVal = !SafeForPHIOfOps ? nullptr
                                   : findLeaderForInst(ValueOp, Visited,
                                                       MemAccess, I, PredBB);
-      ValueOp->removeFromParent();
+      ValueOp->eraseFromParent();
       if (!FoundVal) {
         // We failed to find a leader for the current ValueOp, but this might
         // change in case of the translated operands change.
@@ -3324,6 +3333,16 @@ void NewGVN::verifyIterationSettled(Function &F) {
 
   TouchedInstructions.set();
   TouchedInstructions.reset(0);
+  for (auto &KV : NumPREInsertionsPerBlock) {
+    auto *BB = KV.first;
+    auto NumInsertions = KV.second;
+    assert(NumInsertions <= MaxPREInsertions &&
+           "NumInsertions outside expected range");
+    const auto &InstRange = BlockInstRange.lookup(BB);
+    unsigned UnusedStart = InstRange.second + NumInsertions;
+    unsigned UnusedEnd = InstRange.second + MaxPREInsertions;  
+    TouchedInstructions.reset(UnusedStart, UnusedEnd);
+  }
   iterateTouchedInstructions();
   DenseSet<std::pair<const CongruenceClass *, const CongruenceClass *>>
       EqualClasses;
@@ -3490,7 +3509,11 @@ bool NewGVN::runGVN() {
     BasicBlock *B = DTN->getBlock();
     const auto &BlockRange = assignDFSNumbers(B, ICount);
     BlockInstRange.insert({B, BlockRange});
-    ICount += BlockRange.second - BlockRange.first;
+    ICount += BlockRange.second - BlockRange.first + MaxPREInsertions;
+    // Insert placeholders for the potential PRE insertions.
+    for (unsigned i = 0 ; i < MaxPREInsertions; i++)
+      DFSToInstr.emplace_back(nullptr);
+    NumPREInsertionsPerBlock.insert({B, 0});
   }
   initializeCongruenceClasses(F);
 
@@ -3662,7 +3685,7 @@ void NewGVN::convertClassToDFSOrdered(
           IBlock = P->getIncomingBlock(U);
           // Make phi node users appear last in the incoming block
           // they are from.
-          VDUse.LocalNum = InstrDFS.size() + 1;
+          VDUse.LocalNum = DFSToInstr.size() + 1;
         } else {
           IBlock = getBlockForValue(I);
           VDUse.LocalNum = InstrToDFSNum(I);
