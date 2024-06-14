@@ -2782,7 +2782,7 @@ const Expression *NewGVN::performPRE(Instruction *I,
         // Phi-translate the MemPhi if its present and it resides in PHIBlock. 
         if (MemPhiRHS && MemPhiRHS->getBlock() == PHIBlock)
           ValueMemOp = MemPhiRHS->getIncomingValueForBlock(PredBB);
-        TempToMemory.insert({ValueOp, ValueMemOp});
+        TempToMemory[ValueOp] = ValueMemOp;
       }
       bool SafeForPHIOfOps = true;
       VisitedOps.clear();
@@ -2827,9 +2827,6 @@ const Expression *NewGVN::performPRE(Instruction *I,
                         << getBlockName(PredBB)
                         << " because the block is unreachable\n");
       RevisitOnReachabilityChange[PHIBlock].set(InstrToDFSNum(I));
-      // Don't PRE optimistically.
-      if (isBackedge(PredBB, PHIBlock))
-        return nullptr;
       FoundVal = PoisonValue::get(I->getType());
     }
 
