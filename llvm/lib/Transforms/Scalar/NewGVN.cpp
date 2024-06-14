@@ -773,6 +773,7 @@ private:
                            SmallPtrSetImpl<const Value *> &);
   void addPhiOfOps(PHINode *Op, BasicBlock *BB, Instruction *ExistingValue);
   void removePhiOfOps(Instruction *I, PHINode *PHITemp);
+  bool fullyRedundant(SmallVector<ValPair, 4> AvailableValues, Instruction *I);
 
   // Value number an Instruction or MemoryPhi.
   void valueNumberMemoryPhi(MemoryPhi *);
@@ -2684,6 +2685,19 @@ Value *NewGVN::findLeaderForInst(Instruction *TransInst,
   return FoundVal;
 }
 
+bool NewGVN::fullyRedundant(SmallVector<ValPair, 4> AvailableValues,
+                            Instruction *I) {
+  for (auto AV : AvailableValues) {
+    if (auto *OpI = dyn_cast<Instruction>(AV.first)) {
+      if (!OpI->getParent()) {
+        // Not a real instruction.
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // When we see an instruction that is an op of phis, generate the equivalent phi
 // of ops form.
 const Expression *NewGVN::performPRE(Instruction *I,
@@ -2811,15 +2825,14 @@ const Expression *NewGVN::performPRE(Instruction *I,
       FoundVal = !SafeForPHIOfOps ? nullptr
                                   : findLeaderForInst(ValueOp, Visited,
                                                       MemAccess, I, PredBB);
-      ValueOp->eraseFromParent();
+      ValueOp->removeFromParent();
       if (!FoundVal) {
         // We failed to find a leader for the current ValueOp, but this might
         // change in case of the translated operands change.
         if (SafeForPHIOfOps)
           for (auto *Dep : CurrentDeps)
             addAdditionalUsers(Dep, I);
-
-        return nullptr;
+        FoundVal = ValueOp;
       }
       Deps.insert(CurrentDeps.begin(), CurrentDeps.end());
     } else {
@@ -2836,6 +2849,8 @@ const Expression *NewGVN::performPRE(Instruction *I,
   }
   for (auto *Dep : Deps)
     addAdditionalUsers(Dep, I);
+  if (!fullyRedundant(PHIOps, I))
+    return nullptr;
   sortPHIOps(PHIOps);
   auto *E = performSymbolicPHIEvaluation(PHIOps, I, PHIBlock);
   if (isa<ConstantExpression>(E) || isa<VariableExpression>(E)) {
