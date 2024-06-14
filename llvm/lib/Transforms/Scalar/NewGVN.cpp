@@ -557,7 +557,7 @@ class NewGVN {
       ExpressionToPhiOfOps;
 
   // Map from temporary operation to MemoryAccess.
-  DenseMap<const Instruction *, MemoryUseOrDef *> TempToMemory;
+  DenseMap<const Instruction *, MemoryAccess *> TempToMemory;
 
   // Set of all temporary instructions we created.
   // Note: This will include instructions that were just created during value
@@ -940,7 +940,7 @@ static std::string getBlockName(const BasicBlock *B) {
 // Get a MemoryAccess for an instruction, fake or real.
 MemoryUseOrDef *NewGVN::getMemoryAccess(const Instruction *I) const {
   auto *Result = MSSA->getMemoryAccess(I);
-  return Result ? Result : TempToMemory.lookup(I);
+  return Result;
 }
 
 // Get a MemoryPhi for a basic block. These are all real.
@@ -1533,10 +1533,15 @@ const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) const {
   // Load of undef is UB.
   if (isa<UndefValue>(LoadAddressLeader))
     return createConstantExpression(PoisonValue::get(LI->getType()));
-  MemoryAccess *OriginalAccess = getMemoryAccess(I);
-  MemoryAccess *DefiningAccess =
-      MSSAWalker->getClobberingMemoryAccess(OriginalAccess);
-
+  MemoryAccess *OriginalAccess = nullptr;
+  MemoryAccess *DefiningAccess = nullptr;
+  if (TempToMemory.count(I)) {
+    DefiningAccess = TempToMemory.lookup(I);
+  } else {
+    OriginalAccess = getMemoryAccess(I);
+    DefiningAccess = MSSAWalker->getClobberingMemoryAccess(OriginalAccess);
+  }
+  
   if (!MSSA->isLiveOnEntryDef(DefiningAccess)) {
     if (auto *MD = dyn_cast<MemoryDef>(DefiningAccess)) {
       Instruction *DefiningInst = MD->getMemoryInst();
@@ -1558,7 +1563,9 @@ const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) const {
                                         DefiningAccess);
   // If our MemoryLeader is not our defining access, add a use to the
   // MemoryLeader, so that we get reprocessed when it changes.
-  if (LE->getMemoryLeader() != DefiningAccess)
+  // If we don't have an OriginalAccess its because we are evaluating a
+  // temporary instruction, no need to add users in this case.
+  if (LE->getMemoryLeader() != DefiningAccess && OriginalAccess)
     addMemoryUsers(LE->getMemoryLeader(), OriginalAccess);
   return LE;
 }
@@ -2698,9 +2705,6 @@ const Expression *NewGVN::performPRE(Instruction *I,
     return nullptr;
 
   SmallPtrSet<const Value *, 8> ProcessedPHIs;
-  // TODO: We don't do phi translation on memory accesses because it's
-  // complicated. For a load, we'd need to be able to simulate a new memoryuse,
-  // which we don't have a good way of doing ATM.
   auto *MemAccess = getMemoryAccess(I);
   // If the memory operation is defined by a memory operation this block that
   // isn't a MemoryPhi, transforming the pointer backwards through a scalar phi
@@ -2709,6 +2713,13 @@ const Expression *NewGVN::performPRE(Instruction *I,
       MemAccess->getDefiningAccess()->getBlock() == I->getParent())
     return nullptr;
 
+  MemoryAccess *MemRHS = nullptr;
+  MemoryPhi *MemPhiRHS = nullptr;
+  if (MemAccess) {
+    MemRHS = MemAccess->getDefiningAccess();
+    if (isa<MemoryPhi>(MemRHS))
+      MemPhiRHS = dyn_cast<MemoryPhi>(MemRHS);
+  }
   // Convert op of phis to phi of ops
   SmallPtrSet<const Value *, 10> VisitedOps;
   SmallVector<Value *, 4> Ops(I->operand_values());
@@ -2745,7 +2756,9 @@ const Expression *NewGVN::performPRE(Instruction *I,
   // If the instruction has a PHI operand then use that PHIs block as the
   // starting point. Otherwise we won't be able to perform PHI-translation.
   // This is correct because the PHI dominates I.
-  auto *PHIBlock = OpPHI ? getBlockForValue(OpPHI) : getBlockForValue(I);
+  auto *PHIBlock =
+      OpPHI ? getBlockForValue(OpPHI)
+            : (MemPhiRHS ? MemPhiRHS->getBlock() : getBlockForValue(I));
 
   // There is no point in performing this if PHIBlock has less than two
   // predecessors. For #preds = 0 it produces a DeadExpression. For #preds = 1
@@ -2765,8 +2778,12 @@ const Expression *NewGVN::performPRE(Instruction *I,
       // Emit the temporal instruction in the predecessor basic block where the
       // corresponding value is defined.
       ValueOp->insertBefore(PredBB->getTerminator());
-      if (MemAccess)
-        TempToMemory.insert({ValueOp, MemAccess});
+      if (MemoryAccess *ValueMemOp = MemRHS) {
+        // Phi-translate the MemPhi if its present and it resides in PHIBlock. 
+        if (MemPhiRHS && MemPhiRHS->getBlock() == PHIBlock)
+          ValueMemOp = MemPhiRHS->getIncomingValueForBlock(PredBB);
+        TempToMemory.insert({ValueOp, ValueMemOp});
+      }
       bool SafeForPHIOfOps = true;
       VisitedOps.clear();
       for (auto &Op : ValueOp->operands()) {
@@ -2809,8 +2826,11 @@ const Expression *NewGVN::performPRE(Instruction *I,
       LLVM_DEBUG(dbgs() << "Skipping phi of ops operand for incoming block "
                         << getBlockName(PredBB)
                         << " because the block is unreachable\n");
-      FoundVal = PoisonValue::get(I->getType());
       RevisitOnReachabilityChange[PHIBlock].set(InstrToDFSNum(I));
+      // Don't PRE optimistically.
+      if (isBackedge(PredBB, PHIBlock))
+        return nullptr;
+      FoundVal = PoisonValue::get(I->getType());
     }
 
     PHIOps.push_back({FoundVal, PredBB});
