@@ -70,6 +70,7 @@
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AssumptionCache.h"
+#include "llvm/Analysis/CFG.h"
 #include "llvm/Analysis/CFGPrinter.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/GlobalsModRef.h"
@@ -521,6 +522,9 @@ class NewGVN {
   // Number of PRE insertions for each block
   DenseMap<BasicBlock *, unsigned> NumPREInsertionsPerBlock;
 
+  DenseMap<Instruction *, Instruction *> RealToPREInst;
+  DenseSet<Instruction *> PREInsts;
+
   // Congruence class info.
 
   // This class is called INITIAL in the paper. It is the class everything
@@ -647,6 +651,8 @@ class NewGVN {
   DenseMap<const BasicBlock *, std::pair<unsigned, unsigned>> BlockInstRange;
   mutable DenseMap<const IntrinsicInst *, const Value *> IntrinsicInstPred;
 
+  unsigned MaxLocalNum = 0;
+
 #ifndef NDEBUG
   // Debugging for how many times each block and instruction got processed.
   DenseMap<const Value *, unsigned> ProcessedCount;
@@ -659,7 +665,7 @@ class NewGVN {
   DenseMap<const Value *, unsigned> InstrDFS;
 
   // This contains the mapping DFS numbers to instructions.
-  SmallVector<Value *, 32> DFSToInstr;
+  DenseMap<unsigned, Value *> DFSToInstr;
 
   // Deletion info.
   SmallPtrSet<Instruction *, 8> InstructionsToErase;
@@ -778,7 +784,8 @@ private:
                            SmallPtrSetImpl<const Value *> &);
   void addPhiOfOps(PHINode *Op, BasicBlock *BB, Instruction *ExistingValue);
   void removePhiOfOps(Instruction *I, PHINode *PHITemp);
-  bool fullyRedundant(SmallVector<ValPair, 4> AvailableValues, Instruction *I);
+  bool fullyRedundant(SmallVector<ValPair, 4> AvailableValues, Instruction *I,
+                      BasicBlock *PHIBlock, BasicBlock *&MissingBlock);
 
   // Value number an Instruction or MemoryPhi.
   void valueNumberMemoryPhi(MemoryPhi *);
@@ -2694,17 +2701,93 @@ Value *NewGVN::findLeaderForInst(Instruction *TransInst,
   return FoundVal;
 }
 
+static bool okayForPRE(Instruction *I) {
+  if (!isa<BinaryOperator>(I))
+    return false;
+  return true;
+}
+
 bool NewGVN::fullyRedundant(SmallVector<ValPair, 4> AvailableValues,
-                            Instruction *I) {
+                            Instruction *I, BasicBlock *PHIBlock,
+                            BasicBlock *&MissingBlock) {
+  unsigned NumWithout = 0;
+  BasicBlock *PredBlock = nullptr;
+  Instruction *PREInst = nullptr;
+  if (AvailableValues.empty())
+    return false;
   for (auto AV : AvailableValues) {
+    PredBlock = AV.second;
+    if (!AV.first)
+      return false;
     if (auto *OpI = dyn_cast<Instruction>(AV.first)) {
       if (!OpI->getParent()) {
-        // Not a real instruction.
-        return false;
+        if (PREInst) {
+          NumWithout = 2;
+          break;
+        }
+        // Not a real instruction. Check if we can PRE.
+        if (NumPREInsertionsPerBlock[PredBlock] == MaxPREInsertions) {
+          NumWithout = 2;
+          break;
+        }
+        // No dependent PREs for now.
+        if (PREInsts.count(I)) {
+          NumWithout = 2;
+          break;
+        }
+        if (!okayForPRE(I)) {
+          NumWithout = 2;
+          break;
+        }
+        if (!isSafeToSpeculativelyExecute(I)) {
+          NumWithout = 2;
+          break;
+        }
+        
+        // No loops for now.
+        if (isBackedge(PredBlock, PHIBlock)) {
+          NumWithout = 2;
+          break;
+        }
+        // Don't do PRE across indirect branch.
+        if (isa<IndirectBrInst>(PredBlock->getTerminator())) {
+          NumWithout = 2;
+          break;
+        }
+        // No critical edges.
+        unsigned SuccNum = GetSuccessorNumber(PredBlock, PHIBlock);
+        if (isCriticalEdge(PredBlock->getTerminator(), SuccNum)) {
+          NumWithout = 2;
+          break;
+        }
+
+        PREInst = OpI;
+        MissingBlock = PredBlock;
+        NumWithout++;
       }
     }
   }
-  return true;
+  if (NumWithout == 0)
+    return true;
+  else if (NumWithout == 1) {
+    auto *CC = createSingletonCongruenceClass(PREInst);
+    ValueToClass[PREInst] = CC;
+    const auto &InstRange = BlockInstRange.lookup(PredBlock);
+
+    // Post-increment because InstRange is open on the right-side.
+    unsigned DFSNumber =
+        InstRange.second + NumPREInsertionsPerBlock[PredBlock]++;
+
+    InstrDFS[PREInst] = DFSNumber;
+    DFSToInstr[DFSNumber] = PREInst;
+    TouchedInstructions.set(DFSNumber);
+
+    PREInsts.insert(PREInst);
+    RealToPREInst.insert({I, PREInst});
+    return true;
+  }
+  MissingBlock = nullptr;
+  return false;
 }
 
 // When we see an instruction that is an op of phis, generate the equivalent phi
@@ -2776,6 +2859,7 @@ const Expression *NewGVN::performPRE(Instruction *I,
 
   SmallVector<ValPair, 4> PHIOps;
   SmallPtrSet<Value *, 4> Deps;
+  DenseMap<Instruction *, BasicBlock *> ValueOps;
   // If the instruction has a PHI operand then use that PHIs block as the
   // starting point. Otherwise we won't be able to perform PHI-translation.
   // This is correct because the PHI dominates I.
@@ -2800,6 +2884,7 @@ const Expression *NewGVN::performPRE(Instruction *I,
       Instruction *ValueOp = I->clone();
       // Emit the temporal instruction in the predecessor basic block where the
       // corresponding value is defined.
+      ValueOps.insert({ValueOp, PredBB});
       ValueOp->insertBefore(PredBB->getTerminator());
       if (MemoryAccess *ValueMemOp = MemRHS) {
         // Phi-translate the MemPhi if its present and it resides in PHIBlock. 
@@ -2808,6 +2893,7 @@ const Expression *NewGVN::performPRE(Instruction *I,
         TempToMemory[ValueOp] = ValueMemOp;
       }
       bool SafeForPHIOfOps = true;
+      bool SafeForPRE = true;
       VisitedOps.clear();
       for (auto &Op : ValueOp->operands()) {
         auto *OrigOp = &*Op;
@@ -2821,6 +2907,10 @@ const Expression *NewGVN::performPRE(Instruction *I,
           if (getBlockForValue(ValuePHI) == PHIBlock)
             Op = ValuePHI->getIncomingValueForBlock(PredBB);
         }
+        SafeForPRE =
+            SafeForPRE &&
+            (!isa<Instruction>(Op) ||
+             DT->dominates(cast<Instruction>(Op)->getParent(), PredBB));
         // If we phi-translated the op, it must be safe.
         SafeForPHIOfOps =
             SafeForPHIOfOps &&
@@ -2834,14 +2924,21 @@ const Expression *NewGVN::performPRE(Instruction *I,
       FoundVal = !SafeForPHIOfOps ? nullptr
                                   : findLeaderForInst(ValueOp, Visited,
                                                       MemAccess, I, PredBB);
-      ValueOp->eraseFromParent();
+      ValueOp->removeFromParent();
       if (!FoundVal) {
         // We failed to find a leader for the current ValueOp, but this might
         // change in case of the translated operands change.
         if (SafeForPHIOfOps)
           for (auto *Dep : CurrentDeps)
             addAdditionalUsers(Dep, I);
-        FoundVal = ValueOp;
+        // This temp instruction has missing operands in PredBB. To insert it we
+        // would have to recursively materialize its operands in PredBB.
+        if (SafeForPRE) {
+          FoundVal = ValueOp;
+        } else {
+          PHIOps.push_back({nullptr, PredBB});
+          continue;
+        }
       }
       Deps.insert(CurrentDeps.begin(), CurrentDeps.end());
     } else {
@@ -2858,8 +2955,26 @@ const Expression *NewGVN::performPRE(Instruction *I,
   }
   for (auto *Dep : Deps)
     addAdditionalUsers(Dep, I);
-  if (!fullyRedundant(PHIOps, I))
-    return nullptr;
+  BasicBlock *MissingBlock = nullptr;
+  bool isFullyRedundant = fullyRedundant(PHIOps, I, PHIBlock, MissingBlock);
+  // If it is not fully redundant then delete every temp instruction. If it is fully redundant but no insertion was required then delete every temp.Otherwise delete every one except for the one corresponding to the MissingBlock. In the process rename and insert the required instruction.
+  if (!isFullyRedundant || !MissingBlock) {
+    for (auto &KV : ValueOps) {
+      KV.first->deleteValue();
+    }
+  } else {
+    for (auto &KV : ValueOps) {
+      if (KV.second != MissingBlock)
+        KV.first->deleteValue();
+      else {
+        KV.first->setName(I->getName() + ".pre");
+        KV.first->insertBefore(MissingBlock->getTerminator());
+      }
+    }
+  }
+  if (!isFullyRedundant)
+      return nullptr;
+
   sortPHIOps(PHIOps);
   auto *E = performSymbolicPHIEvaluation(PHIOps, I, PHIBlock);
   if (isa<ConstantExpression>(E) || isa<VariableExpression>(E)) {
@@ -3031,8 +3146,8 @@ std::pair<unsigned, unsigned> NewGVN::assignDFSNumbers(BasicBlock *B,
                                                        unsigned Start) {
   unsigned End = Start;
   if (MemoryAccess *MemPhi = getMemoryAccess(B)) {
+    DFSToInstr[End] = MemPhi;
     InstrDFS[MemPhi] = End++;
-    DFSToInstr.emplace_back(MemPhi);
   }
 
   // Then the real block goes next.
@@ -3048,8 +3163,8 @@ std::pair<unsigned, unsigned> NewGVN::assignDFSNumbers(BasicBlock *B,
     }
     if (isa<PHINode>(&I))
       RevisitOnReachabilityChange[B].set(End);
+    DFSToInstr[End] = &I;
     InstrDFS[&I] = End++;
-    DFSToInstr.emplace_back(&I);
   }
 
   // All of the range functions taken half-open ranges (open on the end side).
@@ -3479,7 +3594,6 @@ bool NewGVN::runGVN() {
   // up with a global dfs numbering for instructions.
   unsigned ICount = 1;
   // Add an empty instruction to account for the fact that we start at 1
-  DFSToInstr.emplace_back(nullptr);
   // Note: We want ideal RPO traversal of the blocks, which is not quite the
   // same as dominator tree order, particularly with regard whether backedges
   // get visited first or second, given a block with multiple successors.
@@ -3510,11 +3624,9 @@ bool NewGVN::runGVN() {
     const auto &BlockRange = assignDFSNumbers(B, ICount);
     BlockInstRange.insert({B, BlockRange});
     ICount += BlockRange.second - BlockRange.first + MaxPREInsertions;
-    // Insert placeholders for the potential PRE insertions.
-    for (unsigned i = 0 ; i < MaxPREInsertions; i++)
-      DFSToInstr.emplace_back(nullptr);
     NumPREInsertionsPerBlock.insert({B, 0});
   }
+  MaxLocalNum = ICount + 1;
   initializeCongruenceClasses(F);
 
   TouchedInstructions.resize(ICount);
@@ -3537,11 +3649,29 @@ bool NewGVN::runGVN() {
 
   Changed |= eliminateInstructions(F);
 
+  // Delete unused PRE-inserted instructions.
+  for (Instruction *PREInst : PREInsts) {
+    if (PREInst->use_empty())
+      markInstructionForDeletion(PREInst);
+    else {
+      bool dead = true;
+      for (User *U : PREInst->users()) {
+        if (Instruction *Inst = dyn_cast<Instruction>(U)) {
+          if (Inst->getParent()) {
+            dead = false;
+            break;
+          }
+        }
+      }
+      if (dead)
+        markInstructionForDeletion(PREInst);
+    }
+  }
+
   // Delete all instructions marked for deletion.
   for (Instruction *ToErase : InstructionsToErase) {
     if (!ToErase->use_empty())
       ToErase->replaceAllUsesWith(PoisonValue::get(ToErase->getType()));
-
     assert(ToErase->getParent() &&
            "BB containing ToErase deleted unexpectedly!");
     ToErase->eraseFromParent();
@@ -3685,7 +3815,7 @@ void NewGVN::convertClassToDFSOrdered(
           IBlock = P->getIncomingBlock(U);
           // Make phi node users appear last in the incoming block
           // they are from.
-          VDUse.LocalNum = DFSToInstr.size() + 1;
+          VDUse.LocalNum = MaxLocalNum + 1;
         } else {
           IBlock = getBlockForValue(I);
           VDUse.LocalNum = InstrToDFSNum(I);

@@ -29,9 +29,11 @@ define void @m_adj(ptr %mp, i32 %req_len) nounwind optsize {
 ; CHECK-NEXT:    [[TMP4:%.*]] = icmp ne ptr [[M_0_PH]], null
 ; CHECK-NEXT:    [[TMP5]] = getelementptr [[STRUCT_MBUF:%.*]], ptr [[M_0_PH]], i32 0, i32 2
 ; CHECK-NEXT:    [[TMP6:%.*]] = getelementptr [[STRUCT_MBUF]], ptr [[M_0_PH]], i32 0, i32 3
+; CHECK-NEXT:    [[DOTPRE:%.*]] = sub i32 [[REQ_LEN]], [[LEN_0_PH]]
 ; CHECK-NEXT:    br label [[BB4:%.*]]
 ; CHECK:       bb4:
-; CHECK-NEXT:    [[LEN_0]] = phi i32 [ 0, [[BB3:%.*]] ], [ [[LEN_0_PH]], [[BB4_OUTER]] ]
+; CHECK-NEXT:    [[TMP19:%.*]] = phi i32 [ [[DOTPRE]], [[BB4_OUTER]] ], [ [[REQ_LEN]], [[BB3:%.*]] ]
+; CHECK-NEXT:    [[LEN_0]] = phi i32 [ 0, [[BB3]] ], [ [[LEN_0_PH]], [[BB4_OUTER]] ]
 ; CHECK-NEXT:    [[TMP7:%.*]] = icmp sgt i32 [[LEN_0]], 0
 ; CHECK-NEXT:    [[TMP8:%.*]] = and i1 [[TMP7]], [[TMP4]]
 ; CHECK-NEXT:    br i1 [[TMP8]], label [[BB1:%.*]], label [[BB7:%.*]]
@@ -54,7 +56,6 @@ define void @m_adj(ptr %mp, i32 %req_len) nounwind optsize {
 ; CHECK-NEXT:    [[TMP18:%.*]] = icmp eq i32 [[TMP17]], 0
 ; CHECK-NEXT:    br i1 [[TMP18]], label [[RETURN]], label [[BB8:%.*]]
 ; CHECK:       bb8:
-; CHECK-NEXT:    [[TMP19:%.*]] = sub i32 [[REQ_LEN]], [[LEN_0]]
 ; CHECK-NEXT:    [[TMP20:%.*]] = getelementptr [[STRUCT_MBUF]], ptr [[MP]], i32 0, i32 6
 ; CHECK-NEXT:    store i32 [[TMP19]], ptr [[TMP20]], align 4
 ; CHECK-NEXT:    ret void
