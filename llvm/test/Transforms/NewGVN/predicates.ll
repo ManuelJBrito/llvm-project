@@ -80,8 +80,6 @@ if.end8:                                          ; preds = %for.end
 define fastcc void @barney() {
 ; CHECK-LABEL: @barney(
 ; CHECK-NEXT:  bb:
-; CHECK-NEXT:    br label [[BB22:%.*]]
-; CHECK:       bb22:
 ; CHECK-NEXT:    br i1 undef, label [[BB29:%.*]], label [[BB35:%.*]]
 ; CHECK:       bb29:
 ; CHECK-NEXT:    br i1 true, label [[BB33:%.*]], label [[BB35]]

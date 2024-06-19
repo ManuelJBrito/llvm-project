@@ -12,8 +12,6 @@ define void @fn1() local_unnamed_addr #0 {
 ; CHECK-NEXT:    br label [[FOR_BODY:%.*]]
 ; CHECK:       for.body:
 ; CHECK-NEXT:    [[H_128:%.*]] = phi i32 [ [[H_031]], [[FOR_COND_PREHEADER]] ], [ [[H_2:%.*]], [[FOR_INC:%.*]] ]
-; CHECK-NEXT:    br label [[IF_THEN:%.*]]
-; CHECK:       if.then:
 ; CHECK-NEXT:    br i1 false, label [[L_LOOPEXIT:%.*]], label [[IF_END:%.*]]
 ; CHECK:       if.end:
 ; CHECK-NEXT:    br i1 undef, label [[FOR_INC]], label [[IF_END9:%.*]]

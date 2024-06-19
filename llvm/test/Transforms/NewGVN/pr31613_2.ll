@@ -13,11 +13,9 @@ define hidden void @barrier() align 2 {
 ; CHECK-NEXT:    br label [[FIRST:%.*]]
 ; CHECK:       first:
 ; CHECK-NEXT:    [[PHI_ONE:%.*]] = phi i64 [ [[SEL]], [[ENTRY:%.*]] ], [ 0, [[FIRST]] ], [ poison, [[THIRD:%.*]] ]
-; CHECK-NEXT:    br i1 poison, label [[SECOND:%.*]], label [[FIRST]]
+; CHECK-NEXT:    br i1 poison, label [[THIRD]], label [[FIRST]]
 ; CHECK:       second:
-; CHECK-NEXT:    br label [[THIRD]]
-; CHECK:       third:
-; CHECK-NEXT:    br i1 true, label [[SECOND]], label [[FIRST]]
+; CHECK-NEXT:    br i1 true, label [[THIRD]], label [[FIRST]]
 ;
 entry:
   %callg = tail call i64 @g()
@@ -62,8 +60,6 @@ define hidden void @barrier2() align 2 {
 ; CHECK:       second.preheader:
 ; CHECK-NEXT:    br label [[INNERLOOP:%.*]]
 ; CHECK:       innerloop:
-; CHECK-NEXT:    br label [[CLEANUP:%.*]]
-; CHECK:       cleanup:
 ; CHECK-NEXT:    br i1 true, label [[INNERLOOP]], label [[SECOND_EXIT:%.*]]
 ;
 entry:

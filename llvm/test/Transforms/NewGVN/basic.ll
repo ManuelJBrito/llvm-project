@@ -4,8 +4,6 @@
 define i32 @main() {
 ; CHECK-LABEL: @main(
 ; CHECK-NEXT:  block1:
-; CHECK-NEXT:    br label [[BLOCK2:%.*]]
-; CHECK:       block2:
 ; CHECK-NEXT:    ret i32 0
 ;
 block1:

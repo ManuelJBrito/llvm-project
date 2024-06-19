@@ -5,8 +5,6 @@ define ptr addrspace(1) @addrspacecast(ptr %ptr) {
 ; CHECK-LABEL: @addrspacecast(
 ; CHECK-NEXT:  block1:
 ; CHECK-NEXT:    [[Z1:%.*]] = addrspacecast ptr [[PTR:%.*]] to ptr addrspace(1)
-; CHECK-NEXT:    br label [[BLOCK2:%.*]]
-; CHECK:       block2:
 ; CHECK-NEXT:    store ptr addrspace(1) [[Z1]], ptr undef, align 8
 ; CHECK-NEXT:    ret ptr addrspace(1) [[Z1]]
 ;
@@ -26,8 +24,6 @@ define ptr addrspace(1) @addrspacecast_different_result_types(ptr %ptr) {
 ; CHECK-LABEL: @addrspacecast_different_result_types(
 ; CHECK-NEXT:  block1:
 ; CHECK-NEXT:    [[Z1:%.*]] = addrspacecast ptr [[PTR:%.*]] to ptr addrspace(2)
-; CHECK-NEXT:    br label [[BLOCK2:%.*]]
-; CHECK:       block2:
 ; CHECK-NEXT:    [[Z2:%.*]] = addrspacecast ptr [[PTR]] to ptr addrspace(1)
 ; CHECK-NEXT:    store ptr addrspace(2) [[Z1]], ptr undef, align 8
 ; CHECK-NEXT:    ret ptr addrspace(1) [[Z2]]
@@ -46,8 +42,6 @@ define ptr addrspace(1) @addrspacecast_simplify(ptr addrspace(1) %ptr) {
 ; CHECK-LABEL: @addrspacecast_simplify(
 ; CHECK-NEXT:  block1:
 ; CHECK-NEXT:    [[CAST0:%.*]] = addrspacecast ptr addrspace(1) [[PTR:%.*]] to ptr
-; CHECK-NEXT:    br label [[BLOCK2:%.*]]
-; CHECK:       block2:
 ; CHECK-NEXT:    store ptr addrspace(1) [[PTR]], ptr undef, align 8
 ; CHECK-NEXT:    ret ptr addrspace(1) [[PTR]]
 ;
@@ -68,8 +62,6 @@ define ptr addrspace(1) @addrspacecast_constant() {
 ; CHECK-LABEL: @addrspacecast_constant(
 ; CHECK-NEXT:  block1:
 ; CHECK-NEXT:    store ptr undef, ptr @h, align 4
-; CHECK-NEXT:    br label [[BLOCK2:%.*]]
-; CHECK:       block2:
 ; CHECK-NEXT:    store ptr addrspace(1) undef, ptr undef, align 8
 ; CHECK-NEXT:    ret ptr addrspace(1) undef
 ;
@@ -90,8 +82,6 @@ define ptr addrspace(1) @addrspacecast_leader(ptr %arg.ptr) {
 ; CHECK-NEXT:  block1:
 ; CHECK-NEXT:    [[LOAD0:%.*]] = load ptr, ptr [[ARG_PTR:%.*]], align 8
 ; CHECK-NEXT:    [[Z1:%.*]] = addrspacecast ptr [[LOAD0]] to ptr addrspace(1)
-; CHECK-NEXT:    br label [[BLOCK2:%.*]]
-; CHECK:       block2:
 ; CHECK-NEXT:    store ptr addrspace(1) [[Z1]], ptr undef, align 8
 ; CHECK-NEXT:    ret ptr addrspace(1) [[Z1]]
 ;

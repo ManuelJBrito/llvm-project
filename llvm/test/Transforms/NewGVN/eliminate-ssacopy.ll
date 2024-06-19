@@ -16,8 +16,6 @@ define void @g() {
 ; CHECK:       for.cond.preheader:
 ; CHECK-NEXT:    unreachable
 ; CHECK:       for.cond1thread-pre-split:
-; CHECK-NEXT:    br label [[FOR_END4_SPLIT:%.*]]
-; CHECK:       for.end4.split:
 ; CHECK-NEXT:    br i1 true, label [[FOR_COND6_PREHEADER:%.*]], label [[IF_END11:%.*]]
 ; CHECK:       for.cond6.preheader:
 ; CHECK-NEXT:    br i1 undef, label [[FOR_COND6_PREHEADER3:%.*]], label [[IF_END11_LOOPEXIT:%.*]]

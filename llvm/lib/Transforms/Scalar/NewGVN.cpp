@@ -3612,6 +3612,15 @@ bool NewGVN::runGVN() {
   ICF = &ImplicitCFT;
   SingletonDeadExpression = new (ExpressionAllocator) DeadExpression();
 
+  DomTreeUpdater DTU(DT, DomTreeUpdater::UpdateStrategy::Eager);
+  // Merge unconditional branches, allowing PRE to catch more
+  // optimization opportunities.
+  for (BasicBlock &BB : llvm::make_early_inc_range(F)) {
+    bool removedBlock =
+        MergeBlockIntoPredecessor(&BB, &DTU, nullptr, MSSAU, nullptr);
+    Changed |= removedBlock;
+  }
+
   // Count number of instructions for sizing of hash tables, and come
   // up with a global dfs numbering for instructions.
   unsigned ICount = 1;

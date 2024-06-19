@@ -13,15 +13,13 @@ define i16 @hoge() {
 ; CHECK-NEXT:      i8 12, label [[BB2:%.*]]
 ; CHECK-NEXT:    ]
 ; CHECK:       bb1:
-; CHECK-NEXT:    br label [[BB6:%.*]]
+; CHECK-NEXT:    br i1 true, label [[BB3:%.*]], label [[BB4:%.*]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    br label [[BB4:%.*]]
+; CHECK-NEXT:    br label [[BB4]]
 ; CHECK:       bb3:
 ; CHECK-NEXT:    unreachable
 ; CHECK:       bb4:
 ; CHECK-NEXT:    ret i16 undef
-; CHECK:       bb6:
-; CHECK-NEXT:    br i1 true, label [[BB3:%.*]], label [[BB4]]
 ; CHECK:       bb7:
 ; CHECK-NEXT:    unreachable
 ;

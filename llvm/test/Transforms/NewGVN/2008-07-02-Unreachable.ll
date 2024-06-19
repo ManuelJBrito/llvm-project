@@ -12,24 +12,16 @@ define i8 @func_1(i32 %x, i32 %y) nounwind  {
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq i32 [[X]], [[Y]]
 ; CHECK-NEXT:    br i1 [[CMP]], label [[IFELSE:%.*]], label [[IFTHEN:%.*]]
 ; CHECK:       ifthen:
-; CHECK-NEXT:    br label [[IFEND:%.*]]
+; CHECK-NEXT:    ret i8 0
 ; CHECK:       ifelse:
 ; CHECK-NEXT:    [[TMP3:%.*]] = load i8, ptr @g_3, align 1
 ; CHECK-NEXT:    store i8 [[TMP3]], ptr [[A]], align 1
 ; CHECK-NEXT:    br label [[AFTERFOR:%.*]]
-; CHECK:       forcond:
-; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label [[AFTERFOR]], label [[FORBODY:%.*]]
 ; CHECK:       forbody:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br label [[FORINC:%.*]]
-; CHECK:       forinc:
-; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br label [[FORCOND:%.*]]
+; CHECK-NEXT:    br i1 false, label [[AFTERFOR]], label [[FORBODY:%.*]]
 ; CHECK:       afterfor:
 ; CHECK-NEXT:    ret i8 [[TMP3]]
-; CHECK:       ifend:
-; CHECK-NEXT:    ret i8 0
 ;
 entry:
   %A = alloca i8

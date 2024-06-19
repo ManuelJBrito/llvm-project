@@ -16,7 +16,7 @@ define void @vnum_test1(ptr %data) #0 {
 ; CHECK-NEXT:    [[M_0:%.*]] = phi i32 [ [[TMP3]], [[BB:%.*]] ], [ [[TMP15:%.*]], [[BB17:%.*]] ]
 ; CHECK-NEXT:    [[I_0:%.*]] = phi i32 [ 0, [[BB]] ], [ [[TMP18:%.*]], [[BB17]] ]
 ; CHECK-NEXT:    [[TMP5:%.*]] = icmp slt i32 [[I_0]], [[TMP1]]
-; CHECK-NEXT:    br i1 [[TMP5]], label [[BB6:%.*]], label [[BB19:%.*]]
+; CHECK-NEXT:    br i1 [[TMP5]], label [[BB17]], label [[BB19:%.*]]
 ; CHECK:       bb6:
 ; CHECK-NEXT:    [[TMP7:%.*]] = getelementptr inbounds i32, ptr [[DATA]], i64 2
 ; CHECK-NEXT:    [[TMP8:%.*]] = load i32, ptr [[TMP7]], align 4
@@ -27,8 +27,6 @@ define void @vnum_test1(ptr %data) #0 {
 ; CHECK-NEXT:    [[TMP13:%.*]] = getelementptr inbounds i32, ptr [[DATA]], i64 1
 ; CHECK-NEXT:    [[TMP14:%.*]] = load i32, ptr [[TMP13]], align 4
 ; CHECK-NEXT:    [[TMP15]] = add nsw i32 [[M_0]], [[TMP14]]
-; CHECK-NEXT:    br label [[BB17]]
-; CHECK:       bb17:
 ; CHECK-NEXT:    [[TMP18]] = add nsw i32 [[I_0]], 1
 ; CHECK-NEXT:    br label [[BB4]]
 ; CHECK:       bb19:
@@ -86,7 +84,7 @@ define i32 @vnum_test2(ptr %data) #0 {
 ; CHECK-NEXT:    [[M_0:%.*]] = phi i32 [ [[TMP3]], [[BB:%.*]] ], [ [[TMP15:%.*]], [[BB19:%.*]] ]
 ; CHECK-NEXT:    [[I_0:%.*]] = phi i32 [ 0, [[BB]] ], [ [[TMP20:%.*]], [[BB19]] ]
 ; CHECK-NEXT:    [[TMP5:%.*]] = icmp slt i32 [[I_0]], [[TMP1]]
-; CHECK-NEXT:    br i1 [[TMP5]], label [[BB6:%.*]], label [[BB21:%.*]]
+; CHECK-NEXT:    br i1 [[TMP5]], label [[BB19]], label [[BB21:%.*]]
 ; CHECK:       bb6:
 ; CHECK-NEXT:    [[TMP7:%.*]] = getelementptr inbounds i32, ptr [[DATA]], i64 2
 ; CHECK-NEXT:    [[TMP8:%.*]] = load i32, ptr [[TMP7]], align 4
@@ -97,8 +95,6 @@ define i32 @vnum_test2(ptr %data) #0 {
 ; CHECK-NEXT:    [[TMP13:%.*]] = getelementptr inbounds i32, ptr [[DATA]], i64 1
 ; CHECK-NEXT:    [[TMP14:%.*]] = load i32, ptr [[TMP13]], align 4
 ; CHECK-NEXT:    [[TMP15]] = add nsw i32 [[M_0]], [[TMP14]]
-; CHECK-NEXT:    br label [[BB19]]
-; CHECK:       bb19:
 ; CHECK-NEXT:    [[TMP20]] = add nsw i32 [[I_0]], 1
 ; CHECK-NEXT:    br label [[BB4]]
 ; CHECK:       bb21:
@@ -164,15 +160,13 @@ define i32 @vnum_test3(ptr %data) #0 {
 ; CHECK-NEXT:    [[TMP9:%.*]] = getelementptr inbounds i32, ptr [[DATA]], i64 5
 ; CHECK-NEXT:    store i32 0, ptr [[TMP9]], align 4
 ; CHECK-NEXT:    [[TMP10:%.*]] = icmp slt i32 [[I_0]], 30
-; CHECK-NEXT:    br i1 [[TMP10]], label [[BB11:%.*]], label [[BB14:%.*]]
+; CHECK-NEXT:    br i1 [[TMP10]], label [[BB11:%.*]], label [[BB21]]
 ; CHECK:       bb11:
-; CHECK-NEXT:    br label [[BB14]]
+; CHECK-NEXT:    br label [[BB21]]
 ; CHECK:       bb14:
 ; CHECK-NEXT:    [[TMP17:%.*]] = getelementptr inbounds i32, ptr [[DATA]], i64 1
 ; CHECK-NEXT:    [[TMP18:%.*]] = load i32, ptr [[TMP17]], align 4
 ; CHECK-NEXT:    [[TMP19]] = add nsw i32 [[N_0]], [[TMP18]]
-; CHECK-NEXT:    br label [[BB21]]
-; CHECK:       bb21:
 ; CHECK-NEXT:    [[TMP22]] = add nsw i32 [[I_0]], 1
 ; CHECK-NEXT:    br label [[BB4]]
 ; CHECK:       bb23:

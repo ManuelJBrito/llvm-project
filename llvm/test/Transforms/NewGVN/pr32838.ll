@@ -110,11 +110,9 @@ define void @fn3() {
 ; CHECK:       for.cond:
 ; CHECK-NEXT:    br i1 undef, label [[FOR_END14:%.*]], label [[FOR_COND1_PREHEADER:%.*]]
 ; CHECK:       for.cond1.preheader:
-; CHECK-NEXT:    br label [[FOR_BODY3:%.*]]
+; CHECK-NEXT:    br i1 undef, label [[FOR_COND1:%.*]], label [[L1_LOOPEXIT]]
 ; CHECK:       for.cond1:
 ; CHECK-NEXT:    br label [[L2:%.*]]
-; CHECK:       for.body3:
-; CHECK-NEXT:    br i1 undef, label [[FOR_COND1:%.*]], label [[L1_LOOPEXIT]]
 ; CHECK:       l2:
 ; CHECK-NEXT:    [[G_4:%.*]] = phi ptr [ @b, [[FOR_END14]] ], [ @a, [[FOR_COND1]] ]
 ; CHECK-NEXT:    [[F_2:%.*]] = phi ptr [ [[F_0]], [[FOR_END14]] ], [ @a, [[FOR_COND1]] ]

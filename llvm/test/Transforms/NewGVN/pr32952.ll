@@ -24,8 +24,6 @@ define i32 @tinkywinky() {
 ; CHECK:       patatino:
 ; CHECK-NEXT:    [[MEH:%.*]] = phi i16 [ [[TMP0]], [[WINKY]] ], [ [[CONV1]], [[TINKY]] ]
 ; CHECK-NEXT:    [[BANANA:%.*]] = phi i16 [ [[TMP0]], [[TINKY]] ], [ [[CONV1]], [[WINKY]] ]
-; CHECK-NEXT:    br label [[END:%.*]]
-; CHECK:       end:
 ; CHECK-NEXT:    [[PROMOTED:%.*]] = zext i16 [[BANANA]] to i32
 ; CHECK-NEXT:    [[OTHER:%.*]] = zext i16 [[MEH]] to i32
 ; CHECK-NEXT:    [[FIRST:%.*]] = tail call i32 (ptr, ...) @printf(ptr @.str, i32 [[PROMOTED]])

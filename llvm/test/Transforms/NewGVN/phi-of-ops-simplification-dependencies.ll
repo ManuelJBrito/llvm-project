@@ -16,8 +16,6 @@ define void @test1() {
 ; CHECK-NEXT:    [[Y_0]] = phi i32 [ 1, [[ENTRY]] ], [ [[INC7:%.*]], [[FOR_INC6]] ]
 ; CHECK-NEXT:    br i1 undef, label [[FOR_INC6]], label [[FOR_BODY_LR_PH:%.*]]
 ; CHECK:       for.body.lr.ph:
-; CHECK-NEXT:    br label [[FOR_BODY4:%.*]]
-; CHECK:       for.body4:
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp ugt i32 [[PHIOFOPS]], [[Y_0]]
 ; CHECK-NEXT:    br i1 [[CMP]], label [[FOR_END:%.*]], label [[FOR_BODY4_1:%.*]]
 ; CHECK:       for.end:

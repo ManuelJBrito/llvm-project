@@ -9,9 +9,7 @@ define internal i32 @pr31491() {
 ; CHECK-NEXT:  bb5:
 ; CHECK-NEXT:    br label [[BB7:%.*]]
 ; CHECK:       bb7:
-; CHECK-NEXT:    [[TMP:%.*]] = phi ptr [ [[TMP11:%.*]], [[BB10:%.*]] ], [ undef, [[BB5:%.*]] ]
-; CHECK-NEXT:    br label [[BB10]]
-; CHECK:       bb10:
+; CHECK-NEXT:    [[TMP:%.*]] = phi ptr [ [[TMP11:%.*]], [[BB7]] ], [ undef, [[BB5:%.*]] ]
 ; CHECK-NEXT:    [[TMP11]] = tail call ptr @patatino(ptr [[TMP]])
 ; CHECK-NEXT:    br label [[BB7]]
 ;

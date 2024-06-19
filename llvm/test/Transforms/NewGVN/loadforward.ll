@@ -9,12 +9,11 @@ target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 ;; Test that we forward the first store to the second load
 define i16 @bazinga() {
 ; CHECK-LABEL: @bazinga(
+; CHECK-NEXT:  bb1:
 ; CHECK-NEXT:    [[_TMP10:%.*]] = load i16, ptr getelementptr inbounds ([[REC11:%.*]], ptr @str, i64 0, i32 1), align 2
 ; CHECK-NEXT:    store i16 [[_TMP10]], ptr @str, align 2
 ; CHECK-NEXT:    [[_TMP15:%.*]] = icmp eq i16 [[_TMP10]], 3
 ; CHECK-NEXT:    [[_TMP16:%.*]] = select i1 [[_TMP15]], i16 1, i16 0
-; CHECK-NEXT:    br label [[BB1:%.*]]
-; CHECK:       bb1:
 ; CHECK-NEXT:    ret i16 [[_TMP16]]
 ;
   %_tmp9 = getelementptr %rec11, ptr @str, i16 0, i32 1

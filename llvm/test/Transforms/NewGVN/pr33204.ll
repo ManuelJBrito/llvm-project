@@ -18,13 +18,11 @@ define void @hoge(i32 %arg) {
 ; CHECK-NEXT:    br label [[BB2]]
 ; CHECK:       bb2:
 ; CHECK-NEXT:    [[TMP:%.*]] = phi i32 [ 0, [[BB1:%.*]] ], [ [[ARG:%.*]], [[BB:%.*]] ]
-; CHECK-NEXT:    br label [[BB6:%.*]]
-; CHECK:       bb3:
-; CHECK-NEXT:    [[TMP4:%.*]] = load i32, ptr @global, align 4, !h [[META0:![0-9]+]]
-; CHECK-NEXT:    unreachable
-; CHECK:       bb6:
-; CHECK-NEXT:    store i32 [[TMP]], ptr @global.1, align 4, !h [[META0]]
+; CHECK-NEXT:    store i32 [[TMP]], ptr @global.1, align 4, !h [[META0:![0-9]+]]
 ; CHECK-NEXT:    br i1 undef, label [[BB7:%.*]], label [[BB1]]
+; CHECK:       bb3:
+; CHECK-NEXT:    [[TMP4:%.*]] = load i32, ptr @global, align 4, !h [[META0]]
+; CHECK-NEXT:    unreachable
 ; CHECK:       bb7:
 ; CHECK-NEXT:    br i1 undef, label [[BB10:%.*]], label [[BB8:%.*]]
 ; CHECK:       bb8:

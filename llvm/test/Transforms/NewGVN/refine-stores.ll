@@ -133,18 +133,15 @@ declare void @quux()
 
 define void @b() {
 ; CHECK-LABEL: @b(
+; CHECK-NEXT:  d:
 ; CHECK-NEXT:    [[C:%.*]] = alloca [[STRUCT_A:%.*]], align 8
-; CHECK-NEXT:    br label [[D:%.*]]
-; CHECK:       m:
-; CHECK-NEXT:    unreachable
-; CHECK:       d:
 ; CHECK-NEXT:    [[E:%.*]] = load i32, ptr [[C]], align 4
 ; CHECK-NEXT:    br i1 undef, label [[I:%.*]], label [[J:%.*]]
+; CHECK:       m:
+; CHECK-NEXT:    unreachable
 ; CHECK:       i:
 ; CHECK-NEXT:    br i1 undef, label [[K:%.*]], label [[M:%.*]]
 ; CHECK:       k:
-; CHECK-NEXT:    br label [[L:%.*]]
-; CHECK:       l:
 ; CHECK-NEXT:    unreachable
 ; CHECK:       j:
 ; CHECK-NEXT:    br label [[M]]
