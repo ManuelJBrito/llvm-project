@@ -75,6 +75,7 @@
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/DomTreeUpdater.h"
 #include "llvm/Analysis/GlobalsModRef.h"
+#include "llvm/Analysis/InstructionPrecedenceTracking.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/MemorySSA.h"
@@ -506,6 +507,7 @@ class NewGVN {
   MemorySSA *MSSA = nullptr;
   MemorySSAWalker *MSSAWalker = nullptr;
   MemorySSAUpdater *MSSAU = nullptr;
+  ImplicitControlFlowTracking *ICF = nullptr;
   AssumptionCache *AC = nullptr;
   const DataLayout &DL;
   std::unique_ptr<PredicateInfo> PredInfo;
@@ -2744,11 +2746,13 @@ bool NewGVN::fullyRedundant(SmallVector<ValPair, 4> AvailableValues,
           NumWithout = 2;
           break;
         }
-        if (!isSafeToSpeculativelyExecute(I)) {
+        if (ICF->isDominatedByICFIFromSameBlock(I) &&
+            !isSafeToSpeculativelyExecute(I, PredBlock->getTerminator(), AC, DT,
+                                          TLI)) {
           NumWithout = 2;
           break;
         }
-        
+
         // No loops for now.
         if (isBackedge(PredBlock, PHIBlock)) {
           NumWithout = 2;
@@ -3604,6 +3608,8 @@ bool NewGVN::runGVN() {
   MSSAWalker = MSSA->getWalker();
   MemorySSAUpdater Updater(MSSA);
   MSSAU = &Updater;
+  ImplicitControlFlowTracking ImplicitCFT;
+  ICF = &ImplicitCFT;
   SingletonDeadExpression = new (ExpressionAllocator) DeadExpression();
 
   // Count number of instructions for sizing of hash tables, and come

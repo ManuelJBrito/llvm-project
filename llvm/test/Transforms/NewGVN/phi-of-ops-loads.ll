@@ -81,11 +81,11 @@ bb237:
 define void @no-alias-store-in-loop(ptr noalias %p, ptr noalias %q) {
 ; CHECK-LABEL: @no-alias-store-in-loop(
 ; CHECK-NEXT:  bb56:
+; CHECK-NEXT:    [[N60:%.*]] = load i8, ptr [[P:%.*]], align 1
 ; CHECK-NEXT:    br label [[BB57:%.*]]
 ; CHECK:       bb57:
 ; CHECK-NEXT:    [[N59:%.*]] = phi i1 [ false, [[BB229:%.*]] ], [ true, [[BB56:%.*]] ]
 ; CHECK-NEXT:    [[IDX:%.*]] = phi i8 [ 0, [[BB56]] ], [ [[INC:%.*]], [[BB229]] ]
-; CHECK-NEXT:    [[N60:%.*]] = load i8, ptr [[P:%.*]], align 1
 ; CHECK-NEXT:    [[N62:%.*]] = icmp ne i8 [[N60]], 2
 ; CHECK-NEXT:    [[N63:%.*]] = or i1 [[N59]], [[N62]]
 ; CHECK-NEXT:    br i1 [[N63]], label [[BB229]], label [[BB237:%.*]]
@@ -154,10 +154,10 @@ bb237:
 define void @nowrite-function-in-loop(ptr %p) {
 ; CHECK-LABEL: @nowrite-function-in-loop(
 ; CHECK-NEXT:  bb56:
+; CHECK-NEXT:    [[N60:%.*]] = load i8, ptr [[P:%.*]], align 1
 ; CHECK-NEXT:    br label [[BB57:%.*]]
 ; CHECK:       bb57:
 ; CHECK-NEXT:    [[N59:%.*]] = phi i1 [ false, [[BB229:%.*]] ], [ true, [[BB56:%.*]] ]
-; CHECK-NEXT:    [[N60:%.*]] = load i8, ptr [[P:%.*]], align 1
 ; CHECK-NEXT:    [[N62:%.*]] = icmp ne i8 [[N60]], 2
 ; CHECK-NEXT:    [[N63:%.*]] = or i1 [[N59]], [[N62]]
 ; CHECK-NEXT:    br i1 [[N63]], label [[BB229]], label [[BB237:%.*]]

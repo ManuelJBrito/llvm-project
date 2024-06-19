@@ -14,10 +14,10 @@ define fastcc void @foo(ptr nocapture readonly %x) {
 ; CHECK-LABEL: define fastcc void @foo(
 ; CHECK-SAME: ptr nocapture readonly [[X:%.*]]) {
 ; CHECK-NEXT:  entry:
+; CHECK-NEXT:    [[TMP0:%.*]] = load i16, ptr [[X]], align 4
 ; CHECK-NEXT:    br label [[BB0:%.*]]
 ; CHECK:       bb0:
 ; CHECK-NEXT:    [[X_TR:%.*]] = phi ptr [ [[X]], [[ENTRY:%.*]] ], [ null, [[LAND_LHS_TRUE:%.*]] ]
-; CHECK-NEXT:    [[TMP0:%.*]] = load i16, ptr [[X_TR]], align 4
 ; CHECK-NEXT:    [[CONV:%.*]] = zext i16 [[TMP0]] to i32
 ; CHECK-NEXT:    switch i32 [[CONV]], label [[IF_END_50:%.*]] [
 ; CHECK-NEXT:      i32 43, label [[CLEANUP:%.*]]

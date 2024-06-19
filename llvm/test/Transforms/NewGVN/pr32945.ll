@@ -8,18 +8,13 @@ define void @tinkywinky() {
 ; CHECK-NEXT:    br i1 true, label [[LOR_LHS_FALSE:%.*]], label [[COND_TRUE:%.*]]
 ; CHECK:       lor.lhs.false:
 ; CHECK-NEXT:    [[TMP:%.*]] = load i32, ptr @d, align 4
-; CHECK-NEXT:    [[PATATINO:%.*]] = load i32, ptr null, align 4
-; CHECK-NEXT:    [[OR:%.*]] = or i32 [[TMP]], [[PATATINO]]
-; CHECK-NEXT:    store i32 [[OR]], ptr @d, align 4
+; CHECK-NEXT:    store i32 poison, ptr @d, align 4
 ; CHECK-NEXT:    br label [[COND_TRUE]]
 ; CHECK:       cond.true:
 ; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr @e, align 4
-; CHECK-NEXT:    [[TMP2:%.*]] = load i32, ptr @d, align 4
-; CHECK-NEXT:    [[CMP:%.*]] = icmp eq i32 [[TMP1]], [[TMP2]]
-; CHECK-NEXT:    br i1 [[CMP]], label [[COND_TRUE6:%.*]], label [[COND_FALSE:%.*]]
+; CHECK-NEXT:    br i1 poison, label [[COND_TRUE6:%.*]], label [[COND_FALSE:%.*]]
 ; CHECK:       cond.true6:
-; CHECK-NEXT:    [[CMP7:%.*]] = icmp slt i32 [[TMP2]], 0
-; CHECK-NEXT:    br i1 [[CMP7]], label [[COND_FALSE]], label [[COND_FALSE]]
+; CHECK-NEXT:    br i1 poison, label [[COND_FALSE]], label [[COND_FALSE]]
 ; CHECK:       cond.false:
 ; CHECK-NEXT:    ret void
 ;
