@@ -79,9 +79,7 @@ define void @e(i32 %a0, i32 %a1, ptr %p2) {
 ; CHECK:       h:
 ; CHECK-NEXT:    [[I:%.*]] = phi i32 [ [[A0]], [[TMP0:%.*]] ], [ [[A1:%.*]], [[S:%.*]] ]
 ; CHECK-NEXT:    call void @c.d.p(i64 8, ptr undef)
-; CHECK-NEXT:    [[J:%.*]] = load i32, ptr null, align 4
-; CHECK-NEXT:    [[K:%.*]] = icmp eq i32 [[I]], [[J]]
-; CHECK-NEXT:    br i1 [[K]], label [[L:%.*]], label [[Q:%.*]]
+; CHECK-NEXT:    br i1 poison, label [[L:%.*]], label [[Q:%.*]]
 ; CHECK:       l:
 ; CHECK-NEXT:    br label [[R:%.*]]
 ; CHECK:       q:

@@ -10,19 +10,14 @@ define hidden void @barrier() align 2 {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[CALLG:%.*]] = tail call i64 @g()
 ; CHECK-NEXT:    [[SEL:%.*]] = select i1 undef, i64 0, i64 [[CALLG]]
-; CHECK-NEXT:    [[LOADED:%.*]] = load i64, ptr null, align 8
-; CHECK-NEXT:    [[ADD:%.*]] = add i64 [[LOADED]], 1
-; CHECK-NEXT:    [[SHR17:%.*]] = lshr i64 [[ADD]], 1
-; CHECK-NEXT:    [[SUB:%.*]] = add nsw i64 [[SHR17]], -1
 ; CHECK-NEXT:    br label [[FIRST:%.*]]
 ; CHECK:       first:
-; CHECK-NEXT:    [[PHI_ONE:%.*]] = phi i64 [ [[SEL]], [[ENTRY:%.*]] ], [ 0, [[FIRST]] ], [ 0, [[THIRD:%.*]] ]
-; CHECK-NEXT:    [[CMP_PHI1_SUB:%.*]] = icmp eq i64 [[PHI_ONE]], [[SUB]]
-; CHECK-NEXT:    br i1 [[CMP_PHI1_SUB]], label [[SECOND:%.*]], label [[FIRST]]
+; CHECK-NEXT:    [[PHI_ONE:%.*]] = phi i64 [ [[SEL]], [[ENTRY:%.*]] ], [ 0, [[FIRST]] ], [ poison, [[THIRD:%.*]] ]
+; CHECK-NEXT:    br i1 poison, label [[SECOND:%.*]], label [[FIRST]]
 ; CHECK:       second:
 ; CHECK-NEXT:    br label [[THIRD]]
 ; CHECK:       third:
-; CHECK-NEXT:    br i1 false, label [[SECOND]], label [[FIRST]]
+; CHECK-NEXT:    br i1 true, label [[SECOND]], label [[FIRST]]
 ;
 entry:
   %callg = tail call i64 @g()
@@ -53,27 +48,23 @@ third:
 define hidden void @barrier2() align 2 {
 ; CHECK-LABEL: @barrier2(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = load i64, ptr null, align 8
 ; CHECK-NEXT:    [[CALL9:%.*]] = tail call i64 @g()
 ; CHECK-NEXT:    [[REM:%.*]] = select i1 undef, i64 0, i64 [[CALL9]]
-; CHECK-NEXT:    [[ADD:%.*]] = add i64 [[TMP0]], 1
-; CHECK-NEXT:    [[SHR17:%.*]] = lshr i64 [[ADD]], 1
-; CHECK-NEXT:    [[SUB:%.*]] = add nsw i64 [[SHR17]], -1
 ; CHECK-NEXT:    br label [[MAINLOOP:%.*]]
 ; CHECK:       second.exit:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label [[FIRST_EXIT:%.*]]
 ; CHECK:       first.exit:
 ; CHECK-NEXT:    br label [[MAINLOOP]]
 ; CHECK:       mainloop:
 ; CHECK-NEXT:    [[FIRSTPHI:%.*]] = phi i64 [ [[REM]], [[ENTRY:%.*]] ], [ 0, [[FIRST_EXIT]] ]
-; CHECK-NEXT:    [[FIRSTCMP:%.*]] = icmp eq i64 [[FIRSTPHI]], [[SUB]]
-; CHECK-NEXT:    br i1 [[FIRSTCMP]], label [[SECOND_PREHEADER:%.*]], label [[FIRST_EXIT]]
+; CHECK-NEXT:    br i1 poison, label [[SECOND_PREHEADER:%.*]], label [[FIRST_EXIT]]
 ; CHECK:       second.preheader:
 ; CHECK-NEXT:    br label [[INNERLOOP:%.*]]
 ; CHECK:       innerloop:
 ; CHECK-NEXT:    br label [[CLEANUP:%.*]]
 ; CHECK:       cleanup:
-; CHECK-NEXT:    br i1 false, label [[INNERLOOP]], label [[SECOND_EXIT:%.*]]
+; CHECK-NEXT:    br i1 true, label [[INNERLOOP]], label [[SECOND_EXIT:%.*]]
 ;
 entry:
   %0 = load i64, ptr null, align 8

@@ -1547,8 +1547,9 @@ const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) const {
     return nullptr;
 
   Value *LoadAddressLeader = lookupOperandLeader(LI->getPointerOperand());
-  // Load of undef is UB.
-  if (isa<UndefValue>(LoadAddressLeader))
+  // Load of undef or null is UB.
+  if (isa<UndefValue>(LoadAddressLeader) ||
+      isa<ConstantPointerNull>(LoadAddressLeader))
     return createConstantExpression(PoisonValue::get(LI->getType()));
   MemoryAccess *OriginalAccess = nullptr;
   MemoryAccess *DefiningAccess = nullptr;

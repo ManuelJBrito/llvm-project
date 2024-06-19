@@ -563,10 +563,9 @@ define void @test13() {
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    br label [[BB1:%.*]]
 ; CHECK:       bb1:
-; CHECK-NEXT:    [[TMP:%.*]] = load i8, ptr null, align 1
 ; CHECK-NEXT:    br label [[BB3:%.*]]
 ; CHECK:       bb3:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i8 [ [[TMP]], [[BB1]] ], [ [[TMP10:%.*]], [[BB3]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i8 [ poison, [[BB1]] ], [ [[TMP10:%.*]], [[BB3]] ]
 ; CHECK-NEXT:    [[TMP4:%.*]] = phi ptr [ null, [[BB1]] ], [ [[TMP6:%.*]], [[BB3]] ]
 ; CHECK-NEXT:    [[TMP5:%.*]] = phi i32 [ undef, [[BB1]] ], [ [[TMP9:%.*]], [[BB3]] ]
 ; CHECK-NEXT:    [[TMP6]] = getelementptr i8, ptr [[TMP4]], i64 1

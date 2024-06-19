@@ -13,8 +13,7 @@ define i32 @f(ptr %f) {
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br i1 false, label [[BB1:%.*]], label [[BB2]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    [[STOREMERGE:%.*]] = load i32, ptr null, align 4
-; CHECK-NEXT:    ret i32 [[STOREMERGE]]
+; CHECK-NEXT:    ret i32 poison
 ;
 ; Load should be removed, since it's ignored.
 bb0:

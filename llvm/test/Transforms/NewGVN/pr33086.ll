@@ -21,8 +21,7 @@ define void @tinkywinky() {
 ; CHECK:       l1.loopexit:
 ; CHECK-NEXT:    br label [[L1:%.*]]
 ; CHECK:       l1:
-; CHECK-NEXT:    [[TMP0:%.*]] = load i16, ptr null, align 2
-; CHECK-NEXT:    [[G_0_G_0__PR:%.*]] = load i16, ptr null, align 2
+; CHECK-NEXT:    store i16 poison, ptr null, align 2
 ; CHECK-NEXT:    ret void
 ; CHECK:       for.cond18:
 ; CHECK-NEXT:    br label [[L1]]

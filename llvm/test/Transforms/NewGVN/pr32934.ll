@@ -11,9 +11,7 @@ define void @tinkywinky() {
 ; CHECK-NEXT:    store i32 0, ptr null, align 4
 ; CHECK-NEXT:    br label [[FOR_COND:%.*]]
 ; CHECK:       for.cond:
-; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr null, align 4
-; CHECK-NEXT:    [[CMP:%.*]] = icmp slt i32 [[TMP0]], 1
-; CHECK-NEXT:    br i1 [[CMP]], label [[FOR_BODY:%.*]], label [[WHILE_COND:%.*]]
+; CHECK-NEXT:    br i1 poison, label [[FOR_BODY:%.*]], label [[WHILE_COND:%.*]]
 ; CHECK:       for.body:
 ; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr @a, align 4
 ; CHECK-NEXT:    store i32 [[TMP1]], ptr [[D]], align 4

@@ -12,12 +12,9 @@ define void @tinkywinky(i1 %patatino) {
 ; CHECK:       L:
 ; CHECK-NEXT:    br label [[IF_END]]
 ; CHECK:       if.end:
-; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr null, align 4
 ; CHECK-NEXT:    [[BF_LOAD1:%.*]] = load i32, ptr @b, align 4
-; CHECK-NEXT:    [[BF_VALUE:%.*]] = and i32 [[TMP1]], 536870911
 ; CHECK-NEXT:    [[BF_CLEAR:%.*]] = and i32 [[BF_LOAD1]], -536870912
-; CHECK-NEXT:    [[BF_SET:%.*]] = or i32 [[BF_CLEAR]], [[BF_VALUE]]
-; CHECK-NEXT:    store i32 [[BF_SET]], ptr @b, align 4
+; CHECK-NEXT:    store i32 poison, ptr @b, align 4
 ; CHECK-NEXT:    br label [[LOR_END:%.*]]
 ; CHECK:       lor.end:
 ; CHECK-NEXT:    br label [[L]]
