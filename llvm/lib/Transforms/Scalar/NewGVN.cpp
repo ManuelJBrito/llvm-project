@@ -73,10 +73,12 @@
 #include "llvm/Analysis/CFG.h"
 #include "llvm/Analysis/CFGPrinter.h"
 #include "llvm/Analysis/ConstantFolding.h"
+#include "llvm/Analysis/DomTreeUpdater.h"
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/MemorySSA.h"
+#include "llvm/Analysis/MemorySSAUpdater.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Argument.h"
@@ -105,6 +107,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar/GVNExpression.h"
 #include "llvm/Transforms/Utils/AssumeBundleBuilder.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/PredicateInfo.h"
 #include "llvm/Transforms/Utils/VNCoercion.h"
@@ -502,6 +505,7 @@ class NewGVN {
   AliasAnalysis *AA = nullptr;
   MemorySSA *MSSA = nullptr;
   MemorySSAWalker *MSSAWalker = nullptr;
+  MemorySSAUpdater *MSSAU = nullptr;
   AssumptionCache *AC = nullptr;
   const DataLayout &DL;
   std::unique_ptr<PredicateInfo> PredInfo;
@@ -2702,9 +2706,9 @@ Value *NewGVN::findLeaderForInst(Instruction *TransInst,
 }
 
 static bool okayForPRE(Instruction *I) {
-  if (!isa<BinaryOperator>(I))
-    return false;
-  return true;
+  if (isa<BinaryOperator>(I) || isa<LoadInst>(I))
+    return true;
+  return false;
 }
 
 bool NewGVN::fullyRedundant(SmallVector<ValPair, 4> AvailableValues,
@@ -2772,11 +2776,11 @@ bool NewGVN::fullyRedundant(SmallVector<ValPair, 4> AvailableValues,
   else if (NumWithout == 1) {
     auto *CC = createSingletonCongruenceClass(PREInst);
     ValueToClass[PREInst] = CC;
-    const auto &InstRange = BlockInstRange.lookup(PredBlock);
+    const auto &InstRange = BlockInstRange.lookup(MissingBlock);
 
     // Post-increment because InstRange is open on the right-side.
     unsigned DFSNumber =
-        InstRange.second + NumPREInsertionsPerBlock[PredBlock]++;
+        InstRange.second + NumPREInsertionsPerBlock[MissingBlock]++;
 
     InstrDFS[PREInst] = DFSNumber;
     DFSToInstr[DFSNumber] = PREInst;
@@ -2957,7 +2961,10 @@ const Expression *NewGVN::performPRE(Instruction *I,
     addAdditionalUsers(Dep, I);
   BasicBlock *MissingBlock = nullptr;
   bool isFullyRedundant = fullyRedundant(PHIOps, I, PHIBlock, MissingBlock);
-  // If it is not fully redundant then delete every temp instruction. If it is fully redundant but no insertion was required then delete every temp.Otherwise delete every one except for the one corresponding to the MissingBlock. In the process rename and insert the required instruction.
+  // If it is not fully redundant then delete every temp instruction. If it is
+  // fully redundant but no insertion was required then delete every
+  // temp.Otherwise delete every one except for the one corresponding to the
+  // MissingBlock. In the process rename and insert the required instruction.
   if (!isFullyRedundant || !MissingBlock) {
     for (auto &KV : ValueOps) {
       KV.first->deleteValue();
@@ -2969,6 +2976,12 @@ const Expression *NewGVN::performPRE(Instruction *I,
       else {
         KV.first->setName(I->getName() + ".pre");
         KV.first->insertBefore(MissingBlock->getTerminator());
+        if (auto *LI = dyn_cast<LoadInst>(KV.first)) {
+          auto *NewAccess = MSSAU->createMemoryAccessInBB(
+              LI, /*Definition=*/nullptr, MissingBlock,
+              MemorySSA::BeforeTerminator);
+          MSSAU->insertUse(cast<MemoryUse>(NewAccess), /*RenameUses=*/true);
+        }
       }
     }
   }
@@ -3256,7 +3269,7 @@ void NewGVN::valueNumberInstruction(Instruction *I) {
 
       // Make a phi of ops if necessary
       if (Symbolized && !isa<ConstantExpression>(Symbolized) &&
-          !isa<VariableExpression>(Symbolized)) {
+          !isa<VariableExpression>(Symbolized) && !PREInsts.count(I)) {
         auto *PHIE = performPRE(I, Visited);
         // If we created a phi of ops, use it.
         // If we couldn't create one, make sure we don't leave one lying around
@@ -3588,6 +3601,8 @@ bool NewGVN::runGVN() {
   bool Changed = false;
   NumFuncArgs = F.arg_size();
   MSSAWalker = MSSA->getWalker();
+  MemorySSAUpdater Updater(MSSA);
+  MSSAU = &Updater;
   SingletonDeadExpression = new (ExpressionAllocator) DeadExpression();
 
   // Count number of instructions for sizing of hash tables, and come

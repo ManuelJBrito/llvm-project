@@ -10,17 +10,21 @@ define void @tinkywinky() {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    br i1 undef, label [[L2:%.*]], label [[IF_THEN:%.*]]
 ; CHECK:       if.then:
+; CHECK-NEXT:    [[PATATINO_PRE:%.*]] = load i64, ptr @c, align 4
 ; CHECK-NEXT:    br label [[FOR_BODY:%.*]]
 ; CHECK:       ph:
+; CHECK-NEXT:    [[PATATINO_PRE1:%.*]] = load i64, ptr @c, align 4
 ; CHECK-NEXT:    br label [[FOR_BODY]]
 ; CHECK:       for.body:
+; CHECK-NEXT:    [[PHIOFOPS2:%.*]] = phi i64 [ [[PATATINO_PRE]], [[IF_THEN]] ], [ [[PATATINO_PRE1]], [[PH:%.*]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i64 [ [[PATATINO_PRE]], [[IF_THEN]] ], [ [[PATATINO_PRE1]], [[PH]] ]
 ; CHECK-NEXT:    br i1 undef, label [[ONTRUE:%.*]], label [[ONFALSE:%.*]]
 ; CHECK:       onfalse:
-; CHECK-NEXT:    [[PATATINO:%.*]] = load i64, ptr @c, align 4
+; CHECK-NEXT:    store i64 [[PHIOFOPS2]], ptr @c, align 4
 ; CHECK-NEXT:    ret void
 ; CHECK:       ontrue:
-; CHECK-NEXT:    [[DIPSY:%.*]] = load i64, ptr @c, align 4
-; CHECK-NEXT:    br label [[PH:%.*]]
+; CHECK-NEXT:    store i64 [[PHIOFOPS]], ptr @c, align 4
+; CHECK-NEXT:    br label [[PH]]
 ; CHECK:       back:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label [[PH]]

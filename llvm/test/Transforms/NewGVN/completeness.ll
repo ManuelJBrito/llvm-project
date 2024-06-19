@@ -210,6 +210,8 @@ define i64 @test5(i64 %arg) {
 ; CHECK-NEXT:    [[TMP1:%.*]] = icmp eq i64 [[ARG:%.*]], 0
 ; CHECK-NEXT:    br i1 [[TMP1]], label [[BB28:%.*]], label [[BB2:%.*]]
 ; CHECK:       bb2:
+; CHECK-NEXT:    [[TMP10:%.*]] = load i64, ptr @global, align 16
+; CHECK-NEXT:    [[TMP11:%.*]] = load i64, ptr @global.1, align 16
 ; CHECK-NEXT:    br label [[BB7:%.*]]
 ; CHECK:       bb4:
 ; CHECK-NEXT:    br label [[BB5:%.*]]
@@ -219,8 +221,6 @@ define i64 @test5(i64 %arg) {
 ; CHECK:       bb7:
 ; CHECK-NEXT:    [[TMP8:%.*]] = phi i64 [ [[ARG]], [[BB2]] ], [ [[TMP9]], [[BB5]] ]
 ; CHECK-NEXT:    [[TMP9]] = add nsw i64 [[TMP8]], -1
-; CHECK-NEXT:    [[TMP10:%.*]] = load i64, ptr @global, align 16
-; CHECK-NEXT:    [[TMP11:%.*]] = load i64, ptr @global.1, align 16
 ; CHECK-NEXT:    [[TMP12:%.*]] = mul nsw i64 [[TMP11]], [[TMP10]]
 ; CHECK-NEXT:    [[TMP13:%.*]] = icmp eq i64 [[TMP12]], 0
 ; CHECK-NEXT:    br i1 [[TMP13]], label [[BB5]], label [[BB14:%.*]]
