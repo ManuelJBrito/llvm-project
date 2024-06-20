@@ -19,10 +19,10 @@ define void @test1(i32 %N, ptr nocapture %G) nounwind ssp {
 ; CHECK-NEXT:    [[TMP:%.*]] = zext i32 [[TMP0]] to i64
 ; CHECK-NEXT:    br label [[BB:%.*]]
 ; CHECK:       bb:
+; CHECK-NEXT:    [[SCEVGEP7:%.*]] = phi ptr [ [[G]], [[BB_NPH]] ], [ [[SCEVGEP:%.*]], [[BB]] ]
 ; CHECK-NEXT:    [[INDVAR:%.*]] = phi i64 [ 0, [[BB_NPH]] ], [ [[TMP6:%.*]], [[BB]] ]
 ; CHECK-NEXT:    [[TMP6]] = add i64 [[INDVAR]], 1
-; CHECK-NEXT:    [[SCEVGEP:%.*]] = getelementptr double, ptr [[G]], i64 [[TMP6]]
-; CHECK-NEXT:    [[SCEVGEP7:%.*]] = getelementptr double, ptr [[G]], i64 [[INDVAR]]
+; CHECK-NEXT:    [[SCEVGEP]] = getelementptr double, ptr [[G]], i64 [[TMP6]]
 ; CHECK-NEXT:    [[TMP2:%.*]] = load double, ptr [[SCEVGEP7]], align 8
 ; CHECK-NEXT:    [[TMP3:%.*]] = load double, ptr [[SCEVGEP]], align 8
 ; CHECK-NEXT:    [[TMP4:%.*]] = fadd double [[TMP2]], [[TMP3]]

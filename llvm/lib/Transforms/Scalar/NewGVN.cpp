@@ -2618,7 +2618,7 @@ static bool okayForPHIOfOps(const Instruction *I) {
   if (!EnablePhiOfOps)
     return false;
   return isa<BinaryOperator>(I) || isa<SelectInst>(I) || isa<CmpInst>(I) ||
-         isa<LoadInst>(I);
+         isa<LoadInst>(I) || isa<GetElementPtrInst>(I);
 }
 
 // Return true if this operand will be safe to use for phi of ops.
