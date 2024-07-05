@@ -6,7 +6,7 @@ target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 
 ;; All the loads in this testcase are useless, but it requires understanding that repeated
 ;; stores of the same value do not change the memory state to eliminate them.
-;; TODO : Phi of ops is useless here. On edge (4,5) %tmp3 is true. This because 
+;; TODO : Phi of ops is useless here. On edge (4,5) %tmp3 is true. This because
 ;; of some ssa.copy and PRE shenanigans.
 define i32 @foo(ptr, i32)  {
 ; CHECK-LABEL: @foo(
@@ -17,12 +17,12 @@ define i32 @foo(ptr, i32)  {
 ; CHECK-NEXT:    br label [[TMP5]]
 ; CHECK:       5:
 ; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ [[TMP3]], [[TMP2:%.*]] ], [ true, [[TMP4]] ]
+; CHECK-NEXT:    [[TMP7:%.*]] = phi i32 [ 10, [[TMP2]] ], [ 15, [[TMP4]] ]
 ; CHECK-NEXT:    [[DOT0:%.*]] = phi i32 [ 10, [[TMP4]] ], [ 5, [[TMP2]] ]
 ; CHECK-NEXT:    br i1 [[PHIOFOPS]], label [[TMP6:%.*]], label [[TMP8:%.*]]
 ; CHECK:       6:
-; CHECK-NEXT:    [[TMP7:%.*]] = add nsw i32 [[DOT0]], 5
 ; CHECK-NEXT:    br label [[TMP8]]
-; CHECK:       8:
+; CHECK:       7:
 ; CHECK-NEXT:    [[DOT1:%.*]] = phi i32 [ [[TMP7]], [[TMP6]] ], [ [[DOT0]], [[TMP5]] ]
 ; CHECK-NEXT:    ret i32 [[DOT1]]
 ;
@@ -64,12 +64,12 @@ define i32 @foo2(ptr, i32)  {
 ; CHECK-NEXT:    br label [[TMP6]]
 ; CHECK:       6:
 ; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ false, [[TMP5]] ], [ true, [[TMP4]] ]
+; CHECK-NEXT:    [[TMP8:%.*]] = phi i32 [ 10, [[TMP5]] ], [ 15, [[TMP4]] ]
 ; CHECK-NEXT:    [[DOT0:%.*]] = phi i32 [ 10, [[TMP4]] ], [ 5, [[TMP5]] ]
 ; CHECK-NEXT:    br i1 [[PHIOFOPS]], label [[TMP7:%.*]], label [[TMP9:%.*]]
 ; CHECK:       7:
-; CHECK-NEXT:    [[TMP8:%.*]] = add nsw i32 [[DOT0]], 5
 ; CHECK-NEXT:    br label [[TMP9]]
-; CHECK:       9:
+; CHECK:       8:
 ; CHECK-NEXT:    [[DOT1:%.*]] = phi i32 [ [[TMP8]], [[TMP7]] ], [ [[DOT0]], [[TMP6]] ]
 ; CHECK-NEXT:    ret i32 [[DOT1]]
 ;

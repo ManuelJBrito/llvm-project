@@ -224,9 +224,10 @@ define i1 @test7_fp(float %x, float %y) {
 ; CHECK-NEXT:    [[CMP:%.*]] = fcmp ogt float [[X:%.*]], [[Y:%.*]]
 ; CHECK-NEXT:    br i1 [[CMP]], label [[SAME:%.*]], label [[DIFFERENT:%.*]]
 ; CHECK:       same:
-; CHECK-NEXT:    ret i1 false
+; CHECK-NEXT:    [[CMP2:%.*]] = fcmp ule float [[X]], [[Y]]
+; CHECK-NEXT:    ret i1 [[CMP2]]
 ; CHECK:       different:
-; CHECK-NEXT:    ret i1 false
+; CHECK-NEXT:    ret i1 [[CMP]]
 ;
   %cmp = fcmp ogt float %x, %y
   br i1 %cmp, label %same, label %different
@@ -296,7 +297,7 @@ define i32 @test11(i32 %x) {
 ; CHECK-NEXT:    [[CMP2:%.*]] = icmp eq i32 [[X:%.*]], [[V0]]
 ; CHECK-NEXT:    br i1 [[CMP2]], label [[COND_TRUE2:%.*]], label [[NEXT2:%.*]]
 ; CHECK:       cond_true2:
-; CHECK-NEXT:    ret i32 [[X]]
+; CHECK-NEXT:    ret i32 [[V0]]
 ; CHECK:       next2:
 ; CHECK-NEXT:    ret i32 0
 ;

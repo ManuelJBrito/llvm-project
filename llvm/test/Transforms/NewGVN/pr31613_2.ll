@@ -50,7 +50,6 @@ define hidden void @barrier2() align 2 {
 ; CHECK-NEXT:    [[REM:%.*]] = select i1 undef, i64 0, i64 [[CALL9]]
 ; CHECK-NEXT:    br label [[MAINLOOP:%.*]]
 ; CHECK:       second.exit:
-; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label [[FIRST_EXIT:%.*]]
 ; CHECK:       first.exit:
 ; CHECK-NEXT:    br label [[MAINLOOP]]
@@ -58,9 +57,11 @@ define hidden void @barrier2() align 2 {
 ; CHECK-NEXT:    [[FIRSTPHI:%.*]] = phi i64 [ [[REM]], [[ENTRY:%.*]] ], [ 0, [[FIRST_EXIT]] ]
 ; CHECK-NEXT:    br i1 poison, label [[SECOND_PREHEADER:%.*]], label [[FIRST_EXIT]]
 ; CHECK:       second.preheader:
+; CHECK-NEXT:    [[INC_PRE:%.*]] = add i64 [[REM]], 1
 ; CHECK-NEXT:    br label [[INNERLOOP:%.*]]
 ; CHECK:       innerloop:
-; CHECK-NEXT:    br i1 true, label [[INNERLOOP]], label [[SECOND_EXIT:%.*]]
+; CHECK-NEXT:    [[INC:%.*]] = add i64 [[INC_PRE]], 1
+; CHECK-NEXT:    br i1 poison, label [[INNERLOOP]], label [[SECOND_EXIT:%.*]]
 ;
 entry:
   %0 = load i64, ptr null, align 8

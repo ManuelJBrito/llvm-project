@@ -8,10 +8,10 @@ define void @fn1(i1 %bc) {
 ; CHECK-SAME: i1 [[BC:%.*]]) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[LV:%.*]] = load i32, ptr @a, align 4
-; CHECK-NEXT:    br label [[FOR_COND:%.*]]
-; CHECK:       for.cond:
 ; CHECK-NEXT:    [[BF_CLEAR:%.*]] = and i32 [[LV]], -131072
 ; CHECK-NEXT:    [[BF_SET:%.*]] = or i32 1, [[BF_CLEAR]]
+; CHECK-NEXT:    br label [[FOR_COND:%.*]]
+; CHECK:       for.cond:
 ; CHECK-NEXT:    br i1 [[BC]], label [[FOR_COND]], label [[EXIT:%.*]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    store i32 [[BF_SET]], ptr @a, align 4

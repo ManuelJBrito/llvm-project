@@ -8,13 +8,15 @@ define i32 @mp_unsgn_cmp(i32 %n, ptr nocapture readonly %in1, ptr nocapture read
 ; CHECK-NEXT:    [[CMP11:%.*]] = icmp sgt i32 [[N:%.*]], -1
 ; CHECK-NEXT:    br i1 [[CMP11]], label [[FOR_INC_PREHEADER:%.*]], label [[IF_ELSE:%.*]]
 ; CHECK:       for.inc.preheader:
+; CHECK-NEXT:    [[DOTPRE:%.*]] = load i32, ptr [[IN1:%.*]], align 4
+; CHECK-NEXT:    [[DOTPRE1:%.*]] = load i32, ptr [[IN2:%.*]], align 4
 ; CHECK-NEXT:    br label [[FOR_INC:%.*]]
 ; CHECK:       for.inc:
 ; CHECK-NEXT:    [[STOREMERGE2:%.*]] = phi i32 [ [[INC:%.*]], [[FOR_INC]] ], [ 0, [[FOR_INC_PREHEADER]] ]
 ; CHECK-NEXT:    [[IDXPROM:%.*]] = sext i32 [[STOREMERGE2]] to i64
-; CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i32, ptr [[IN1:%.*]], i64 [[IDXPROM]]
+; CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i32, ptr [[IN1]], i64 [[IDXPROM]]
 ; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr [[ARRAYIDX]], align 4
-; CHECK-NEXT:    [[ARRAYIDX4:%.*]] = getelementptr inbounds i32, ptr [[IN2:%.*]], i64 [[IDXPROM]]
+; CHECK-NEXT:    [[ARRAYIDX4:%.*]] = getelementptr inbounds i32, ptr [[IN2]], i64 [[IDXPROM]]
 ; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr [[ARRAYIDX4]], align 4
 ; CHECK-NEXT:    [[SUB:%.*]] = sub nsw i32 [[TMP0]], [[TMP1]]
 ; CHECK-NEXT:    [[INC]] = add nsw i32 [[STOREMERGE2]], 1

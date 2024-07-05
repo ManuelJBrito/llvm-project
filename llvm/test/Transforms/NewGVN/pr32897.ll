@@ -4,9 +4,11 @@
 define void @tinkywinky(ptr %b) {
 ; CHECK-LABEL: @tinkywinky(
 ; CHECK-NEXT:  entry:
+; CHECK-NEXT:    [[B2_PRE:%.*]] = load i64, ptr [[B:%.*]], align 4
 ; CHECK-NEXT:    br label [[BODY:%.*]]
 ; CHECK:       body:
-; CHECK-NEXT:    store i64 undef, ptr [[B:%.*]], align 4
+; CHECK-NEXT:    store i64 undef, ptr [[B]], align 4
+; CHECK-NEXT:    store i64 [[B2_PRE]], ptr [[B]], align 4
 ; CHECK-NEXT:    br i1 undef, label [[BODY]], label [[END:%.*]]
 ; CHECK:       end:
 ; CHECK-NEXT:    br label [[BODY]]

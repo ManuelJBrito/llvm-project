@@ -168,15 +168,18 @@ define i32 @test4(i32, ptr, ptr noalias, ptr noalias) {
 ; CHECK-NEXT:    [[TMP5:%.*]] = icmp ne i32 [[TMP0:%.*]], 0
 ; CHECK-NEXT:    br i1 [[TMP5]], label [[TMP6:%.*]], label [[TMP7:%.*]]
 ; CHECK:       6:
+; CHECK-NEXT:    [[DOTPRE:%.*]] = load i32, ptr [[TMP2]], align 4
+; CHECK-NEXT:    [[DOTPRE1:%.*]] = mul nsw i32 [[DOTPRE]], 15
+; CHECK-NEXT:    [[DOTPRE2:%.*]] = mul nsw i32 [[DOTPRE1]], 5
 ; CHECK-NEXT:    br label [[TMP8:%.*]]
 ; CHECK:       7:
 ; CHECK-NEXT:    br label [[TMP8]]
 ; CHECK:       8:
+; CHECK-NEXT:    [[PHIOFOPS4:%.*]] = phi i32 [ 7, [[TMP7]] ], [ [[DOTPRE]], [[TMP6]] ]
+; CHECK-NEXT:    [[PHIOFOPS3:%.*]] = phi i32 [ 105, [[TMP7]] ], [ [[DOTPRE1]], [[TMP6]] ]
+; CHECK-NEXT:    [[TMP11:%.*]] = phi i32 [ 735, [[TMP7]] ], [ [[DOTPRE2]], [[TMP6]] ]
 ; CHECK-NEXT:    [[DOT01:%.*]] = phi i32 [ 5, [[TMP6]] ], [ 7, [[TMP7]] ]
 ; CHECK-NEXT:    [[DOT0:%.*]] = phi ptr [ [[TMP2]], [[TMP6]] ], [ [[TMP3]], [[TMP7]] ]
-; CHECK-NEXT:    [[TMP9:%.*]] = load i32, ptr [[DOT0]], align 4
-; CHECK-NEXT:    [[TMP10:%.*]] = mul nsw i32 [[TMP9]], 15
-; CHECK-NEXT:    [[TMP11:%.*]] = mul nsw i32 [[TMP10]], [[DOT01]]
 ; CHECK-NEXT:    ret i32 [[TMP11]]
 ;
   store i32 5, ptr %2, align 4
@@ -225,6 +228,8 @@ define i64 @test5(i64 %arg) {
 ; CHECK-NEXT:    [[TMP13:%.*]] = icmp eq i64 [[TMP12]], 0
 ; CHECK-NEXT:    br i1 [[TMP13]], label [[BB5]], label [[BB14:%.*]]
 ; CHECK:       bb14:
+; CHECK-NEXT:    [[TMP22_PRE:%.*]] = load i64, ptr getelementptr inbounds ([100 x i64], ptr @global, i64 0, i64 1), align 8
+; CHECK-NEXT:    [[TMP24_PRE:%.*]] = load i64, ptr getelementptr inbounds ([100 x i64], ptr @global.1, i64 0, i64 1), align 8
 ; CHECK-NEXT:    br label [[BB15:%.*]]
 ; CHECK:       bb15:
 ; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i64 [ [[TMP12]], [[BB14]] ], [ [[TMP25:%.*]], [[BB15]] ]

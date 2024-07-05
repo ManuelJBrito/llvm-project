@@ -17,17 +17,17 @@ define i32 @volatile_load(i32 %n) {
 ; CHECK-NEXT:    [[CMP6:%.*]] = icmp sgt i32 [[N:%.*]], 0
 ; CHECK-NEXT:    br i1 [[CMP6]], label [[FOR_BODY_LR_PH:%.*]], label [[FOR_END:%.*]]
 ; CHECK:       for.body.lr.ph:
-; CHECK-NEXT:    [[TMP0:%.*]] = load ptr, ptr @a2, align 8, !tbaa [[TBAA5:![0-9]+]]
-; CHECK-NEXT:    [[TMP1:%.*]] = load ptr, ptr @a, align 8, !tbaa [[TBAA5]]
+; CHECK-NEXT:    [[TMP0:%.*]] = load ptr, ptr @a2, align 8
+; CHECK-NEXT:    [[TMP1:%.*]] = load ptr, ptr @a, align 8
 ; CHECK-NEXT:    br label [[FOR_BODY:%.*]]
 ; CHECK:       for.body:
 ; CHECK-NEXT:    [[INDVARS_IV:%.*]] = phi i64 [ 0, [[FOR_BODY_LR_PH]] ], [ [[INDVARS_IV_NEXT:%.*]], [[FOR_BODY]] ]
 ; CHECK-NEXT:    [[S_09:%.*]] = phi i32 [ 0, [[FOR_BODY_LR_PH]] ], [ [[ADD:%.*]], [[FOR_BODY]] ]
 ; CHECK-NEXT:    [[P_08:%.*]] = phi ptr [ [[TMP0]], [[FOR_BODY_LR_PH]] ], [ [[INCDEC_PTR:%.*]], [[FOR_BODY]] ]
-; CHECK-NEXT:    [[TMP2:%.*]] = load i32, ptr [[P_08]], align 4, !tbaa [[TBAA9:![0-9]+]]
+; CHECK-NEXT:    [[TMP2:%.*]] = load i32, ptr [[P_08]], align 4, !tbaa [[TBAA5:![0-9]+]]
 ; CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i32, ptr [[TMP1]], i64 [[INDVARS_IV]]
-; CHECK-NEXT:    store i32 [[TMP2]], ptr [[ARRAYIDX]], align 4, !tbaa [[TBAA9]]
-; CHECK-NEXT:    [[TMP3:%.*]] = load volatile i32, ptr [[P_08]], align 4, !tbaa [[TBAA9]]
+; CHECK-NEXT:    store i32 [[TMP2]], ptr [[ARRAYIDX]], align 4, !tbaa [[TBAA5]]
+; CHECK-NEXT:    [[TMP3:%.*]] = load volatile i32, ptr [[P_08]], align 4
 ; CHECK-NEXT:    [[ADD]] = add nsw i32 [[TMP3]], [[S_09]]
 ; CHECK-NEXT:    [[INDVARS_IV_NEXT]] = add nuw nsw i64 [[INDVARS_IV]], 1
 ; CHECK-NEXT:    [[INCDEC_PTR]] = getelementptr inbounds i32, ptr [[P_08]], i64 1
@@ -79,22 +79,22 @@ for.end:
 define i32 @overaligned_load(i32 %a, ptr nocapture %b) !dbg !13 {
 ; CHECK-LABEL: @overaligned_load(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[CMP:%.*]] = icmp sgt i32 [[A:%.*]], 0, !dbg [[DBG14:![0-9]+]]
-; CHECK-NEXT:    br i1 [[CMP]], label [[IF_THEN:%.*]], label [[IF_ELSE:%.*]], !dbg [[DBG14]]
+; CHECK-NEXT:    [[CMP:%.*]] = icmp sgt i32 [[A:%.*]], 0, !dbg [[DBG12:![0-9]+]]
+; CHECK-NEXT:    br i1 [[CMP]], label [[IF_THEN:%.*]], label [[IF_ELSE:%.*]], !dbg [[DBG12]]
 ; CHECK:       if.then:
-; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr @s1, align 8, !dbg [[DBG15:![0-9]+]], !tbaa [[TBAA9]]
-; CHECK-NEXT:    br label [[IF_END:%.*]], !dbg [[DBG15]]
+; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr @s1, align 8, !dbg [[DBG13:![0-9]+]], !tbaa [[TBAA5]]
+; CHECK-NEXT:    br label [[IF_END:%.*]], !dbg [[DBG13]]
 ; CHECK:       if.else:
-; CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i32, ptr [[B:%.*]], i64 2, !dbg [[DBG16:![0-9]+]]
-; CHECK-NEXT:    store i32 10, ptr [[ARRAYIDX]], align 4, !dbg [[DBG16]], !tbaa [[TBAA9]]
-; CHECK-NEXT:    br label [[IF_END]], !dbg [[DBG16]]
+; CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i32, ptr [[B:%.*]], i64 2, !dbg [[DBG14:![0-9]+]]
+; CHECK-NEXT:    store i32 10, ptr [[ARRAYIDX]], align 4, !dbg [[DBG14]], !tbaa [[TBAA5]]
+; CHECK-NEXT:    br label [[IF_END]], !dbg [[DBG14]]
 ; CHECK:       if.end:
 ; CHECK-NEXT:    [[I_0:%.*]] = phi i32 [ [[TMP0]], [[IF_THEN]] ], [ 0, [[IF_ELSE]] ]
 ; CHECK-NEXT:    [[P_0:%.*]] = phi ptr [ @s1, [[IF_THEN]] ], [ [[B]], [[IF_ELSE]] ]
-; CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, ptr [[P_0]], i64 1, !dbg [[DBG17:![0-9]+]]
-; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr [[ADD_PTR]], align 4, !dbg [[DBG17]], !tbaa [[TBAA9]]
-; CHECK-NEXT:    [[ADD1:%.*]] = add nsw i32 [[TMP1]], [[I_0]], !dbg [[DBG17]]
-; CHECK-NEXT:    ret i32 [[ADD1]], !dbg [[DBG17]]
+; CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, ptr [[P_0]], i64 1, !dbg [[DBG15:![0-9]+]]
+; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr [[ADD_PTR]], align 4, !dbg [[DBG15]], !tbaa [[TBAA5]]
+; CHECK-NEXT:    [[ADD1:%.*]] = add nsw i32 [[TMP1]], [[I_0]], !dbg [[DBG15]]
+; CHECK-NEXT:    ret i32 [[ADD1]], !dbg [[DBG15]]
 ;
 entry:
   %cmp = icmp sgt i32 %a, 0, !dbg !14

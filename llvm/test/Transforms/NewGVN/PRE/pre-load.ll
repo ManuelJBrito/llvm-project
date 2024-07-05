@@ -229,9 +229,9 @@ define void @test6(i32 %N, ptr nocapture %G) nounwind ssp {
 ; CHECK-NEXT:    [[INDVAR:%.*]] = phi i64 [ 0, [[BB_NPH]] ], [ [[TMP6:%.*]], [[BB]] ]
 ; CHECK-NEXT:    [[TMP6]] = add i64 [[INDVAR]], 1
 ; CHECK-NEXT:    [[SCEVGEP]] = getelementptr double, ptr [[G]], i64 [[TMP6]]
-; CHECK-NEXT:    [[TMP3:%.*]] = load double, ptr [[SCEVGEP]], align 8
-; CHECK-NEXT:    [[TMP4]] = fadd double [[TMP2]], [[TMP3]]
-; CHECK-NEXT:    store double [[TMP4]], ptr [[SCEVGEP]], align 8
+; CHECK-NEXT:    [[TMP4]] = load double, ptr [[SCEVGEP]], align 8
+; CHECK-NEXT:    [[TMP3:%.*]] = fadd double [[TMP2]], [[TMP4]]
+; CHECK-NEXT:    store double [[TMP3]], ptr [[SCEVGEP]], align 8
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp eq i64 [[TMP6]], [[TMP]]
 ; CHECK-NEXT:    br i1 [[EXITCOND]], label [[RETURN]], label [[BB]]
 ; CHECK:       return:
@@ -277,7 +277,7 @@ define void @test7(i32 %N, ptr nocapture %G) nounwind ssp {
 ; CHECK-LABEL: define void @test7(
 ; CHECK-SAME: i32 [[N:%.*]], ptr nocapture [[G:%.*]]) #[[ATTR0]] {
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = getelementptr inbounds double, ptr [[G]], i64 1
+; CHECK-NEXT:    [[TMP0:%.*]] = getelementptr double, ptr [[G]], i64 1
 ; CHECK-NEXT:    store double 1.000000e+00, ptr [[TMP0]], align 8
 ; CHECK-NEXT:    [[TMP1:%.*]] = add i32 [[N]], -1
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp sgt i32 [[TMP1]], 1
@@ -460,11 +460,11 @@ define void @test10(i32 %N, ptr nocapture %G) nounwind ssp {
 ; CHECK-NEXT:    [[SCEVGEP10:%.*]] = getelementptr double, ptr [[G]], i64 [[TMP9]]
 ; CHECK-NEXT:    [[TMP11]] = add i64 [[INDVAR]], 1
 ; CHECK-NEXT:    [[SCEVGEP12]] = getelementptr double, ptr [[G]], i64 [[TMP11]]
-; CHECK-NEXT:    [[TMP3:%.*]] = load double, ptr [[SCEVGEP12]], align 8
+; CHECK-NEXT:    [[TMP6]] = load double, ptr [[SCEVGEP12]], align 8
 ; CHECK-NEXT:    [[TMP4:%.*]] = load double, ptr [[SCEVGEP10]], align 8
-; CHECK-NEXT:    [[TMP5:%.*]] = fadd double [[TMP3]], [[TMP4]]
-; CHECK-NEXT:    [[TMP6]] = fadd double [[TMP5]], [[TMP2]]
-; CHECK-NEXT:    store double [[TMP6]], ptr [[SCEVGEP12]], align 8
+; CHECK-NEXT:    [[TMP7:%.*]] = fadd double [[TMP6]], [[TMP4]]
+; CHECK-NEXT:    [[TMP5:%.*]] = fadd double [[TMP7]], [[TMP2]]
+; CHECK-NEXT:    store double [[TMP5]], ptr [[SCEVGEP12]], align 8
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp eq i64 [[TMP11]], [[TMP8]]
 ; CHECK-NEXT:    br i1 [[EXITCOND]], label [[RETURN]], label [[BB]]
 ; CHECK:       return:

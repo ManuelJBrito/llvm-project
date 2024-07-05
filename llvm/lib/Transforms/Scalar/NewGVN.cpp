@@ -676,6 +676,16 @@ class NewGVN {
   // Deletion info.
   SmallPtrSet<Instruction *, 8> InstructionsToErase;
 
+  // Lazy Checkpointing
+  DenseMap<Value*, DenseSet<BlockEdge>> Assumptions;
+
+  // Since we are in SSA and we iterate over the function in RPO, the basis for
+  // the optimistic assumption is always values carried by backedges at phis.
+  // Therefore we define the Snapshot base as an Edge. This base points to all
+  // its transitively assumed instructions. Finally each of these instructions
+  // points to its old uses.
+  DenseMap<BlockEdge, DenseMap<Instruction *, SmallPtrSet<Use *, 8>>> Snapshots;
+
 public:
   NewGVN(Function &F, DominatorTree *DT, AssumptionCache *AC,
          TargetLibraryInfo *TLI, AliasAnalysis *AA, MemorySSA *MSSA,
@@ -736,7 +746,8 @@ private:
 
   PHIExpression *createPHIExpression(ArrayRef<ValPair>, const Instruction *,
                                      BasicBlock *, bool &HasBackEdge,
-                                     bool &OriginalOpsConstant) const;
+                                     bool &OriginalOpsConstant,
+                                     DenseSet<BlockEdge> &SnapBase) const;
   const DeadExpression *createDeadExpression() const;
   const VariableExpression *createVariableExpression(Value *) const;
   const ConstantExpression *createConstantExpression(Constant *) const;
@@ -800,20 +811,26 @@ private:
   // Symbolic evaluation.
   ExprResult checkExprResults(Expression *, Instruction *, Value *) const;
   ExprResult performSymbolicEvaluation(Instruction *,
-                                       SmallPtrSetImpl<Value *> &) const;
+                                       SmallPtrSetImpl<Value *> &);
   const Expression *performSymbolicLoadCoercion(Type *, Value *, LoadInst *,
                                                 Instruction *,
                                                 MemoryAccess *) const;
   const Expression *performSymbolicLoadEvaluation(Instruction *) const;
   const Expression *performSymbolicStoreEvaluation(Instruction *) const;
-  ExprResult performSymbolicCallEvaluation(Instruction *) const;
+  ExprResult performSymbolicCallEvaluation(Instruction *) ;
   void sortPHIOps(MutableArrayRef<ValPair> Ops) const;
   const Expression *performSymbolicPHIEvaluation(ArrayRef<ValPair>,
                                                  Instruction *I,
-                                                 BasicBlock *PHIBlock) const;
+                                                 BasicBlock *PHIBlock);
   const Expression *performSymbolicAggrValueEvaluation(Instruction *) const;
   ExprResult performSymbolicCmpEvaluation(Instruction *) const;
-  ExprResult performSymbolicPredicateInfoEvaluation(IntrinsicInst *) const;
+  ExprResult performSymbolicPredicateInfoEvaluation(IntrinsicInst *);
+
+  // Checkpointing.
+  void updateIR(Instruction *, CongruenceClass *);
+  void snapshotIR(Instruction *, DenseSet<BlockEdge>);
+  void rollbackIR(BlockEdge);
+  bool RPODom(Instruction *, Instruction *);
 
   // Congruence finding.
   bool someEquivalentDominates(const Instruction *, const Instruction *) const;
@@ -860,9 +877,9 @@ private:
 
   // Various instruction touch utilities
   template <typename Map, typename KeyType>
-  void touchAndErase(Map &, const KeyType &);
+  void touchAndErase(Map &, const KeyType &, DenseSet<BlockEdge>);
   void markUsersTouched(Value *);
-  void markMemoryUsersTouched(const MemoryAccess *);
+  void markMemoryUsersTouched(MemoryAccess *);
   void markMemoryDefTouched(const MemoryAccess *);
   void markPredicateUsersTouched(Instruction *);
   void markValueLeaderChangeTouched(CongruenceClass *CC);
@@ -905,8 +922,16 @@ private:
   // This deliberately takes a value so it can be used with Use's, which will
   // auto-convert to Value's but not to MemoryAccess's.
   unsigned MemoryToDFSNum(const Value *MA) const {
+    if (!isa<MemoryAccess>(MA))
+      return ~0U;
     assert(isa<MemoryAccess>(MA) &&
            "This should not be used with instructions");
+    if (auto *MUD = dyn_cast<MemoryUseOrDef>(MA)) {
+      auto *MI = MUD->getMemoryInst();
+      assert(MI && "Use or def without instruction\n");
+      if (!MI->getParent())
+        return ~0U;
+    }
     return isa<MemoryUseOrDef>(MA)
                ? InstrToDFSNum(cast<MemoryUseOrDef>(MA)->getMemoryInst())
                : InstrDFS.lookup(MA);
@@ -1033,11 +1058,11 @@ static bool alwaysAvailable(Value *V) {
 // a phi node). We require, as an invariant, that all the PHIOperands in the
 // same block are sorted the same way. sortPHIOps will sort them into a
 // canonical order.
-PHIExpression *NewGVN::createPHIExpression(ArrayRef<ValPair> PHIOperands,
-                                           const Instruction *I,
-                                           BasicBlock *PHIBlock,
-                                           bool &HasBackedge,
-                                           bool &OriginalOpsConstant) const {
+PHIExpression *
+NewGVN::createPHIExpression(ArrayRef<ValPair> PHIOperands, const Instruction *I,
+                            BasicBlock *PHIBlock, bool &HasBackedge,
+                            bool &OriginalOpsConstant,
+                            DenseSet<BlockEdge> &SnapBase) const {
   unsigned NumOps = PHIOperands.size();
   auto *E = new (ExpressionAllocator) PHIExpression(NumOps, PHIBlock);
 
@@ -1051,8 +1076,10 @@ PHIExpression *NewGVN::createPHIExpression(ArrayRef<ValPair> PHIOperands,
     if (auto *PHIOp = dyn_cast<PHINode>(I))
       if (isCopyOfPHI(P.first, PHIOp))
         return false;
-    if (!ReachableEdges.count({BB, PHIBlock}))
+    if (!ReachableEdges.count({BB, PHIBlock})) {
+      SnapBase.insert({BB, PHIBlock});
       return false;
+    }
     // Things in TOPClass are equivalent to everything.
     if (ValueToClass.lookup(P.first) == TOPClass)
       return false;
@@ -1555,8 +1582,15 @@ const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) const {
     return createConstantExpression(PoisonValue::get(LI->getType()));
   MemoryAccess *OriginalAccess = nullptr;
   MemoryAccess *DefiningAccess = nullptr;
+  bool Temp = false;
   if (TempToMemory.count(I)) {
     DefiningAccess = TempToMemory.lookup(I);
+  } else if (PREInsts.count(I)) {
+    // Don't refine access for PRE insertions, since this might break the
+    // previous PRE that depends on them.
+    OriginalAccess = getMemoryAccess(I);
+    DefiningAccess = cast<MemoryAccess>(OriginalAccess->getOperand(0));
+    Temp = true;
   } else {
     OriginalAccess = getMemoryAccess(I);
     DefiningAccess = MSSAWalker->getClobberingMemoryAccess(OriginalAccess);
@@ -1583,15 +1617,13 @@ const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) const {
                                         DefiningAccess);
   // If our MemoryLeader is not our defining access, add a use to the
   // MemoryLeader, so that we get reprocessed when it changes.
-  // If we don't have an OriginalAccess its because we are evaluating a
-  // temporary instruction, no need to add users in this case.
-  if (LE->getMemoryLeader() != DefiningAccess && OriginalAccess)
+  if (LE->getMemoryLeader() != DefiningAccess && !Temp)
     addMemoryUsers(LE->getMemoryLeader(), OriginalAccess);
   return LE;
 }
 
 NewGVN::ExprResult
-NewGVN::performSymbolicPredicateInfoEvaluation(IntrinsicInst *I) const {
+NewGVN::performSymbolicPredicateInfoEvaluation(IntrinsicInst *I) {
   auto *PI = PredInfo->getPredicateInfoFor(I);
   if (!PI)
     return ExprResult::none();
@@ -1601,6 +1633,14 @@ NewGVN::performSymbolicPredicateInfoEvaluation(IntrinsicInst *I) const {
   const std::optional<PredicateConstraint> &Constraint = PI->getConstraint();
   if (!Constraint)
     return ExprResult::none();
+
+  auto *Cond = PI->Condition;
+  DenseSet<BlockEdge> AssumedEdges;
+  if (Assumptions.count(Cond))
+    AssumedEdges = Assumptions.lookup(Cond);
+  for (auto Edge : AssumedEdges) {
+    Assumptions[I].insert(Edge);
+  }
 
   CmpInst::Predicate Predicate = Constraint->Predicate;
   Value *CmpOp0 = I->getOperand(0);
@@ -1631,7 +1671,7 @@ NewGVN::performSymbolicPredicateInfoEvaluation(IntrinsicInst *I) const {
 }
 
 // Evaluate read only and pure calls, and create an expression result.
-NewGVN::ExprResult NewGVN::performSymbolicCallEvaluation(Instruction *I) const {
+NewGVN::ExprResult NewGVN::performSymbolicCallEvaluation(Instruction *I)  {
   auto *CI = cast<CallInst>(I);
   if (auto *II = dyn_cast<IntrinsicInst>(I)) {
     // Intrinsics with the returned attribute are copies of arguments.
@@ -1759,10 +1799,9 @@ bool NewGVN::isCycleFree(const Instruction *I) const {
 }
 
 // Evaluate PHI nodes symbolically and create an expression result.
-const Expression *
-NewGVN::performSymbolicPHIEvaluation(ArrayRef<ValPair> PHIOps,
-                                     Instruction *I,
-                                     BasicBlock *PHIBlock) const {
+const Expression *NewGVN::performSymbolicPHIEvaluation(ArrayRef<ValPair> PHIOps,
+                                                       Instruction *I,
+                                                       BasicBlock *PHIBlock) {
   // True if one of the incoming phi edges is a backedge.
   bool HasBackedge = false;
   // All constant tracks the state of whether all the *original* phi operands
@@ -1770,8 +1809,19 @@ NewGVN::performSymbolicPHIEvaluation(ArrayRef<ValPair> PHIOps,
   // change in value of the phi is guaranteed not to later change the value of
   // the phi. IE it can't be v = phi(undef, v+1)
   bool OriginalOpsConstant = true;
+  DenseSet<BlockEdge> SnapBase;
   auto *E = cast<PHIExpression>(createPHIExpression(
-      PHIOps, I, PHIBlock, HasBackedge, OriginalOpsConstant));
+      PHIOps, I, PHIBlock, HasBackedge, OriginalOpsConstant, SnapBase));
+  // SnapBase tells us which edges where ignored when evaluating the PHI. Add
+  // them to the assumption set for the instruction. If it's the first time this
+  // edge is being assumed then start a snapshot for it.
+  for (auto Base : SnapBase) {
+    Assumptions[I].insert(Base);
+    if (!Snapshots.count(Base)) {
+      DenseMap<Instruction *, SmallPtrSet<Use *, 8>> snap;
+      Snapshots[Base] = snap;
+    }
+  }
   // We match the semantics of SimplifyPhiNode from InstructionSimplify here.
   // See if all arguments are the same.
   // We track if any were undef because they need special handling.
@@ -1997,8 +2047,7 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
 // Substitute and symbolize the instruction before value numbering.
 NewGVN::ExprResult
 NewGVN::performSymbolicEvaluation(Instruction *I,
-                                  SmallPtrSetImpl<Value *> &Visited) const {
-
+                                  SmallPtrSetImpl<Value *> &Visited)  {
   const Expression *E = nullptr;
   // TODO: memory intrinsics.
   // TODO: Some day, we should do the forward propagation and reassociation
@@ -2083,11 +2132,19 @@ NewGVN::performSymbolicEvaluation(Instruction *I,
 // Look up a container of values/instructions in a map, and touch all the
 // instructions in the container.  Then erase value from the map.
 template <typename Map, typename KeyType>
-void NewGVN::touchAndErase(Map &M, const KeyType &Key) {
+void NewGVN::touchAndErase(Map &M, const KeyType &Key,
+                           DenseSet<BlockEdge> AssumedEdges) {
   const auto Result = M.find_as(Key);
   if (Result != M.end()) {
-    for (const typename Map::mapped_type::value_type Mapped : Result->second)
-      TouchedInstructions.set(InstrToDFSNum(Mapped));
+    for (const typename Map::mapped_type::value_type Mapped : Result->second) {
+      auto DFSNum = InstrToDFSNum(Mapped);
+      if (DFSNum != ~0U) {
+        TouchedInstructions.set(DFSNum);
+        for (auto Edge : AssumedEdges) {
+          Assumptions[Mapped].insert(Edge);
+        }
+      }
+    }
     M.erase(Result);
   }
 }
@@ -2113,12 +2170,17 @@ void NewGVN::addAdditionalUsers(ExprResult &Res, Instruction *User) const {
 }
 
 void NewGVN::markUsersTouched(Value *V) {
+  DenseSet<BlockEdge> AssumedEdges;
+  if (Assumptions.count(V))
+    AssumedEdges = Assumptions[V];
   // Now mark the users as touched.
   for (auto *User : V->users()) {
     assert(isa<Instruction>(User) && "Use of value not within an instruction?");
     TouchedInstructions.set(InstrToDFSNum(User));
+    for (auto Edge : AssumedEdges)
+      Assumptions[User].insert(Edge);
   }
-  touchAndErase(AdditionalUsers, V);
+  touchAndErase(AdditionalUsers, V, AssumedEdges);
 }
 
 void NewGVN::addMemoryUsers(const MemoryAccess *To, MemoryAccess *U) const {
@@ -2130,17 +2192,31 @@ void NewGVN::markMemoryDefTouched(const MemoryAccess *MA) {
   TouchedInstructions.set(MemoryToDFSNum(MA));
 }
 
-void NewGVN::markMemoryUsersTouched(const MemoryAccess *MA) {
+void NewGVN::markMemoryUsersTouched(MemoryAccess *MA) {
   if (isa<MemoryUse>(MA))
     return;
-  for (const auto *U : MA->users())
+  DenseSet<BlockEdge> AssumedEdges;
+  if (auto *MD = dyn_cast<MemoryDef>(MA)) 
+    AssumedEdges = Assumptions.lookup(MD->getMemoryInst());
+
+  for (auto *U : MA->users()) {
     TouchedInstructions.set(MemoryToDFSNum(U));
-  touchAndErase(MemoryToUsers, MA);
+    for (auto Edge : AssumedEdges) {
+      Assumptions[U].insert(Edge);
+      if (auto *MUD = dyn_cast<MemoryUseOrDef>(U))
+        Assumptions[MUD->getMemoryInst()].insert(Edge);
+    }
+  }
+  touchAndErase(MemoryToUsers, MA, AssumedEdges);
+  touchAndErase(AdditionalUsers, MA, AssumedEdges);
 }
 
 // Touch all the predicates that depend on this instruction.
 void NewGVN::markPredicateUsersTouched(Instruction *I) {
-  touchAndErase(PredicateToUsers, I);
+  DenseSet<BlockEdge> AssumedEdges;
+  if (Assumptions.count(I))
+    AssumedEdges = Assumptions.lookup(I);
+  touchAndErase(PredicateToUsers, I, AssumedEdges);
 }
 
 // Mark users affected by a memory leader change.
@@ -2357,7 +2433,8 @@ void NewGVN::moveValueToNewCongruenceClass(Instruction *I, const Expression *E,
 // For a given expression, mark the phi of ops instructions that could have
 // changed as a result.
 void NewGVN::markPhiOfOpsChanged(const Expression *E) {
-  touchAndErase(ExpressionToPhiOfOps, E);
+  DenseSet<BlockEdge> AssumedEdges;
+  touchAndErase(ExpressionToPhiOfOps, E, AssumedEdges);
 }
 
 // Perform congruence finding on a given value numbering expression.
@@ -2438,6 +2515,7 @@ void NewGVN::performCongruenceFinding(Instruction *I, const Expression *E) {
       markMemoryUsersTouched(MA);
     if (auto *CI = dyn_cast<CmpInst>(I))
       markPredicateUsersTouched(CI);
+    updateIR(I, EClass);
   }
   // If we changed the class of the store, we want to ensure nothing finds the
   // old store expression.  In particular, loads do not compare against stored
@@ -2491,6 +2569,8 @@ void NewGVN::updateReachableEdge(BasicBlock *From, BasicBlock *To) {
       // here.
       for (auto InstNum : RevisitOnReachabilityChange[To])
         TouchedInstructions.set(InstNum);
+      
+      rollbackIR({From, To});
     }
   }
 }
@@ -2831,7 +2911,8 @@ const Expression *NewGVN::performPRE(Instruction *I,
   MemoryAccess *MemRHS = nullptr;
   MemoryPhi *MemPhiRHS = nullptr;
   if (MemAccess) {
-    MemRHS = MemAccess->getDefiningAccess();
+    // MemRHS = MemAccess->getDefiningAccess();
+    MemRHS = MSSAWalker->getClobberingMemoryAccess(MemAccess);
     if (isa<MemoryPhi>(MemRHS))
       MemPhiRHS = dyn_cast<MemoryPhi>(MemRHS);
   }
@@ -2896,10 +2977,14 @@ const Expression *NewGVN::performPRE(Instruction *I,
       ValueOps.insert({ValueOp, PredBB});
       ValueOp->insertBefore(PredBB->getTerminator());
       if (MemoryAccess *ValueMemOp = MemRHS) {
-        // Phi-translate the MemPhi if its present and it resides in PHIBlock. 
-        if (MemPhiRHS && MemPhiRHS->getBlock() == PHIBlock)
-          ValueMemOp = MemPhiRHS->getIncomingValueForBlock(PredBB);
-        TempToMemory[ValueOp] = ValueMemOp;
+        auto *NewAccess =
+            MSSAU->createMemoryAccessInBB(ValueOp, /*Definition=*/nullptr,
+                                          PredBB, MemorySSA::BeforeTerminator);
+        MSSAU->insertUse(cast<MemoryUse>(NewAccess), /*RenameUses=*/true);
+        MSSAWalker->getClobberingMemoryAccess(NewAccess);
+        MemoryAccess *DefAccess =
+            cast<MemoryUse>(NewAccess)->getDefiningAccess();
+        addMemoryUsers(DefAccess, MemAccess);
       }
       bool SafeForPHIOfOps = true;
       bool SafeForPRE = true;
@@ -2972,26 +3057,27 @@ const Expression *NewGVN::performPRE(Instruction *I,
   // MissingBlock. In the process rename and insert the required instruction.
   if (!isFullyRedundant || !MissingBlock) {
     for (auto &KV : ValueOps) {
+      if (MSSA->getMemoryAccess(KV.first)) {
+        // Delete the temporary memory accesses.
+        MSSAU->removeMemoryAccess(KV.first);
+      }
       KV.first->deleteValue();
     }
   } else {
     for (auto &KV : ValueOps) {
-      if (KV.second != MissingBlock)
+      if (KV.second != MissingBlock) {
+        if (MSSA->getMemoryAccess(KV.first)) {
+          MSSAU->removeMemoryAccess(KV.first);
+        }
         KV.first->deleteValue();
-      else {
+      } else {
         KV.first->setName(I->getName() + ".pre");
         KV.first->insertBefore(MissingBlock->getTerminator());
-        if (auto *LI = dyn_cast<LoadInst>(KV.first)) {
-          auto *NewAccess = MSSAU->createMemoryAccessInBB(
-              LI, /*Definition=*/nullptr, MissingBlock,
-              MemorySSA::BeforeTerminator);
-          MSSAU->insertUse(cast<MemoryUse>(NewAccess), /*RenameUses=*/true);
-        }
       }
     }
   }
   if (!isFullyRedundant)
-      return nullptr;
+    return nullptr;
 
   sortPHIOps(PHIOps);
   auto *E = performSymbolicPHIEvaluation(PHIOps, I, PHIBlock);
@@ -3013,8 +3099,7 @@ const Expression *NewGVN::performPRE(Instruction *I,
   auto *ValuePHI = RealToTemp.lookup(I);
   bool NewPHI = false;
   if (!ValuePHI) {
-    ValuePHI =
-        PHINode::Create(I->getType(), PHIOps.size(), "phiofops");
+    ValuePHI = PHINode::Create(I->getType(), PHIOps.size(), "phiofops");
     addPhiOfOps(ValuePHI, PHIBlock, I);
     NewPHI = true;
     NumGVNPHIOfOpsCreated++;
@@ -3210,11 +3295,25 @@ void NewGVN::valueNumberMemoryPhi(MemoryPhi *MP) {
   // TODO: We could do cycle-checking on the memory phis to allow valueizing for
   // self-phi checking.
   const BasicBlock *PHIBlock = MP->getBlock();
+  DenseSet<BlockEdge> SnapBase;
   auto Filtered = make_filter_range(MP->operands(), [&](const Use &U) {
-    return cast<MemoryAccess>(U) != MP &&
-           !isMemoryAccessTOP(cast<MemoryAccess>(U)) &&
-           ReachableEdges.count({MP->getIncomingBlock(U), PHIBlock});
+    auto *BB = MP->getIncomingBlock(U);
+    if (cast<MemoryAccess>(U) == MP || isMemoryAccessTOP(cast<MemoryAccess>(U)))
+      return false;
+    if (!ReachableEdges.count({MP->getIncomingBlock(U), PHIBlock})) {
+      SnapBase.insert({BB, PHIBlock});
+      return false;
+    }
+    return true;
   });
+
+  for (auto Base : SnapBase) {
+    Assumptions[MP].insert(Base);
+    if (!Snapshots.count(Base)) {
+      DenseMap<Instruction *, SmallPtrSet<Use *, 8>> snap;
+      Snapshots[Base] = snap;
+    }
+  }
   // If all that is left is nothing, our memoryphi is poison. We keep it as
   // InitialClass.  Note: The only case this should happen is if we have at
   // least one self-argument.
@@ -3580,6 +3679,7 @@ void NewGVN::iterateTouchedInstructions() {
           continue;
         }
         updateProcessedCount(CurrBlock);
+        break;
       }
       // Reset after processing (because we may mark ourselves as touched when
       // we propagate equalities).
@@ -3947,6 +4047,69 @@ void NewGVN::replaceInstruction(Instruction *I, Value *V) {
   // We save the actual erasing to avoid invalidating memory
   // dependencies until we are done with everything.
   markInstructionForDeletion(I);
+}
+
+bool NewGVN::RPODom(Instruction *A, Instruction *B) {
+  BasicBlock *BBA = getBlockForValue(A);
+  BasicBlock *BBB = getBlockForValue(B);
+
+  if (BBA == BBB) {
+    return A->comesBefore(B);
+  }
+
+  DomTreeNode *DomNodeA = DT->getNode(BBA);
+  DomTreeNode *DomNodeB = DT->getNode(BBB);
+
+  unsigned DFSINA = DomNodeA->getDFSNumIn();
+  unsigned DFSINB = DomNodeB->getDFSNumIn();
+
+  unsigned DFSOUTA = DomNodeA->getDFSNumOut();
+  unsigned DFSOUTB = DomNodeB->getDFSNumOut();
+
+  if (DFSINA < DFSINB && DFSOUTA > DFSOUTB)
+    return true;
+  return false;
+}
+
+void NewGVN::updateIR(Instruction *I, CongruenceClass *CC) {
+  // Find a dominating leader and replace all uses of I
+  if (isa<StoreInst>(I))
+    return;
+  Value *Leader = CC->getStoredValue() ? CC->getStoredValue() : CC->getLeader();
+  if (!Leader)
+    return;
+
+  if (I != Leader &&
+      (alwaysAvailable(Leader) || RPODom(cast<Instruction>(Leader), I))) {
+    auto AssumedEdges = Assumptions.lookup(I);
+    snapshotIR(I, AssumedEdges);
+    patchAndReplaceAllUsesWith(I, Leader);
+  }
+}
+
+void NewGVN::snapshotIR(Instruction * I, DenseSet<BlockEdge> AssumedEdges){
+  if (AssumedEdges.empty())
+    return;
+
+  for (Use &U : I->uses()) {
+    for (auto Edge : AssumedEdges)
+      Snapshots[Edge][I].insert(&U);
+  }
+}
+void NewGVN::rollbackIR(BlockEdge Edge) {
+  auto Snapshot = Snapshots.lookup(Edge);
+  if (Snapshot.empty())
+    return;
+
+  for (auto &KV : Snapshot) {
+    auto *I = KV.first;
+    auto Uses = KV.second;
+    for (Use *U : Uses) {
+      U->set(I);
+      TouchedInstructions.set(InstrToDFSNum(U->getUser()));
+    }
+    Assumptions[I].erase(Edge);
+  }
 }
 
 namespace {

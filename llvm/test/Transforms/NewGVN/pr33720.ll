@@ -16,19 +16,16 @@ define void @patatino() {
 ; CHECK:       for.cond11thread-pre-split.lr.ph:
 ; CHECK-NEXT:    br label [[L1]]
 ; CHECK:       for.body:
-; CHECK-NEXT:    [[CMP3:%.*]] = icmp ne i64 [[K_2:%.*]], 3
-; CHECK-NEXT:    [[CONV4:%.*]] = zext i1 [[CMP3]] to i64
-; CHECK-NEXT:    [[OR:%.*]] = or i64 [[TMP0:%.*]], [[CONV4]]
-; CHECK-NEXT:    store i64 [[OR]], ptr @f, align 4
-; CHECK-NEXT:    [[TOBOOL7:%.*]] = icmp ne i64 [[K_2]], 0
-; CHECK-NEXT:    br i1 [[TOBOOL7]], label [[FOR_COND2THREAD_PRE_SPLIT:%.*]], label [[LOR_RHS:%.*]]
+; CHECK-NEXT:    store i64 [[OR:%.*]], ptr @f, align 4
+; CHECK-NEXT:    br i1 true, label [[FOR_COND2THREAD_PRE_SPLIT:%.*]], label [[LOR_RHS:%.*]]
 ; CHECK:       lor.rhs:
 ; CHECK-NEXT:    store i64 1, ptr @b, align 8
 ; CHECK-NEXT:    br label [[FOR_COND2THREAD_PRE_SPLIT]]
 ; CHECK:       l1:
-; CHECK-NEXT:    [[K_2]] = phi i64 [ undef, [[L1_PREHEADER:%.*]] ], [ 15, [[FOR_COND8_PREHEADER]] ], [ 5, [[FOR_COND11THREAD_PRE_SPLIT_LR_PH]] ]
-; CHECK-NEXT:    store i64 7, ptr [[J_3:%.*]], align 4
-; CHECK-NEXT:    [[TMP0]] = load i64, ptr @f, align 4
+; CHECK-NEXT:    [[K_2:%.*]] = phi i64 [ undef, [[L1_PREHEADER:%.*]] ], [ 15, [[FOR_COND8_PREHEADER]] ], [ 5, [[FOR_COND11THREAD_PRE_SPLIT_LR_PH]] ]
+; CHECK-NEXT:    store i64 7, ptr @f, align 4
+; CHECK-NEXT:    [[TMP0:%.*]] = load i64, ptr @f, align 4
+; CHECK-NEXT:    [[OR]] = or i64 [[TMP0]], 1
 ; CHECK-NEXT:    br label [[FOR_BODY]]
 ; CHECK:       for.cond16:
 ; CHECK-NEXT:    [[J_0:%.*]] = phi ptr [ @f, [[ENTRY:%.*]] ], [ poison, [[FOR_COND20:%.*]] ], [ @e, [[FOR_COND16]] ]
@@ -37,7 +34,7 @@ define void @patatino() {
 ; CHECK-NEXT:    [[J_2:%.*]] = phi ptr [ [[J_0]], [[FOR_COND16]] ], [ poison, [[IF_END24]] ]
 ; CHECK-NEXT:    br i1 true, label [[IF_END24]], label [[FOR_COND16]]
 ; CHECK:       if.end24:
-; CHECK-NEXT:    [[J_3]] = phi ptr [ [[J_2]], [[FOR_COND20]] ], [ undef, [[ENTRY]] ]
+; CHECK-NEXT:    [[J_3:%.*]] = phi ptr [ [[J_2]], [[FOR_COND20]] ], [ undef, [[ENTRY]] ]
 ; CHECK-NEXT:    br i1 false, label [[FOR_COND20]], label [[L1_PREHEADER]]
 ; CHECK:       l1.preheader:
 ; CHECK-NEXT:    br label [[L1]]
