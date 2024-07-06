@@ -922,15 +922,11 @@ private:
   // This deliberately takes a value so it can be used with Use's, which will
   // auto-convert to Value's but not to MemoryAccess's.
   unsigned MemoryToDFSNum(const Value *MA) const {
-    if (!isa<MemoryAccess>(MA))
-      return ~0U;
     assert(isa<MemoryAccess>(MA) &&
            "This should not be used with instructions");
     if (auto *MUD = dyn_cast<MemoryUseOrDef>(MA)) {
       auto *MI = MUD->getMemoryInst();
-      assert(MI && "Use or def without instruction\n");
-      if (!MI->getParent())
-        return ~0U;
+      assert(isa_and_nonnull<Instruction>(MI) && MI->getParent() && "Use or def without instruction\n");
     }
     return isa<MemoryUseOrDef>(MA)
                ? InstrToDFSNum(cast<MemoryUseOrDef>(MA)->getMemoryInst())
@@ -1583,9 +1579,9 @@ const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) const {
   MemoryAccess *OriginalAccess = nullptr;
   MemoryAccess *DefiningAccess = nullptr;
   bool Temp = false;
-  if (TempToMemory.count(I)) {
-    DefiningAccess = TempToMemory.lookup(I);
-  } else if (PREInsts.count(I)) {
+  if (TempToMemory.count(I))
+    Temp = true;
+  if (PREInsts.count(I)) {
     // Don't refine access for PRE insertions, since this might break the
     // previous PRE that depends on them.
     OriginalAccess = getMemoryAccess(I);
@@ -2976,7 +2972,7 @@ const Expression *NewGVN::performPRE(Instruction *I,
       // corresponding value is defined.
       ValueOps.insert({ValueOp, PredBB});
       ValueOp->insertBefore(PredBB->getTerminator());
-      if (MemoryAccess *ValueMemOp = MemRHS) {
+      if (MemRHS) {
         auto *NewAccess =
             MSSAU->createMemoryAccessInBB(ValueOp, /*Definition=*/nullptr,
                                           PredBB, MemorySSA::BeforeTerminator);
@@ -2984,7 +2980,7 @@ const Expression *NewGVN::performPRE(Instruction *I,
         MSSAWalker->getClobberingMemoryAccess(NewAccess);
         MemoryAccess *DefAccess =
             cast<MemoryUse>(NewAccess)->getDefiningAccess();
-        addMemoryUsers(DefAccess, MemAccess);
+        TempToMemory[ValueOp] = DefAccess;
       }
       bool SafeForPHIOfOps = true;
       bool SafeForPRE = true;
