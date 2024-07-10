@@ -333,7 +333,7 @@ INTERCEPTOR(int, pthread_timedjoin_np, void *thread, void **ret,
 }
 #    endif
 
-DEFINE_REAL_PTHREAD_FUNCTIONS
+DEFINE_INTERNAL_PTHREAD_FUNCTIONS
 #endif  // ASAN_INTERCEPT_PTHREAD_CREATE
 
 #if ASAN_INTERCEPT_SWAPCONTEXT
@@ -761,8 +761,8 @@ INTERCEPTOR(int, pthread_atfork, void (*prepare)(), void (*parent)(),
 #endif
 
 #if ASAN_INTERCEPT_VFORK
-DEFINE_REAL(int, vfork)
-DECLARE_EXTERN_INTERCEPTOR_AND_WRAPPER(int, vfork)
+DEFINE_REAL(int, vfork,)
+DECLARE_EXTERN_INTERCEPTOR_AND_WRAPPER(int, vfork,)
 #endif
 
 // ---------------------- InitializeAsanInterceptors ---------------- {{{1

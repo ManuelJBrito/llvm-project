@@ -13,7 +13,6 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Support/FileUtilities.h"
-#include "mlir/Support/LogicalResult.h"
 #include "mlir/Support/Timing.h"
 #include "mlir/Support/ToolUtilities.h"
 #include "mlir/Tools/mlir-translate/Translation.h"
@@ -62,7 +61,7 @@ LogicalResult mlir::mlirTranslateMain(int argc, char **argv,
       llvm::cl::desc("Allow operation with no registered dialects (discouraged: testing only!)"),
       llvm::cl::init(false));
 
-  static llvm::cl::opt<std::string> inputSplitMarker(
+  static llvm::cl::opt<std::string> inputSplitMarker{
       "split-input-file", llvm::cl::ValueOptional,
       llvm::cl::callback([&](const std::string &str) {
         // Implicit value: use default marker if flag was used without value.
@@ -71,7 +70,7 @@ LogicalResult mlir::mlirTranslateMain(int argc, char **argv,
       }),
       llvm::cl::desc("Split the input file into chunks using the given or "
                      "default marker and process each chunk independently"),
-      llvm::cl::init(""));
+      llvm::cl::init("")};
 
   static llvm::cl::opt<bool> verifyDiagnostics(
       "verify-diagnostics",

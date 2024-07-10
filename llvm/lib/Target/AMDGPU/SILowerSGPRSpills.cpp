@@ -278,7 +278,8 @@ void SILowerSGPRSpills::extendWWMVirtRegLiveness(MachineFunction &MF,
   for (auto Reg : MFI->getSGPRSpillVGPRs()) {
     for (MachineBasicBlock *SaveBlock : SaveBlocks) {
       MachineBasicBlock::iterator InsertBefore = SaveBlock->begin();
-      auto MIB = BuildMI(*SaveBlock, *InsertBefore, InsertBefore->getDebugLoc(),
+      DebugLoc DL = SaveBlock->findDebugLoc(InsertBefore);
+      auto MIB = BuildMI(*SaveBlock, InsertBefore, DL,
                          TII->get(AMDGPU::IMPLICIT_DEF), Reg);
       MFI->setFlag(Reg, AMDGPU::VirtRegFlag::WWM_REG);
       // Set SGPR_SPILL asm printer flag
@@ -294,10 +295,10 @@ void SILowerSGPRSpills::extendWWMVirtRegLiveness(MachineFunction &MF,
   for (MachineBasicBlock *RestoreBlock : RestoreBlocks) {
     MachineBasicBlock::iterator InsertBefore =
         RestoreBlock->getFirstTerminator();
+    DebugLoc DL = RestoreBlock->findDebugLoc(InsertBefore);
     for (auto Reg : MFI->getSGPRSpillVGPRs()) {
-      auto MIB =
-          BuildMI(*RestoreBlock, *InsertBefore, InsertBefore->getDebugLoc(),
-                  TII->get(TargetOpcode::KILL));
+      auto MIB = BuildMI(*RestoreBlock, InsertBefore, DL,
+                         TII->get(TargetOpcode::KILL));
       MIB.addReg(Reg);
       if (LIS)
         LIS->InsertMachineInstrInMaps(*MIB);
@@ -311,7 +312,8 @@ bool SILowerSGPRSpills::runOnMachineFunction(MachineFunction &MF) {
   TRI = &TII->getRegisterInfo();
 
   LIS = getAnalysisIfAvailable<LiveIntervals>();
-  Indexes = getAnalysisIfAvailable<SlotIndexes>();
+  auto *SIWrapper = getAnalysisIfAvailable<SlotIndexesWrapperPass>();
+  Indexes = SIWrapper ? &SIWrapper->getSI() : nullptr;
 
   assert(SaveBlocks.empty() && RestoreBlocks.empty());
 

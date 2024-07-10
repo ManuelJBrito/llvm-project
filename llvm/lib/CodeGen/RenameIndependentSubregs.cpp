@@ -56,8 +56,8 @@ public:
     AU.setPreservesCFG();
     AU.addRequired<LiveIntervals>();
     AU.addPreserved<LiveIntervals>();
-    AU.addRequired<SlotIndexes>();
-    AU.addPreserved<SlotIndexes>();
+    AU.addRequired<SlotIndexesWrapperPass>();
+    AU.addPreserved<SlotIndexesWrapperPass>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 
@@ -114,7 +114,7 @@ char &llvm::RenameIndependentSubregsID = RenameIndependentSubregs::ID;
 
 INITIALIZE_PASS_BEGIN(RenameIndependentSubregs, DEBUG_TYPE,
                       "Rename Independent Subregisters", false, false)
-INITIALIZE_PASS_DEPENDENCY(SlotIndexes)
+INITIALIZE_PASS_DEPENDENCY(SlotIndexesWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(LiveIntervals)
 INITIALIZE_PASS_END(RenameIndependentSubregs, DEBUG_TYPE,
                     "Rename Independent Subregisters", false, false)
@@ -334,9 +334,16 @@ void RenameIndependentSubregs::computeMainRangesFixFlags(
                                                DebugLoc(), MCDesc, Reg);
           SlotIndex DefIdx = LIS->InsertMachineInstrInMaps(*ImpDef);
           SlotIndex RegDefIdx = DefIdx.getRegSlot();
+          LaneBitmask Mask = MRI->getMaxLaneMaskForVReg(Reg);
           for (LiveInterval::SubRange &SR : LI.subranges()) {
+            Mask = Mask & ~SR.LaneMask;
             VNInfo *SRVNI = SR.getNextValue(RegDefIdx, Allocator);
             SR.addSegment(LiveRange::Segment(RegDefIdx, PredEnd, SRVNI));
+          }
+
+          if (!Mask.none()) {
+            LiveInterval::SubRange *SR = LI.createSubRange(Allocator, Mask);
+            SR->createDeadDef(RegDefIdx, Allocator);
           }
         }
       }

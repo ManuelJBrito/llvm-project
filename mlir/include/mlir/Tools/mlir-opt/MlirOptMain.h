@@ -14,7 +14,6 @@
 #define MLIR_TOOLS_MLIROPT_MLIROPTMAIN_H
 
 #include "mlir/Debug/CLOptionsSetup.h"
-#include "mlir/Support/LogicalResult.h"
 #include "mlir/Support/ToolUtilities.h"
 #include "llvm/ADT/StringRef.h"
 
@@ -144,7 +143,6 @@ public:
     splitInputFileFlag = std::move(splitMarker);
     return *this;
   }
-  bool shouldSplitInputFile() const { return splitInputFileFlag.empty(); }
   StringRef inputSplitMarker() const { return splitInputFileFlag; }
 
   /// Set whether to merge the output chunks into one file using the given

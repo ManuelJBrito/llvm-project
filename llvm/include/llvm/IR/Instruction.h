@@ -29,27 +29,48 @@
 namespace llvm {
 
 class BasicBlock;
-class DPMarker;
+class DataLayout;
+class DbgMarker;
 class FastMathFlags;
 class MDNode;
 class Module;
 struct AAMDNodes;
-class DPMarker;
+class DbgMarker;
 class DbgRecord;
 
 template <> struct ilist_alloc_traits<Instruction> {
   static inline void deleteNode(Instruction *V);
 };
 
-iterator_range<simple_ilist<DbgRecord>::iterator> getDbgRecordRange(DPMarker *);
+iterator_range<simple_ilist<DbgRecord>::iterator>
+getDbgRecordRange(DbgMarker *);
+
+class InsertPosition {
+  using InstListType = SymbolTableList<Instruction, ilist_iterator_bits<true>,
+                                       ilist_parent<BasicBlock>>;
+  InstListType::iterator InsertAt;
+
+public:
+  InsertPosition(std::nullptr_t) : InsertAt() {}
+  // LLVM_DEPRECATED("Use BasicBlock::iterators for insertion instead",
+  // "BasicBlock::iterator")
+  InsertPosition(Instruction *InsertBefore);
+  InsertPosition(BasicBlock *InsertAtEnd);
+  InsertPosition(InstListType::iterator InsertAt) : InsertAt(InsertAt) {}
+  operator InstListType::iterator() const { return InsertAt; }
+  bool isValid() const { return InsertAt.isValid(); }
+  BasicBlock *getBasicBlock() { return InsertAt.getNodeParent(); }
+};
 
 class Instruction : public User,
                     public ilist_node_with_parent<Instruction, BasicBlock,
-                                                  ilist_iterator_bits<true>> {
+                                                  ilist_iterator_bits<true>,
+                                                  ilist_parent<BasicBlock>> {
 public:
-  using InstListType = SymbolTableList<Instruction, ilist_iterator_bits<true>>;
+  using InstListType = SymbolTableList<Instruction, ilist_iterator_bits<true>,
+                                       ilist_parent<BasicBlock>>;
+
 private:
-  BasicBlock *Parent;
   DebugLoc DbgLoc;                         // 'dbg' Metadata cache.
 
   /// Relative order of this instruction in its parent basic block. Used for
@@ -60,7 +81,7 @@ public:
   /// Optional marker recording the position for debugging information that
   /// takes effect immediately before this instruction. Null unless there is
   /// debugging information present.
-  DPMarker *DbgMarker = nullptr;
+  DbgMarker *DebugMarker = nullptr;
 
   /// Clone any debug-info attached to \p From onto this instruction. Used to
   /// copy debugging information from one block to another, when copying entire
@@ -81,7 +102,7 @@ public:
 
   /// Return a range over the DbgRecords attached to this instruction.
   iterator_range<simple_ilist<DbgRecord>::iterator> getDbgRecordRange() const {
-    return llvm::getDbgRecordRange(DbgMarker);
+    return llvm::getDbgRecordRange(DebugMarker);
   }
 
   /// Return an iterator to the position of the "Next" DbgRecord after this
@@ -148,9 +169,6 @@ public:
   Instruction       *user_back()       { return cast<Instruction>(*user_begin());}
   const Instruction *user_back() const { return cast<Instruction>(*user_begin());}
 
-  inline const BasicBlock *getParent() const { return Parent; }
-  inline       BasicBlock *getParent()       { return Parent; }
-
   /// Return the module owning the function this instruction belongs to
   /// or nullptr it the function does not have a module.
   ///
@@ -171,6 +189,11 @@ public:
     return const_cast<Function *>(
                          static_cast<const Instruction *>(this)->getFunction());
   }
+
+  /// Get the data layout of the module this instruction belongs to.
+  ///
+  /// Requires the instruction to have a parent module.
+  const DataLayout &getDataLayout() const;
 
   /// This method unlinks 'this' from the containing basic block, but does not
   /// delete it.
@@ -495,14 +518,24 @@ public:
   /// Drops metadata that may generate poison.
   void dropPoisonGeneratingMetadata();
 
-  /// Return true if this instruction has poison-generating flags or metadata.
-  bool hasPoisonGeneratingFlagsOrMetadata() const {
-    return hasPoisonGeneratingFlags() || hasPoisonGeneratingMetadata();
+  /// Return true if this instruction has poison-generating attribute.
+  bool hasPoisonGeneratingReturnAttributes() const LLVM_READONLY;
+
+  /// Drops return attributes that may generate poison.
+  void dropPoisonGeneratingReturnAttributes();
+
+  /// Return true if this instruction has poison-generating flags,
+  /// return attributes or metadata.
+  bool hasPoisonGeneratingAnnotations() const {
+    return hasPoisonGeneratingFlags() ||
+           hasPoisonGeneratingReturnAttributes() ||
+           hasPoisonGeneratingMetadata();
   }
 
-  /// Drops flags and metadata that may generate poison.
-  void dropPoisonGeneratingFlagsAndMetadata() {
+  /// Drops flags, return attributes and metadata that may generate poison.
+  void dropPoisonGeneratingAnnotations() {
     dropPoisonGeneratingFlags();
+    dropPoisonGeneratingReturnAttributes();
     dropPoisonGeneratingMetadata();
   }
 
@@ -969,7 +1002,8 @@ public:
   };
 
 private:
-  friend class SymbolTableListTraits<Instruction, ilist_iterator_bits<true>>;
+  friend class SymbolTableListTraits<Instruction, ilist_iterator_bits<true>,
+                                     ilist_parent<BasicBlock>>;
   friend class BasicBlock; // For renumbering.
 
   // Shadow Value::setValueSubclassData with a private forwarding method so that
@@ -981,8 +1015,6 @@ private:
   unsigned short getSubclassDataFromValue() const {
     return Value::getSubclassDataFromValue();
   }
-
-  void setParent(BasicBlock *P);
 
 protected:
   // Instruction subclasses can stick up to 15 bits of stuff into the
@@ -1009,11 +1041,7 @@ protected:
   }
 
   Instruction(Type *Ty, unsigned iType, Use *Ops, unsigned NumOps,
-              InstListType::iterator InsertBefore);
-  Instruction(Type *Ty, unsigned iType, Use *Ops, unsigned NumOps,
-              Instruction *InsertBefore = nullptr);
-  Instruction(Type *Ty, unsigned iType, Use *Ops, unsigned NumOps,
-              BasicBlock *InsertAtEnd);
+              InsertPosition InsertBefore = nullptr);
 
 private:
   /// Create a copy of this instruction.
