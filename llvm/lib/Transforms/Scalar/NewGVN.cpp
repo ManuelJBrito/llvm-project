@@ -529,7 +529,11 @@ class NewGVN {
   // IR.
   SmallPtrSet<const Instruction *, 8> PHINodeUses;
 
-  DenseMap<const Value *, bool> OpSafeForPHIOfOps;
+  // The cached results, in general, are only valid for the specific block where
+  // they were computed. Therefore, we use a vector of caches indexed by a block
+  // identifier.
+  SmallVector<DenseMap<const Value *, bool>, 32> OpSafeForPHIOfOps;
+  unsigned CacheIdx;
 
   // Map a temporary instruction we created to a parent block.
   DenseMap<const Value *, BasicBlock *> TempToBlock;
@@ -2599,20 +2603,19 @@ bool NewGVN::OpIsSafeForPHIOfOps(Value *V, const BasicBlock *PHIBlock,
     auto *I = Worklist.pop_back_val();
     if (!isa<Instruction>(I))
       continue;
-
-    auto OISIt = OpSafeForPHIOfOps.find(I);
-    if (OISIt != OpSafeForPHIOfOps.end())
+    auto OISIt = OpSafeForPHIOfOps[CacheIdx].find(I);
+    if (OISIt != OpSafeForPHIOfOps[CacheIdx].end())
       return OISIt->second;
 
     // Keep walking until we either dominate the phi block, or hit a phi, or run
     // out of things to check.
     if (DT->properlyDominates(getBlockForValue(I), PHIBlock)) {
-      OpSafeForPHIOfOps.insert({I, true});
+      OpSafeForPHIOfOps[CacheIdx].insert({I, true});
       continue;
     }
     // PHI in the same block.
     if (isa<PHINode>(I) && getBlockForValue(I) == PHIBlock) {
-      OpSafeForPHIOfOps.insert({I, false});
+      OpSafeForPHIOfOps[CacheIdx].insert({I, false});
       return false;
     }
 
@@ -2631,10 +2634,10 @@ bool NewGVN::OpIsSafeForPHIOfOps(Value *V, const BasicBlock *PHIBlock,
       if (!isa<Instruction>(Op))
         continue;
       // Stop now if we find an unsafe operand.
-      auto OISIt = OpSafeForPHIOfOps.find(OrigI);
-      if (OISIt != OpSafeForPHIOfOps.end()) {
+      auto OISIt = OpSafeForPHIOfOps[CacheIdx].find(OrigI);
+      if (OISIt != OpSafeForPHIOfOps[CacheIdx].end()) {
         if (!OISIt->second) {
-          OpSafeForPHIOfOps.insert({I, false});
+          OpSafeForPHIOfOps[CacheIdx].insert({I, false});
           return false;
         }
         continue;
@@ -2644,7 +2647,7 @@ bool NewGVN::OpIsSafeForPHIOfOps(Value *V, const BasicBlock *PHIBlock,
       Worklist.push_back(cast<Instruction>(Op));
     }
   }
-  OpSafeForPHIOfOps.insert({V, true});
+  OpSafeForPHIOfOps[CacheIdx].insert({V, true});
   return true;
 }
 
@@ -3296,7 +3299,9 @@ void NewGVN::verifyIterationSettled(Function &F) {
 
   TouchedInstructions.set();
   TouchedInstructions.reset(0);
-  OpSafeForPHIOfOps.clear();
+  for (unsigned i = 0; i < OpSafeForPHIOfOps.size(); i++)
+    OpSafeForPHIOfOps[i].clear();
+  CacheIdx = 0;
   iterateTouchedInstructions();
   DenseSet<std::pair<const CongruenceClass *, const CongruenceClass *>>
       EqualClasses;
@@ -3400,6 +3405,8 @@ void NewGVN::iterateTouchedInstructions() {
                             << " because it is unreachable\n");
           continue;
         }
+        // Use the appropriate cache for "OpIsSafeForPHIOfOps".
+        CacheIdx = RPOOrdering.lookup(DT->getNode(CurrBlock)) - 1;
         updateProcessedCount(CurrBlock);
       }
       // Reset after processing (because we may mark ourselves as touched when
@@ -3461,6 +3468,7 @@ bool NewGVN::runGVN() {
   // Now a standard depth first ordering of the domtree is equivalent to RPO.
   for (auto *DTN : depth_first(DT->getRootNode())) {
     BasicBlock *B = DTN->getBlock();
+    OpSafeForPHIOfOps.emplace_back();
     const auto &BlockRange = assignDFSNumbers(B, ICount);
     BlockInstRange.insert({B, BlockRange});
     ICount += BlockRange.second - BlockRange.first;
@@ -3479,6 +3487,8 @@ bool NewGVN::runGVN() {
   LLVM_DEBUG(dbgs() << "Block " << getBlockName(&F.getEntryBlock())
                     << " marked reachable\n");
   ReachableBlocks.insert(&F.getEntryBlock());
+  // Use index corresponding to entry block.
+  CacheIdx = 0;
 
   iterateTouchedInstructions();
   verifyMemoryCongruency();
