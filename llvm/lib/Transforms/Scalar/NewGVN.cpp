@@ -157,6 +157,10 @@ static cl::opt<bool> EnableStoreRefinement("enable-store-refinement",
 static cl::opt<bool> EnablePhiOfOps("enable-phi-of-ops", cl::init(true),
                                     cl::Hidden);
 
+// Enable Optimistic
+static cl::opt<bool> EnableOptimistic("enable-newgvn-opt", cl::init(true),
+                                      cl::Hidden);
+
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
 //===----------------------------------------------------------------------===//
@@ -1025,6 +1029,8 @@ PHIExpression *NewGVN::createPHIExpression(ArrayRef<ValPair> PHIOperands,
 
   // Filter out unreachable phi operands.
   auto Filtered = make_filter_range(PHIOperands, [&](const ValPair &P) {
+    if (!EnableOptimistic)
+      return true;
     auto *BB = P.second;
     if (auto *PHIOp = dyn_cast<PHINode>(I))
       if (isCopyOfPHI(P.first, PHIOp))
@@ -2812,6 +2818,8 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
       }
       Deps.insert(CurrentDeps.begin(), CurrentDeps.end());
     } else {
+      if (!EnableOptimistic && isBackedge(PredBB, PHIBlock))
+        return nullptr;
       LLVM_DEBUG(dbgs() << "Skipping phi of ops operand for incoming block "
                         << getBlockName(PredBB)
                         << " because the block is unreachable\n");
@@ -3044,6 +3052,8 @@ void NewGVN::valueNumberMemoryPhi(MemoryPhi *MP) {
   // self-phi checking.
   const BasicBlock *PHIBlock = MP->getBlock();
   auto Filtered = make_filter_range(MP->operands(), [&](const Use &U) {
+    if (!EnableOptimistic)
+      return true;
     return cast<MemoryAccess>(U) != MP &&
            !isMemoryAccessTOP(cast<MemoryAccess>(U)) &&
            ReachableEdges.count({MP->getIncomingBlock(U), PHIBlock});
