@@ -144,6 +144,9 @@ DEBUG_COUNTER(VNCounter, "newgvn-vn",
               "Controls which instructions are value numbered");
 DEBUG_COUNTER(PHIOfOpsCounter, "newgvn-phi",
               "Controls which instructions we create phi of ops for");
+// Enable NewGVN
+static cl::opt<bool> EnableNewGVN("enable-newgvn-vn", cl::init(true),
+                                  cl::Hidden);
 // Currently store defining access refinement is too slow due to basicaa being
 // egregiously slow.  This flag lets us keep it working while we work on this
 // issue.
@@ -4278,6 +4281,8 @@ PreservedAnalyses NewGVNPass::run(Function &F, AnalysisManager<Function> &AM) {
   // Apparently the order in which we get these results matter for
   // the old GVN (see Chandler's comment in GVN.cpp). I'll keep
   // the same order here, just in case.
+  if (!EnableNewGVN)
+    return PreservedAnalyses::all();
   auto &AC = AM.getResult<AssumptionAnalysis>(F);
   auto &DT = AM.getResult<DominatorTreeAnalysis>(F);
   auto &TLI = AM.getResult<TargetLibraryAnalysis>(F);
