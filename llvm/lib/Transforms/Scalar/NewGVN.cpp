@@ -161,6 +161,10 @@ static cl::opt<bool> EnablePhiOfOps("enable-phi-of-ops", cl::init(true),
 static cl::opt<bool> EnableOptimistic("enable-newgvn-opt", cl::init(true),
                                       cl::Hidden);
 
+// Enable expression simplification
+static cl::opt<bool> EnableSimpl("enable-newgvn-simpl", cl::init(true),
+                                      cl::Hidden);
+
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
 //===----------------------------------------------------------------------===//
@@ -1133,6 +1137,8 @@ const Expression *NewGVN::createBinaryExpression(unsigned Opcode, Type *T,
   }
   E->op_push_back(lookupOperandLeader(Arg1));
   E->op_push_back(lookupOperandLeader(Arg2));
+  if (!EnableSimpl)
+    return nullptr;
 
   Value *V = simplifyBinOp(Opcode, E->getOperand(0), E->getOperand(1), Q);
   if (auto Simplified = checkExprResults(E, I, V)) {
@@ -1205,6 +1211,8 @@ NewGVN::ExprResult NewGVN::createExpression(Instruction *I) const {
     if (shouldSwapOperands(E->getOperand(0), E->getOperand(1)))
       E->swapOperands(0, 1);
   }
+  if (!EnableSimpl)
+    return ExprResult::none();
   // Perform simplification.
   if (auto *CI = dyn_cast<CmpInst>(I)) {
     // Sort the operand value numbers so x<y and y>x get the same value
