@@ -518,6 +518,8 @@ class NewGVN {
   const DataLayout &DL;
   std::unique_ptr<PredicateInfo> PredInfo;
 
+  bool ChangedPartition = true;
+
   // These are the only two things the create* functions should have
   // side-effects on due to allocating memory.
   mutable BumpPtrAllocator ExpressionAllocator;
@@ -886,7 +888,7 @@ private:
   void addAdditionalUsers(ExprResult &Res, Instruction *User) const;
 
   // Main loop of value numbering
-  void iterateTouchedInstructions();
+  void iterateFunction();
 
   // Utilities.
   void cleanupTables();
@@ -2461,6 +2463,7 @@ void NewGVN::performCongruenceFinding(Instruction *I, const Expression *E) {
       moveValueToNewCongruenceClass(I, E, IClass, EClass);
       markPhiOfOpsChanged(E);
     }
+    ChangedPartition = true;
 
     markUsersTouched(I);
     if (MemoryAccess *MA = getMemoryAccess(I))
@@ -2493,6 +2496,7 @@ void NewGVN::updateReachableEdge(BasicBlock *From, BasicBlock *To) {
   // Check if the Edge was reachable before.
   if (ReachableEdges.insert({From, To}).second) {
     // If this block wasn't reachable before, all instructions are touched.
+    ChangedPartition = true;
     if (ReachableBlocks.insert(To).second) {
       LLVM_DEBUG(dbgs() << "Block " << getBlockName(To)
                         << " marked reachable\n");
@@ -3358,8 +3362,9 @@ void NewGVN::verifyIterationSettled(Function &F) {
   TouchedInstructions.set();
   TouchedInstructions.reset(0);
   OpSafeForPHIOfOps.clear();
+  ChangedPartition = true;
   CacheIdx = 0;
-  iterateTouchedInstructions();
+  iterateFunction();
   DenseSet<std::pair<const CongruenceClass *, const CongruenceClass *>>
       EqualClasses;
   for (const auto &KV : ValueToClass) {
@@ -3422,66 +3427,29 @@ void NewGVN::verifyStoreExpressions() const {
 // This is the main value numbering loop, it iterates over the initial touched
 // instruction set, propagating value numbers, marking things touched, etc,
 // until the set of touched instructions is completely empty.
-void NewGVN::iterateTouchedInstructions() {
-  uint64_t Iterations = 0;
-  // Figure out where touchedinstructions starts
-  int FirstInstr = TouchedInstructions.find_first();
-  // Nothing set, nothing to iterate, just return.
-  if (FirstInstr == -1)
-    return;
-  const BasicBlock *LastBlock = getBlockForValue(InstrFromDFSNum(FirstInstr));
-  while (TouchedInstructions.any()) {
-    ++Iterations;
+void NewGVN::iterateFunction() {
     // Walk through all the instructions in all the blocks in RPO.
-    // TODO: As we hit a new block, we should push and pop equalities into a
-    // table lookupOperandLeader can use, to catch things PredicateInfo
-    // might miss, like edge-only equivalences.
-    for (unsigned InstrNum : TouchedInstructions.set_bits()) {
-
-      // This instruction was found to be dead. We don't bother looking
-      // at it again.
-      if (InstrNum == 0) {
-        TouchedInstructions.reset(InstrNum);
+    for (auto *DTN : depth_first(DT->getRootNode())) {
+      BasicBlock *CurrBlock = DTN->getBlock();
+      if (!ReachableBlocks.count(CurrBlock))
         continue;
-      }
-
-      Value *V = InstrFromDFSNum(InstrNum);
-      const BasicBlock *CurrBlock = getBlockForValue(V);
-
-      // If we hit a new block, do reachability processing.
-      if (CurrBlock != LastBlock) {
-        LastBlock = CurrBlock;
-        bool BlockReachable = ReachableBlocks.count(CurrBlock);
-        const auto &CurrInstRange = BlockInstRange.lookup(CurrBlock);
-
-        // If it's not reachable, erase any touched instructions and move on.
-        if (!BlockReachable) {
-          TouchedInstructions.reset(CurrInstRange.first, CurrInstRange.second);
-          LLVM_DEBUG(dbgs() << "Skipping instructions in block "
-                            << getBlockName(CurrBlock)
-                            << " because it is unreachable\n");
-          continue;
-        }
-        // Use the appropriate cache for "OpIsSafeForPHIOfOps".
-        CacheIdx = RPOOrdering.lookup(DT->getNode(CurrBlock)) - 1;
-        updateProcessedCount(CurrBlock);
-      }
-      // Reset after processing (because we may mark ourselves as touched when
-      // we propagate equalities).
-      TouchedInstructions.reset(InstrNum);
-
-      if (auto *MP = dyn_cast<MemoryPhi>(V)) {
+      updateProcessedCount(CurrBlock);
+      // Use the appropriate cache for "OpIsSafeForPHIOfOps".
+      CacheIdx = RPOOrdering.lookup(DT->getNode(CurrBlock)) - 1;
+      if (auto *MP = getMemoryAccess(CurrBlock)) {
         LLVM_DEBUG(dbgs() << "Processing MemoryPhi " << *MP << "\n");
         valueNumberMemoryPhi(MP);
-      } else if (auto *I = dyn_cast<Instruction>(V)) {
-        valueNumberInstruction(I);
-      } else {
-        llvm_unreachable("Should have been a MemoryPhi or Instruction");
       }
-      updateProcessedCount(V);
+      for (auto &I : *CurrBlock) {
+        if (isInstructionTriviallyDead(&I, TLI)) {
+          LLVM_DEBUG(dbgs() << "Skipping trivially dead instruction " << I
+                            << "\n");
+          markInstructionForDeletion(&I);
+          continue;
+        }
+        valueNumberInstruction(&I);
+      }
     }
-  }
-  NumGVNMaxIterations = std::max(NumGVNMaxIterations.getValue(), Iterations);
 }
 
 // This is the main transformation entry point.
@@ -3537,16 +3505,11 @@ bool NewGVN::runGVN() {
   // instruction.
   ExpressionToClass.reserve(ICount);
 
-  // Initialize the touched instructions to include the entry block.
-  const auto &InstRange = BlockInstRange.lookup(&F.getEntryBlock());
-  TouchedInstructions.set(InstRange.first, InstRange.second);
-  LLVM_DEBUG(dbgs() << "Block " << getBlockName(&F.getEntryBlock())
-                    << " marked reachable\n");
   ReachableBlocks.insert(&F.getEntryBlock());
-  // Use index corresponding to entry block.
-  CacheIdx = 0;
-
-  iterateTouchedInstructions();
+  while (ChangedPartition) {
+    ChangedPartition = false;
+    iterateFunction();
+  }
   verifyMemoryCongruency();
   verifyIterationSettled(F);
   verifyStoreExpressions();
