@@ -157,9 +157,6 @@ static cl::opt<bool> EnableStoreRefinement("enable-store-refinement",
 static cl::opt<bool> EnablePhiOfOps("enable-phi-of-ops", cl::init(true),
                                     cl::Hidden);
 
-// Enable Optimistic
-static cl::opt<bool> EnableOptimistic("enable-newgvn-opt", cl::init(true),
-                                      cl::Hidden);
 
 // Enable expression simplification
 static cl::opt<bool> EnableSimpl("enable-newgvn-simpl", cl::init(true),
@@ -519,6 +516,7 @@ class NewGVN {
   std::unique_ptr<PredicateInfo> PredInfo;
 
   bool ChangedPartition = true;
+  bool OptimisticAssumption = false;
 
   // These are the only two things the create* functions should have
   // side-effects on due to allocating memory.
@@ -645,6 +643,10 @@ class NewGVN {
   // Which values have changed as a result of leader changes.
   SmallPtrSet<Value *, 8> LeaderChanges;
 
+  // Set of rolled back instructions, in the case the instructions end up not
+  // changing classes.
+  SmallPtrSet<Value *, 8> RolledBack;
+
   // Reachability info.
   using BlockEdge = BasicBlockEdge;
   DenseSet<BlockEdge> ReachableEdges;
@@ -680,6 +682,8 @@ class NewGVN {
 
   // Deletion info.
   SmallPtrSet<Instruction *, 8> InstructionsToErase;
+
+  DenseMap<Instruction *, SmallPtrSet<Use *, 8>> Snapshot;
 
 public:
   NewGVN(Function &F, DominatorTree *DT, AssumptionCache *AC,
@@ -741,7 +745,8 @@ private:
 
   PHIExpression *createPHIExpression(ArrayRef<ValPair>, const Instruction *,
                                      BasicBlock *, bool &HasBackEdge,
-                                     bool &OriginalOpsConstant) const;
+                                     bool &OriginalOpsConstant,
+                                     bool &Optimistic) const;
   const DeadExpression *createDeadExpression() const;
   const VariableExpression *createVariableExpression(Value *) const;
   const ConstantExpression *createConstantExpression(Constant *) const;
@@ -815,7 +820,7 @@ private:
   // Symbolic evaluation.
   ExprResult checkExprResults(Expression *, Instruction *, Value *) const;
   ExprResult performSymbolicEvaluation(Instruction *,
-                                       SmallPtrSetImpl<Value *> &) const;
+                                       SmallPtrSetImpl<Value *> &);
   const Expression *performSymbolicLoadCoercion(Type *, Value *, LoadInst *,
                                                 Instruction *,
                                                 MemoryAccess *) const;
@@ -825,10 +830,15 @@ private:
   void sortPHIOps(MutableArrayRef<ValPair> Ops) const;
   const Expression *performSymbolicPHIEvaluation(ArrayRef<ValPair>,
                                                  Instruction *I,
-                                                 BasicBlock *PHIBlock) const;
+                                                 BasicBlock *PHIBlock);
   const Expression *performSymbolicAggrValueEvaluation(Instruction *) const;
   ExprResult performSymbolicCmpEvaluation(Instruction *) const;
   ExprResult performSymbolicPredicateInfoEvaluation(IntrinsicInst *) const;
+
+  // Checkpointing.
+  void updateIR(Instruction *, CongruenceClass *);
+  void snapshotIR(Instruction *);
+  bool rollbackIR();
 
   // Congruence finding.
   bool someEquivalentDominates(const Instruction *, const Instruction *) const;
@@ -928,7 +938,7 @@ private:
   }
 
   bool isCycleFree(const Instruction *) const;
-  bool isBackedge(BasicBlock *From, BasicBlock *To) const;
+  bool isBackedge(const BasicBlock *From, const BasicBlock *To) const;
 
   // Debug counter info.  When verifying, we have to reset the value numbering
   // debug counter to the same state it started in to get the same results.
@@ -971,10 +981,9 @@ bool CallExpression::equals(const Expression &Other) const {
 }
 
 // Determine if the edge From->To is a backedge
-bool NewGVN::isBackedge(BasicBlock *From, BasicBlock *To) const {
-  return From == To ||
-         RPOOrdering.lookup(DT->getNode(From)) >=
-             RPOOrdering.lookup(DT->getNode(To));
+bool NewGVN::isBackedge(const BasicBlock *From, const BasicBlock *To) const {
+  return From == To || RPOOrdering.lookup(DT->getNode(From)) >=
+                           RPOOrdering.lookup(DT->getNode(To));
 }
 
 #ifndef NDEBUG
@@ -1060,11 +1069,10 @@ static bool alwaysAvailable(Value *V) {
 // a phi node). We require, as an invariant, that all the PHIOperands in the
 // same block are sorted the same way. sortPHIOps will sort them into a
 // canonical order.
-PHIExpression *NewGVN::createPHIExpression(ArrayRef<ValPair> PHIOperands,
-                                           const Instruction *I,
-                                           BasicBlock *PHIBlock,
-                                           bool &HasBackedge,
-                                           bool &OriginalOpsConstant) const {
+PHIExpression *
+NewGVN::createPHIExpression(ArrayRef<ValPair> PHIOperands, const Instruction *I,
+                            BasicBlock *PHIBlock, bool &HasBackedge,
+                            bool &OriginalOpsConstant, bool &Optimistic) const {
   unsigned NumOps = PHIOperands.size();
   auto *E = new (ExpressionAllocator) PHIExpression(NumOps, PHIBlock);
 
@@ -1074,14 +1082,16 @@ PHIExpression *NewGVN::createPHIExpression(ArrayRef<ValPair> PHIOperands,
 
   // Filter out unreachable phi operands.
   auto Filtered = make_filter_range(PHIOperands, [&](const ValPair &P) {
-    if (!EnableOptimistic)
-      return true;
     auto *BB = P.second;
     if (auto *PHIOp = dyn_cast<PHINode>(I))
       if (isCopyOfPHI(P.first, PHIOp))
         return false;
-    if (!ReachableEdges.count({BB, PHIBlock}))
+    if (!ReachableEdges.count({BB, PHIBlock})) {
+      // Only ignore unreachable backedges if the optimstic option is enabled.
+      if (isBackedge(BB, PHIBlock))
+        Optimistic = true;
       return false;
+    }
     // Things in TOPClass are equivalent to everything.
     if (ValueToClass.lookup(P.first) == TOPClass)
       return false;
@@ -1787,7 +1797,7 @@ bool NewGVN::isCycleFree(const Instruction *I) const {
 const Expression *
 NewGVN::performSymbolicPHIEvaluation(ArrayRef<ValPair> PHIOps,
                                      Instruction *I,
-                                     BasicBlock *PHIBlock) const {
+                                     BasicBlock *PHIBlock) {
   // True if one of the incoming phi edges is a backedge.
   bool HasBackedge = false;
   // All constant tracks the state of whether all the *original* phi operands
@@ -1795,8 +1805,9 @@ NewGVN::performSymbolicPHIEvaluation(ArrayRef<ValPair> PHIOps,
   // change in value of the phi is guaranteed not to later change the value of
   // the phi. IE it can't be v = phi(undef, v+1)
   bool OriginalOpsConstant = true;
-  auto *E = cast<PHIExpression>(createPHIExpression(
-      PHIOps, I, PHIBlock, HasBackedge, OriginalOpsConstant));
+  auto *E = cast<PHIExpression>(
+      createPHIExpression(PHIOps, I, PHIBlock, HasBackedge, OriginalOpsConstant,
+                          OptimisticAssumption));
   // We match the semantics of SimplifyPhiNode from InstructionSimplify here.
   // See if all arguments are the same.
   // We track if any were undef because they need special handling.
@@ -2022,7 +2033,7 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
 // Substitute and symbolize the instruction before value numbering.
 NewGVN::ExprResult
 NewGVN::performSymbolicEvaluation(Instruction *I,
-                                  SmallPtrSetImpl<Value *> &Visited) const {
+                                  SmallPtrSetImpl<Value *> &Visited) {
 
   const Expression *E = nullptr;
   // TODO: memory intrinsics.
@@ -2463,6 +2474,7 @@ void NewGVN::performCongruenceFinding(Instruction *I, const Expression *E) {
       moveValueToNewCongruenceClass(I, E, IClass, EClass);
       markPhiOfOpsChanged(E);
     }
+    updateIR(I, EClass);
     ChangedPartition = true;
 
     markUsersTouched(I);
@@ -2470,7 +2482,9 @@ void NewGVN::performCongruenceFinding(Instruction *I, const Expression *E) {
       markMemoryUsersTouched(MA);
     if (auto *CI = dyn_cast<CmpInst>(I))
       markPredicateUsersTouched(CI);
-  }
+  } else if (RolledBack.erase(I))
+    updateIR(I, EClass);
+
   // If we changed the class of the store, we want to ensure nothing finds the
   // old store expression.  In particular, loads do not compare against stored
   // value, so they will find old store expressions (and associated class
@@ -2871,8 +2885,6 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
       }
       Deps.insert(CurrentDeps.begin(), CurrentDeps.end());
     } else {
-      if (!EnableOptimistic && isBackedge(PredBB, PHIBlock))
-        return nullptr;
       LLVM_DEBUG(dbgs() << "Skipping phi of ops operand for incoming block "
                         << getBlockName(PredBB)
                         << " because the block is unreachable\n");
@@ -3105,11 +3117,17 @@ void NewGVN::valueNumberMemoryPhi(MemoryPhi *MP) {
   // self-phi checking.
   const BasicBlock *PHIBlock = MP->getBlock();
   auto Filtered = make_filter_range(MP->operands(), [&](const Use &U) {
-    if (!EnableOptimistic)
-      return true;
-    return cast<MemoryAccess>(U) != MP &&
-           !isMemoryAccessTOP(cast<MemoryAccess>(U)) &&
-           ReachableEdges.count({MP->getIncomingBlock(U), PHIBlock});
+    if (cast<MemoryAccess>(U) == MP)
+      return false;
+    if (isMemoryAccessTOP(cast<MemoryAccess>(U)))
+      return false;
+    auto *BB = MP->getIncomingBlock(U);
+    if (!ReachableEdges.count({BB, PHIBlock})) {
+      if (isBackedge(BB, PHIBlock))
+        OptimisticAssumption = true;
+      return false;
+    }
+    return true;
   });
   // If all that is left is nothing, our memoryphi is poison. We keep it as
   // InitialClass.  Note: The only case this should happen is if we have at
@@ -3507,6 +3525,9 @@ bool NewGVN::runGVN() {
 
   ReachableBlocks.insert(&F.getEntryBlock());
   while (ChangedPartition) {
+    if (OptimisticAssumption) {
+      OptimisticAssumption = rollbackIR();
+    }
     ChangedPartition = false;
     iterateFunction();
   }
@@ -3719,9 +3740,15 @@ void NewGVN::convertClassToLoadsAndStores(
   }
 }
 
-static void patchAndReplaceAllUsesWith(Instruction *I, Value *Repl) {
+static void
+patchAndReplaceUsesWithIf(Instruction *I, Value *Repl,
+                          llvm::function_ref<bool(Use &U)> ShouldReplace) {
   patchReplacementInstruction(I, Repl);
-  I->replaceAllUsesWith(Repl);
+  I->replaceUsesWithIf(Repl, ShouldReplace);
+}
+
+static void patchAndReplaceAllUsesWith(Instruction *I, Value *Repl) {
+  patchAndReplaceUsesWithIf(I, Repl, [](Use &use) { return true; });
 }
 
 void NewGVN::deleteInstructionsInBlock(BasicBlock *BB) {
@@ -3766,6 +3793,54 @@ void NewGVN::replaceInstruction(Instruction *I, Value *V) {
   markInstructionForDeletion(I);
 }
 
+void NewGVN::updateIR(Instruction *I, CongruenceClass *CC) {
+  // Find a dominating leader and replace all uses of I
+  if (isa<StoreInst>(I))
+    return;
+  Value *Leader = CC->getStoredValue() ? CC->getStoredValue() : CC->getLeader();
+  if (!Leader)
+    return;
+  
+  if (I != Leader && (alwaysAvailable(Leader) ||
+                      DT->dominates(cast<Instruction>(Leader), I))) {
+    snapshotIR(I);
+    bool hasPredInfo = llvm::any_of(I->users(), [this](User *U){
+      return PredInfo->getPredicateInfoFor(U) != nullptr;
+    });
+    patchAndReplaceUsesWithIf(I, Leader, [I, this, hasPredInfo](Use &u) {
+      // Don't replace into ssa_copies and cmps if the I has predicate info.
+      User *UI = u.getUser();
+      auto *PI = PredInfo->getPredicateInfoFor(UI);
+      if (PI)
+        return false;
+      if (hasPredInfo && isa<CmpInst>(UI))
+        return false;
+
+      return true;
+    });
+  }
+}
+
+void NewGVN::snapshotIR(Instruction *I) {
+  for (Use &U : I->uses()) {
+    Snapshot[I].insert(&U);
+  }
+}
+
+bool NewGVN::rollbackIR() {
+  bool Optimistic = false;
+  for (auto &KV : Snapshot) {
+    auto *I = KV.first;
+    RolledBack.insert(I);
+    auto Uses = KV.second;
+    for (Use *U : Uses) {
+      if (InstrToDFSNum(U->getUser()) < InstrToDFSNum(I))
+        Optimistic = true;
+      U->set(I);
+    }
+  }
+  return Optimistic;
+}
 namespace {
 
 // This is a stack that contains both the value and dfs info of where
