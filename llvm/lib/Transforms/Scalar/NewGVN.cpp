@@ -2824,15 +2824,14 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
       return nullptr;
   }
 
-  if (!OpPHI)
-    return nullptr;
 
   SmallVector<ValPair, 4> PHIOps;
   SmallPtrSet<Value *, 4> Deps;
-  auto *PHIBlock = getBlockForValue(OpPHI);
+  auto *PHIBlock = OpPHI ? getBlockForValue(OpPHI) : getBlockForValue(I);
+  if (pred_size(PHIBlock) < 2)
+    return nullptr;
   RevisitOnReachabilityChange[PHIBlock].reset(InstrToDFSNum(I));
-  for (unsigned PredNum = 0; PredNum < OpPHI->getNumOperands(); ++PredNum) {
-    auto *PredBB = OpPHI->getIncomingBlock(PredNum);
+  for (auto *PredBB : predecessors(PHIBlock)) {
     Value *FoundVal = nullptr;
     SmallPtrSet<Value *, 4> CurrentDeps;
     // We could just skip unreachable edges entirely but it's tricky to do
@@ -2919,7 +2918,7 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
   bool NewPHI = false;
   if (!ValuePHI) {
     ValuePHI =
-        PHINode::Create(I->getType(), OpPHI->getNumOperands(), "phiofops");
+        PHINode::Create(I->getType(), pred_size(PHIBlock), "phiofops");
     addPhiOfOps(ValuePHI, PHIBlock, I);
     NewPHI = true;
     NumGVNPHIOfOpsCreated++;
@@ -3188,7 +3187,7 @@ void NewGVN::valueNumberInstruction(Instruction *I) {
 
       // Make a phi of ops if necessary
       if (Symbolized && !isa<ConstantExpression>(Symbolized) &&
-          !isa<VariableExpression>(Symbolized) && PHINodeUses.count(I)) {
+          !isa<VariableExpression>(Symbolized)) {
         auto *PHIE = makePossiblePHIOfOps(I, Visited);
         // If we created a phi of ops, use it.
         // If we couldn't create one, make sure we don't leave one lying around
