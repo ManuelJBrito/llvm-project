@@ -76,6 +76,7 @@
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/MemorySSA.h"
+#include "llvm/Analysis/MemorySSAUpdater.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Argument.h"
@@ -500,6 +501,7 @@ class NewGVN {
   AliasAnalysis *AA = nullptr;
   MemorySSA *MSSA = nullptr;
   MemorySSAWalker *MSSAWalker = nullptr;
+  MemorySSAUpdater *MSSAU = nullptr;
   AssumptionCache *AC = nullptr;
   const DataLayout &DL;
   std::unique_ptr<PredicateInfo> PredInfo;
@@ -2090,6 +2092,7 @@ void NewGVN::touchAndErase(Map &M, const KeyType &Key) {
 }
 
 void NewGVN::addAdditionalUsers(Value *To, Value *User) const {
+  return;
   assert(User && To != User);
   if (isa<Instruction>(To))
     AdditionalUsers[To].insert(User);
@@ -2791,8 +2794,12 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
       // Emit the temporal instruction in the predecessor basic block where the
       // corresponding value is defined.
       ValueOp->insertBefore(PredBB->getTerminator());
-      if (MemAccess)
-        TempToMemory.insert({ValueOp, MemAccess});
+      if (MemAccess) {
+        auto *NewAccess =
+            MSSAU->createMemoryAccessInBB(ValueOp, /*Definition=*/nullptr,
+                                          PredBB, MemorySSA::BeforeTerminator);
+        MSSAU->insertUse(cast<MemoryUse>(NewAccess), /*RenameUses=*/false);
+      }
       bool SafeForPHIOfOps = true;
       VisitedOps.clear();
       for (auto &Op : ValueOp->operands()) {
@@ -2820,6 +2827,8 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
       FoundVal = !SafeForPHIOfOps ? nullptr
                                   : findLeaderForInst(ValueOp, Visited,
                                                       MemAccess, I, PredBB);
+      if (MemAccess)
+        MSSAU->removeMemoryAccess(ValueOp);
       ValueOp->eraseFromParent();
       if (!FoundVal) {
         // We failed to find a leader for the current ValueOp, but this might
@@ -3422,6 +3431,8 @@ bool NewGVN::runGVN() {
   bool Changed = false;
   NumFuncArgs = F.arg_size();
   MSSAWalker = MSSA->getWalker();
+  MemorySSAUpdater Updater(MSSA);
+  MSSAU = &Updater;
   SingletonDeadExpression = new (ExpressionAllocator) DeadExpression();
 
   // Count number of instructions for sizing of hash tables, and come
