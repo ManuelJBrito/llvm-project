@@ -13,9 +13,9 @@ define i32 @main() #0 {
 ; CHECK:       if.then:
 ; CHECK-NEXT:    br label [[IF_END]]
 ; CHECK:       if.end:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[TMP0]], [[ENTRY:%.*]] ], [ [[NEG]], [[IF_THEN]] ]
+; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i32 [ [[TMP0]], [[ENTRY:%.*]] ], [ [[NEG]], [[IF_THEN]] ]
 ; CHECK-NEXT:    [[STOREMERGE:%.*]] = phi i32 [ [[TMP0]], [[IF_THEN]] ], [ [[NEG]], [[ENTRY]] ]
-; CHECK-NEXT:    [[CMP2:%.*]] = icmp ult i32 [[STOREMERGE]], [[PHIOFOPS]]
+; CHECK-NEXT:    [[CMP2:%.*]] = icmp ult i32 [[STOREMERGE]], [[PHIOFOPS1]]
 ; CHECK-NEXT:    br i1 [[CMP2]], label [[IF_THEN3:%.*]], label [[IF_END6:%.*]]
 ; CHECK:       if.then3:
 ; CHECK-NEXT:    br i1 false, label [[LOR_RHS:%.*]], label [[LOR_END:%.*]]
@@ -26,8 +26,8 @@ define i32 @main() #0 {
 ; CHECK-NEXT:    store i32 1, ptr @a, align 4
 ; CHECK-NEXT:    br label [[IF_END6]]
 ; CHECK:       if.end6:
-; CHECK-NEXT:    [[TMP2:%.*]] = load i32, ptr @a, align 4
-; CHECK-NEXT:    [[CALL:%.*]] = call i32 (ptr, ...) @printf(ptr @.str, i32 [[TMP2]])
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[TMP0]], [[IF_END]] ], [ 1, [[LOR_END]] ]
+; CHECK-NEXT:    [[CALL:%.*]] = call i32 (ptr, ...) @printf(ptr @.str, i32 [[PHIOFOPS]])
 ; CHECK-NEXT:    ret i32 0
 ;
 entry:

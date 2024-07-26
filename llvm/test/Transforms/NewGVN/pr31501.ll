@@ -53,9 +53,9 @@ define weak_odr hidden ptr @quux(ptr %arg, ptr %arg1) local_unnamed_addr #0 alig
 ; CHECK-LABEL: @quux(
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    [[TMP:%.*]] = getelementptr inbounds [[STRUCT_BARNEY:%.*]], ptr [[ARG:%.*]], i64 0, i32 3, i32 0, i32 0, i32 0
-; CHECK-NEXT:    [[TMP3:%.*]] = load ptr, ptr [[TMP]], align 8, !tbaa [[TBAA2:![0-9]+]]
+; CHECK-NEXT:    [[TMP3:%.*]] = load ptr, ptr [[TMP]], align 8
 ; CHECK-NEXT:    [[TMP4:%.*]] = getelementptr inbounds [[STRUCT_BARNEY]], ptr [[ARG]], i64 0, i32 3, i32 0, i32 0, i32 0, i32 0, i32 1
-; CHECK-NEXT:    [[TMP6:%.*]] = load ptr, ptr [[TMP4]], align 8, !tbaa [[TBAA7:![0-9]+]]
+; CHECK-NEXT:    [[TMP6:%.*]] = load ptr, ptr [[TMP4]], align 8
 ; CHECK-NEXT:    [[TMP7:%.*]] = icmp eq ptr [[TMP3]], [[TMP6]]
 ; CHECK-NEXT:    br i1 [[TMP7]], label [[BB21:%.*]], label [[BB8:%.*]]
 ; CHECK:       bb8:
@@ -66,7 +66,7 @@ define weak_odr hidden ptr @quux(ptr %arg, ptr %arg1) local_unnamed_addr #0 alig
 ; CHECK:       bb11:
 ; CHECK-NEXT:    [[TMP12:%.*]] = phi ptr [ [[TMP17:%.*]], [[BB9:%.*]] ], [ undef, [[BB8]] ]
 ; CHECK-NEXT:    [[TMP13:%.*]] = phi ptr [ [[TMP18]], [[BB9]] ], [ [[TMP3]], [[BB8]] ]
-; CHECK-NEXT:    [[TMP15:%.*]] = load ptr, ptr [[TMP13]], align 8, !tbaa [[TBAA8:![0-9]+]]
+; CHECK-NEXT:    [[TMP15:%.*]] = load ptr, ptr [[TMP13]], align 8, !tbaa [[TBAA2:![0-9]+]]
 ; CHECK-NEXT:    [[TMP16:%.*]] = icmp eq ptr [[TMP15]], [[ARG1:%.*]]
 ; CHECK-NEXT:    [[TMP17]] = select i1 [[TMP16]], ptr [[TMP13]], ptr [[TMP12]]
 ; CHECK-NEXT:    [[TMP18]] = getelementptr inbounds [[STRUCT_FOO:%.*]], ptr [[TMP13]], i64 1

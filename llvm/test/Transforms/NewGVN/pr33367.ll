@@ -23,7 +23,7 @@ define %MNR_struct @f000316011717_2(ptr %pDS, ptr %pCG) #2 {
 ; CHECK-NEXT:    [[RMEM:%.*]] = load i64, ptr [[ABSADDR1]], align 8, !tbaa [[TBAA4]]
 ; CHECK-NEXT:    [[PWT:%.*]] = getelementptr [[DS_STRUCT]], ptr [[PDS]], i32 0, i32 2
 ; CHECK-NEXT:    [[PWTE:%.*]] = getelementptr [32 x i16], ptr [[PWT]], i64 0, i64 8593987412
-; CHECK-NEXT:    [[SHIFTS:%.*]] = load i16, ptr [[PWTE]], align 2, !tbaa [[TBAA18:![0-9]+]], !invariant.load [[META20:![0-9]+]]
+; CHECK-NEXT:    [[SHIFTS:%.*]] = load i16, ptr [[PWTE]], align 2, !invariant.load [[META20:![0-9]+]]
 ; CHECK-NEXT:    [[SLOWJ:%.*]] = icmp eq i16 [[SHIFTS]], 0
 ; CHECK-NEXT:    br i1 [[SLOWJ]], label [[BB2_000316011731_5]], label %"BB3.000316011731#1.1"
 ; CHECK:       BB2.000316011731.5:

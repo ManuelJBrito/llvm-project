@@ -6,8 +6,8 @@
 define i32 @test(ptr %p, i32 %i) nounwind {
 ; CHECK-LABEL: @test(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[P:%.*]] = getelementptr [4 x i32], ptr @G, i32 0, i32 [[I:%.*]]
-; CHECK-NEXT:    store i8 4, ptr [[P1:%.*]], align 1
+; CHECK-NEXT:    [[P_I:%.*]] = getelementptr [4 x i32], ptr @G, i32 0, i32 [[I:%.*]]
+; CHECK-NEXT:    store i8 4, ptr [[P:%.*]], align 1
 ; CHECK-NEXT:    ret i32 0
 ;
 entry:

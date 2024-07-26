@@ -172,12 +172,10 @@ define i32 @test4(i32, ptr, ptr noalias, ptr noalias) {
 ; CHECK:       7:
 ; CHECK-NEXT:    br label [[TMP8]]
 ; CHECK:       8:
-; CHECK-NEXT:    [[DOT01:%.*]] = phi i32 [ 5, [[TMP6]] ], [ 7, [[TMP7]] ]
+; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i32 [ 105, [[TMP7]] ], [ 75, [[TMP6]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 735, [[TMP7]] ], [ 375, [[TMP6]] ]
 ; CHECK-NEXT:    [[DOT0:%.*]] = phi ptr [ [[TMP2]], [[TMP6]] ], [ [[TMP3]], [[TMP7]] ]
-; CHECK-NEXT:    [[TMP9:%.*]] = load i32, ptr [[DOT0]], align 4
-; CHECK-NEXT:    [[TMP10:%.*]] = mul nsw i32 [[TMP9]], 15
-; CHECK-NEXT:    [[TMP11:%.*]] = mul nsw i32 [[TMP10]], [[DOT01]]
-; CHECK-NEXT:    ret i32 [[TMP11]]
+; CHECK-NEXT:    ret i32 [[PHIOFOPS]]
 ;
   store i32 5, ptr %2, align 4
   store i32 7, ptr %3, align 4
@@ -525,7 +523,8 @@ define void @test12(ptr %p) {
 ; CHECK:       bb2:
 ; CHECK-NEXT:    br label [[BB3:%.*]]
 ; CHECK:       bb3:
-; CHECK-NEXT:    br i1 true, label [[BB6:%.*]], label [[BB7:%.*]]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ true, [[BB2]] ], [ [[TMP1]], [[BB7:%.*]] ]
+; CHECK-NEXT:    br i1 [[PHIOFOPS]], label [[BB6:%.*]], label [[BB7]]
 ; CHECK:       bb6:
 ; CHECK-NEXT:    br label [[BB7]]
 ; CHECK:       bb7:
