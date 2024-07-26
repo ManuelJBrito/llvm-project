@@ -19,14 +19,14 @@ target triple = "x86_64-apple-macosx10.12.0"
 define i32 @main() local_unnamed_addr #0 {
 ; CHECK-LABEL: @main(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[DOTPR_I:%.*]] = load i32, ptr @c, align 4, !tbaa [[TBAA3:![0-9]+]]
+; CHECK-NEXT:    [[DOTPR_I:%.*]] = load i32, ptr @c, align 4
 ; CHECK-NEXT:    [[CMP13_I:%.*]] = icmp slt i32 [[DOTPR_I]], 1
 ; CHECK-NEXT:    br i1 [[CMP13_I]], label [[FOR_COND1_PREHEADER_LR_PH_I:%.*]], label [[ENTRY_FOR_END9_I_CRIT_EDGE:%.*]]
 ; CHECK:       entry.for.end9.i_crit_edge:
-; CHECK-NEXT:    [[DOTPRE:%.*]] = load i32, ptr @h, align 4, !tbaa [[TBAA3]]
+; CHECK-NEXT:    [[DOTPRE:%.*]] = load i32, ptr @h, align 4, !tbaa [[TBAA3:![0-9]+]]
 ; CHECK-NEXT:    br label [[FOR_END9_I:%.*]]
 ; CHECK:       for.cond1.preheader.lr.ph.i:
-; CHECK-NEXT:    [[G_PROMOTED14_I:%.*]] = load i32, ptr @g, align 4, !tbaa [[TBAA3]]
+; CHECK-NEXT:    [[G_PROMOTED14_I:%.*]] = load i32, ptr @g, align 4
 ; CHECK-NEXT:    br label [[FOR_COND1_PREHEADER_I:%.*]]
 ; CHECK:       for.cond1.preheader.i:
 ; CHECK-NEXT:    [[INC816_I:%.*]] = phi i32 [ [[DOTPR_I]], [[FOR_COND1_PREHEADER_LR_PH_I]] ], [ [[INC8_I:%.*]], [[FOR_INC7_I:%.*]] ]

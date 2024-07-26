@@ -65,7 +65,7 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK-NEXT:    [[DOT04961:%.*]] = phi i32 [ [[DOT2:%.*]], [[TMP57]] ], [ 0, [[DOTPREHEADER_PREHEADER]] ]
 ; CHECK-NEXT:    [[DOT05160:%.*]] = phi i32 [ [[DOT253:%.*]], [[TMP57]] ], [ 0, [[DOTPREHEADER_PREHEADER]] ]
 ; CHECK-NEXT:    [[TMP23:%.*]] = getelementptr inbounds [26 x %struct.Letter], ptr @alPhrase, i64 0, i64 [[INDVARS_IV]], i32 0
-; CHECK-NEXT:    [[TMP24:%.*]] = load i32, ptr [[TMP23]], align 16, !tbaa [[TBAA9]]
+; CHECK-NEXT:    [[TMP24:%.*]] = load i32, ptr [[TMP23]], align 16
 ; CHECK-NEXT:    [[TMP25:%.*]] = icmp eq i32 [[TMP24]], 0
 ; CHECK-NEXT:    [[TMP26:%.*]] = getelementptr inbounds [26 x i32], ptr @auGlobalFrequency, i64 0, i64 [[INDVARS_IV]]
 ; CHECK-NEXT:    br i1 [[TMP25]], label [[TMP27:%.*]], label [[TMP28:%.*]]
