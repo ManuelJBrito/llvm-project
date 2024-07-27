@@ -2656,6 +2656,9 @@ void NewGVN::removePREInst(Instruction *I, Instruction *PREInst) {
       if (Iter != ExpressionToClass.end())
         ExpressionToClass.erase(Iter);
     }
+  } else if (OldClass->getLeader() == PREInst) {
+    OldClass->setLeader(getNextValueLeader(OldClass));
+    OldClass->resetNextLeader();
   }
   ValueToClass.erase(PREInst);
   PREInst->replaceAllUsesWith(PoisonValue::get(PREInst->getType()));
@@ -4392,6 +4395,14 @@ bool NewGVN::shouldSwapOperands(const Value *A, const Value *B) const {
   // Because we only care about a total ordering, and don't rewrite expressions
   // in this order, we order by rank, which will give a strict weak ordering to
   // everything but constants, and then we order by pointer address.
+  auto InstA = dyn_cast<Instruction>(A);
+  auto InstB = dyn_cast<Instruction>(B);
+  if (InstA && InstB){
+    if (comesBeforeRPO(InstA, InstB))
+      return false;
+    else
+      return true;
+  } 
   return std::make_pair(getRank(A), A) > std::make_pair(getRank(B), B);
 }
 
