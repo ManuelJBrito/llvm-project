@@ -847,7 +847,7 @@ private:
   bool someEquivalentDominates(const Instruction *, const Instruction *) const;
   Value *lookupOperandLeader(Value *) const;
   CongruenceClass *getClassForExpression(const Expression *E) const;
-  void performCongruenceFinding(Instruction *, const Expression *);
+  void performCongruenceFinding(Instruction *, const Expression *, bool);
   void moveValueToNewCongruenceClass(Instruction *, const Expression *,
                                      CongruenceClass *, CongruenceClass *);
   void moveMemoryToNewCongruenceClass(Instruction *, MemoryAccess *,
@@ -2420,7 +2420,8 @@ void NewGVN::markPhiOfOpsChanged(const Expression *E) {
 }
 
 // Perform congruence finding on a given value numbering expression.
-void NewGVN::performCongruenceFinding(Instruction *I, const Expression *E) {
+void NewGVN::performCongruenceFinding(Instruction *I, const Expression *E,
+                                      bool Temp = false) {
   // This is guaranteed to return something, since it will at least find
   // TOP.
 
@@ -2491,7 +2492,8 @@ void NewGVN::performCongruenceFinding(Instruction *I, const Expression *E) {
       moveValueToNewCongruenceClass(I, E, IClass, EClass);
     }
     updateIR(I, EClass);
-    ChangedPartition = true;
+    if (!Temp)
+      ChangedPartition = true;
 
   } else if (RolledBack.erase(I))
     updateIR(I, EClass);
@@ -2790,7 +2792,7 @@ bool NewGVN::InstOkayForPRE(Instruction *I) {
     return false;
   if (isa<AllocaInst>(I) || I->isTerminator() || isa<PHINode>(I) ||
       I->getType()->isVoidTy() || I->mayHaveSideEffects() ||
-      isa<DbgInfoIntrinsic>(I) || I->mayReadFromMemory())
+      isa<DbgInfoIntrinsic>(I))
     return false;
 
   // Don't do PRE on compares. The PHI would prevent CodeGenPrepare from
@@ -2944,10 +2946,11 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
           PREInsts.insert(ValueOp);
           RealToPREInst.insert({I, ValueOp});
           PHIOps.push_back({ValueOp, PredBB});
+          TOPClass->insert(ValueOp);
+          ValueToClass[ValueOp] = TOPClass;
           auto Res = performSymbolicEvaluation(ValueOp, Visited);
+          performCongruenceFinding(ValueOp, Res.Expr, true);
           assert(Res.Expr && "Should have been able to symbolize");
-          auto *CC = createSingletonCongruenceClass(ValueOp, Res.Expr);
-          ExpressionToClass.insert({Res.Expr, CC});
           ValueOp->setName(I->getName() + ".pre");
           LLVM_DEBUG(dbgs() << "Inserted phi of ops operand " << *ValueOp
                             << " in " << getBlockName(PredBB) << "\n");

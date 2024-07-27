@@ -16,13 +16,15 @@ define void @patatino(i1 %arg) {
 ; CHECK:       for.cond11thread-pre-split.lr.ph:
 ; CHECK-NEXT:    br label [[L1]]
 ; CHECK:       for.body:
-; CHECK-NEXT:    store i64 7, ptr @f, align 4
+; CHECK-NEXT:    store i64 [[OR_PRE:%.*]], ptr @f, align 4
 ; CHECK-NEXT:    br i1 true, label [[FOR_COND2THREAD_PRE_SPLIT:%.*]], label [[LOR_RHS:%.*]]
 ; CHECK:       lor.rhs:
 ; CHECK-NEXT:    store i64 1, ptr @b, align 8
 ; CHECK-NEXT:    br label [[FOR_COND2THREAD_PRE_SPLIT]]
 ; CHECK:       l1:
 ; CHECK-NEXT:    store i64 7, ptr [[J_3:%.*]], align 4
+; CHECK-NEXT:    [[DOTPRE:%.*]] = load i64, ptr @f, align 4
+; CHECK-NEXT:    [[OR_PRE]] = or i64 [[DOTPRE]], 1
 ; CHECK-NEXT:    br label [[FOR_BODY]]
 ; CHECK:       for.cond16:
 ; CHECK-NEXT:    [[J_0:%.*]] = phi ptr [ @f, [[ENTRY:%.*]] ], [ poison, [[FOR_COND20:%.*]] ], [ @e, [[FOR_COND16]] ]
