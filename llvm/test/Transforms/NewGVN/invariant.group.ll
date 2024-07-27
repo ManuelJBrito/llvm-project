@@ -523,10 +523,10 @@ define void @handling_loops() {
 ; CHECK-NEXT:    [[TMP3:%.*]] = icmp sgt i8 [[TMP1]], 1
 ; CHECK-NEXT:    br i1 [[TMP3]], label [[DOT_CRIT_EDGE_PREHEADER:%.*]], label [[_Z2G2R1A_EXIT]]
 ; CHECK:       ._crit_edge.preheader:
+; CHECK-NEXT:    [[TMP5:%.*]] = load ptr, ptr getelementptr inbounds ([3 x ptr], ptr @_ZTV1A, i64 0, i64 2), align 8
 ; CHECK-NEXT:    br label [[DOT_CRIT_EDGE:%.*]]
 ; CHECK:       ._crit_edge:
 ; CHECK-NEXT:    [[TMP4:%.*]] = phi i8 [ [[TMP6:%.*]], [[DOT_CRIT_EDGE]] ], [ 1, [[DOT_CRIT_EDGE_PREHEADER]] ]
-; CHECK-NEXT:    [[TMP5:%.*]] = load ptr, ptr getelementptr inbounds ([3 x ptr], ptr @_ZTV1A, i64 0, i64 2), align 8
 ; CHECK-NEXT:    call void [[TMP5]](ptr nonnull [[A]])
 ; CHECK-NEXT:    [[TMP6]] = add nuw nsw i8 [[TMP4]], 1
 ; CHECK-NEXT:    [[TMP7:%.*]] = load i8, ptr @unknownPtr, align 4

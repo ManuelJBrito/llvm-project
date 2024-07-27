@@ -224,9 +224,10 @@ define i1 @test7_fp(float %x, float %y) {
 ; CHECK-NEXT:    [[CMP:%.*]] = fcmp ogt float [[X:%.*]], [[Y:%.*]]
 ; CHECK-NEXT:    br i1 [[CMP]], label [[SAME:%.*]], label [[DIFFERENT:%.*]]
 ; CHECK:       same:
-; CHECK-NEXT:    ret i1 false
+; CHECK-NEXT:    [[CMP2:%.*]] = fcmp ule float [[X]], [[Y]]
+; CHECK-NEXT:    ret i1 [[CMP2]]
 ; CHECK:       different:
-; CHECK-NEXT:    ret i1 false
+; CHECK-NEXT:    ret i1 [[CMP]]
 ;
   %cmp = fcmp ogt float %x, %y
   br i1 %cmp, label %same, label %different
