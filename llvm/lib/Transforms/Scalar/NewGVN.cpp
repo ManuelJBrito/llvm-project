@@ -688,7 +688,7 @@ public:
          TargetLibraryInfo *TLI, AliasAnalysis *AA, MemorySSA *MSSA,
          const DataLayout &DL)
       : F(F), DT(DT), TLI(TLI), AA(AA), MSSA(MSSA), AC(AC), DL(DL),
-        PredInfo(std::make_unique<PredicateInfo>(F, *DT, *AC)),
+        PredInfo(nullptr),
         SQ(DL, TLI, DT, AC, /*CtxI=*/nullptr, /*UseInstrInfo=*/false,
            /*CanUseUndef=*/false) {}
 
@@ -1645,7 +1645,7 @@ const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) const {
 
 NewGVN::ExprResult
 NewGVN::performSymbolicPredicateInfoEvaluation(IntrinsicInst *I) const {
-  auto *PI = PredInfo->getPredicateInfoFor(I);
+  PredicateBase *PI = nullptr;
   if (!PI)
     return ExprResult::none();
 
@@ -1943,7 +1943,7 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
   const PredicateBase *LastPredInfo = nullptr;
   // See if we know something about the comparison itself, like it is the target
   // of an assume.
-  auto *CmpPI = PredInfo->getPredicateInfoFor(I);
+  PredicateBase *CmpPI = nullptr;
   if (isa_and_nonnull<PredicateAssume>(CmpPI))
     return ExprResult::some(
         createConstantExpression(ConstantInt::getTrue(CI->getType())));
@@ -1984,7 +1984,8 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
   // See if our operands have predicate info, so that we may be able to derive
   // something from a previous comparison.
   for (const auto &Op : CI->operands()) {
-    auto *PI = PredInfo->getPredicateInfoFor(Op);
+    PredicateBase *PI = nullptr;
+    // PredInfo->getPredicateInfoFor(Op);
     if (const auto *PBranch = dyn_cast_or_null<PredicateBranch>(PI)) {
       if (PI == LastPredInfo)
         continue;
@@ -2962,7 +2963,6 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
           if (MemAccess)
             MSSAU->removeMemoryAccess(ValueOp);
           ValueOp->eraseFromParent();
-        return nullptr;
           return nullptr;
         }
       }
@@ -3003,27 +3003,12 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
 
     return E;
   }
-  auto *ValuePHI = RealToTemp.lookup(I);
-  bool NewPHI = false;
-  if (!ValuePHI) {
-    ValuePHI =
-        PHINode::Create(I->getType(), pred_size(PHIBlock), "phiofops");
-    addPhiOfOps(ValuePHI, PHIBlock, I);
-    NewPHI = true;
-    NumGVNPHIOfOpsCreated++;
-  }
-  if (NewPHI) {
-    for (auto PHIOp : PHIOps)
-      ValuePHI->addIncoming(PHIOp.first, PHIOp.second);
-  } else {
-    TempToBlock[ValuePHI] = PHIBlock;
-    unsigned int i = 0;
-    for (auto PHIOp : PHIOps) {
-      ValuePHI->setIncomingValue(i, PHIOp.first);
-      ValuePHI->setIncomingBlock(i, PHIOp.second);
-      ++i;
-    }
-  }
+  auto *ValuePHI =
+      PHINode::Create(I->getType(), pred_size(PHIBlock), "phiofops");
+  addPhiOfOps(ValuePHI, PHIBlock, I);
+  NumGVNPHIOfOpsCreated++;
+  for (auto PHIOp : PHIOps)
+    ValuePHI->addIncoming(PHIOp.first, PHIOp.second);
   LLVM_DEBUG(dbgs() << "Created phi of ops " << *ValuePHI << " for " << *I
                     << "\n");
 
@@ -3911,20 +3896,7 @@ void NewGVN::updateIR(Instruction *I, CongruenceClass *CC) {
   if (I != Leader && (alwaysAvailable(Leader) ||
                       DT->dominates(cast<Instruction>(Leader), I))) {
     snapshotIR(I);
-    bool hasPredInfo = llvm::any_of(I->users(), [this](User *U){
-      return PredInfo->getPredicateInfoFor(U) != nullptr;
-    });
-    patchAndReplaceUsesWithIf(I, Leader, [I, this, hasPredInfo](Use &u) {
-      // Don't replace into ssa_copies and cmps if the I has predicate info.
-      User *UI = u.getUser();
-      auto *PI = PredInfo->getPredicateInfoFor(UI);
-      if (PI)
-        return false;
-      if (hasPredInfo && isa<CmpInst>(UI))
-        return false;
-
-      return true;
-    });
+    patchAndReplaceAllUsesWith(I, Leader);
   }
 }
 
@@ -4167,7 +4139,7 @@ bool NewGVN::eliminateInstructions(Function &F) {
             LLVM_DEBUG(dbgs() << "Inserting fully real phi of ops" << *Def
                               << " into block "
                               << getBlockName(getBlockForValue(Def)) << "\n");
-            PN->insertBefore(&DefBlock->front());
+            PN->insertBefore(DefBlock->begin());
             Def = PN;
             NumGVNPHIOfOpsEliminations++;
           }
@@ -4277,13 +4249,7 @@ bool NewGVN::eliminateInstructions(Function &F) {
           // metadata.  Skip this if we are replacing predicateinfo with its
           // original operand, as we already know we can just drop it.
           auto *ReplacedInst = cast<Instruction>(U->get());
-          auto *PI = PredInfo->getPredicateInfoFor(ReplacedInst);
-          if (!PI || DominatingLeader != PI->OriginalOp)
-            patchReplacementInstruction(ReplacedInst, DominatingLeader);
-
-          LLVM_DEBUG(dbgs()
-                     << "Found replacement " << *DominatingLeader << " for "
-                     << *U->get() << " in " << *(U->getUser()) << "\n");
+          patchReplacementInstruction(ReplacedInst, DominatingLeader);
           U->set(DominatingLeader);
           // This is now a use of the dominating leader, which means if the
           // dominating leader was dead, it's now live!
