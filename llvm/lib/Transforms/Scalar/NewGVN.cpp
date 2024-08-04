@@ -166,6 +166,9 @@ static cl::opt<bool> EnablePRE("enable-newgvn-pre", cl::init(true),
 static cl::opt<bool> EnableSimpl("enable-newgvn-simpl", cl::init(true),
                                       cl::Hidden);
 
+static cl::opt<bool> EnableUpdate("enable-newgvn-update", cl::init(true),
+                                      cl::Hidden);
+
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
 //===----------------------------------------------------------------------===//
@@ -1115,10 +1118,14 @@ NewGVN::createPHIExpression(ArrayRef<ValPair> PHIOperands, const Instruction *I,
       return false;
     OriginalOpsConstant = OriginalOpsConstant && isa<Constant>(P.first);
     HasBackedge = HasBackedge || isBackedge(BB, PHIBlock);
+    if (RealToPREInst.lookup(I) == P.first)
+      return true;
     return lookupOperandLeader(P.first) != I;
   });
   std::transform(Filtered.begin(), Filtered.end(), op_inserter(E),
                  [&](const ValPair &P) -> Value * {
+                   if (RealToPREInst.lookup(I) == P.first)
+                     return P.first;
                    return lookupOperandLeader(P.first);
                  });
   return E;
@@ -1138,7 +1145,9 @@ bool NewGVN::setBasicExpressionInfo(Instruction *I, BasicExpression *E) const {
   // Transform the operand array into an operand leader array, and keep track of
   // whether all members are constant.
   std::transform(I->op_begin(), I->op_end(), op_inserter(E), [&](Value *O) {
-    auto Operand = lookupOperandLeader(O);
+    auto Operand = isa<Instruction>(O) && PREInsts.count(cast<Instruction>(O))
+                       ? O
+                       : lookupOperandLeader(O);
     AllConstant = AllConstant && isa<Constant>(Operand);
     return Operand;
   });
@@ -2660,7 +2669,9 @@ void NewGVN::removePREInst(Instruction *I, Instruction *PREInst) {
   } else if (OldClass->getLeader() == PREInst) {
     OldClass->setLeader(getNextValueLeader(OldClass));
     OldClass->resetNextLeader();
-  }
+  } else if (PREInst == OldClass->getNextLeader().first)
+    OldClass->resetNextLeader();
+
   ValueToClass.erase(PREInst);
   PREInst->replaceAllUsesWith(PoisonValue::get(PREInst->getType()));
   PREInst->eraseFromParent();
@@ -2675,9 +2686,6 @@ void NewGVN::addPhiOfOps(PHINode *Op, BasicBlock *BB,
   RealToTemp[ExistingValue] = Op;
   // Add all users to phi node use, as they are now uses of the phi of ops phis
   // and may themselves be phi of ops.
-  for (auto *U : ExistingValue->users())
-    if (auto *UI = dyn_cast<Instruction>(U))
-      PHINodeUses.insert(UI);
 }
 
 static bool okayForPHIOfOps(const Instruction *I) {
@@ -2890,7 +2898,6 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
       return nullptr;
   }
 
-
   SmallVector<ValPair, 4> PHIOps;
   SmallPtrSet<Value *, 4> Deps;
   auto *PHIBlock = OpPHI ? getBlockForValue(OpPHI) : getBlockForValue(I);
@@ -2953,8 +2960,8 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
           TOPClass->insert(ValueOp);
           ValueToClass[ValueOp] = TOPClass;
           auto Res = performSymbolicEvaluation(ValueOp, Visited);
-          performCongruenceFinding(ValueOp, Res.Expr, true);
           assert(Res.Expr && "Should have been able to symbolize");
+          performCongruenceFinding(ValueOp, Res.Expr, true);
           ValueOp->setName(I->getName() + ".pre");
           LLVM_DEBUG(dbgs() << "Inserted phi of ops operand " << *ValueOp
                             << " in " << getBlockName(PredBB) << "\n");
@@ -2962,12 +2969,16 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
         } else {
           if (MemAccess)
             MSSAU->removeMemoryAccess(ValueOp);
+          assert(ValueOp);
+  assert(ValueOp->getParent());
           ValueOp->eraseFromParent();
           return nullptr;
         }
       }
       if (MemAccess)
         MSSAU->removeMemoryAccess(ValueOp);
+      assert(ValueOp);
+  assert(ValueOp->getParent());
       ValueOp->eraseFromParent();
 
       Deps.insert(CurrentDeps.begin(), CurrentDeps.end());
@@ -2984,8 +2995,6 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
     LLVM_DEBUG(dbgs() << "Found phi of ops operand " << *FoundVal << " in "
                       << getBlockName(PredBB) << "\n");
   }
-  for (auto *Dep : Deps)
-    addAdditionalUsers(Dep, I);
   sortPHIOps(PHIOps);
   auto *E = performSymbolicPHIEvaluation(PHIOps, I, PHIBlock);
   if (isa<ConstantExpression>(E) || isa<VariableExpression>(E)) {
@@ -2993,13 +3002,6 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
         dbgs()
         << "Not creating real PHI of ops because it simplified to existing "
            "value or constant\n");
-    // We have leaders for all operands, but do not create a real PHI node with
-    // those leaders as operands, so the link between the operands and the
-    // PHI-of-ops is not materialized in the IR. If any of those leaders
-    // changes, the PHI-of-op may change also, so we need to add the operands as
-    // additional users.
-    for (auto &O : PHIOps)
-      addAdditionalUsers(O.first, I);
 
     return E;
   }
@@ -3518,28 +3520,30 @@ void NewGVN::verifyStoreExpressions() const {
 // instruction set, propagating value numbers, marking things touched, etc,
 // until the set of touched instructions is completely empty.
 void NewGVN::iterateFunction() {
-    // Walk through all the instructions in all the blocks in RPO.
-    for (auto *DTN : depth_first(DT->getRootNode())) {
-      BasicBlock *CurrBlock = DTN->getBlock();
-      if (!ReachableBlocks.count(CurrBlock))
-        continue;
-      updateProcessedCount(CurrBlock);
-      // Use the appropriate cache for "OpIsSafeForPHIOfOps".
-      CacheIdx = RPOOrdering.lookup(DT->getNode(CurrBlock)) - 1;
-      if (auto *MP = getMemoryAccess(CurrBlock)) {
-        LLVM_DEBUG(dbgs() << "Processing MemoryPhi " << *MP << "\n");
-        valueNumberMemoryPhi(MP);
-      }
-      for (auto &I : *CurrBlock) {
+  // Walk through all the instructions in all the blocks in RPO.
+  for (auto *DTN : depth_first(DT->getRootNode())) {
+    BasicBlock *CurrBlock = DTN->getBlock();
+    if (!ReachableBlocks.count(CurrBlock))
+      continue;
+    updateProcessedCount(CurrBlock);
+    // Use the appropriate cache for "OpIsSafeForPHIOfOps".
+    CacheIdx = RPOOrdering.lookup(DT->getNode(CurrBlock)) - 1;
+    if (auto *MP = getMemoryAccess(CurrBlock)) {
+      LLVM_DEBUG(dbgs() << "Processing MemoryPhi " << *MP << "\n");
+      valueNumberMemoryPhi(MP);
+    }
+    for (auto &I : *CurrBlock) {
+      if (!PREInsts.count(&I)) {
         if (isInstructionTriviallyDead(&I, TLI) && !PREInsts.count(&I)) {
-          LLVM_DEBUG(dbgs() << "Skipping trivially dead instruction " << I
-                            << "\n");
+          LLVM_DEBUG(dbgs()
+                     << "Skipping trivially dead instruction " << I << "\n");
           markInstructionForDeletion(&I);
           continue;
         }
         valueNumberInstruction(&I);
       }
     }
+  }
 }
 
 // This is the main transformation entry point.
@@ -3882,26 +3886,39 @@ void NewGVN::replaceInstruction(Instruction *I, Value *V) {
 }
 
 void NewGVN::updateIR(Instruction *I, CongruenceClass *CC) {
+  if (!EnableUpdate)
+    return;
+  if (PREInsts.count(I))
+    return;
   // Find a dominating leader and replace all uses of I
   if (isa<StoreInst>(I))
     return;
   Value *Leader = CC->getStoredValue() ? CC->getStoredValue() : CC->getLeader();
-  if (!Leader)
+  if (!Leader) {
     return;
+  }
 
   if (auto LeaderInst = dyn_cast<Instruction>(Leader))
-    if (PREInsts.count(LeaderInst))
+    if (PREInsts.count(LeaderInst)) {
       return;
-
+    }
   if (I != Leader && (alwaysAvailable(Leader) ||
                       DT->dominates(cast<Instruction>(Leader), I))) {
     snapshotIR(I);
-    patchAndReplaceAllUsesWith(I, Leader);
+    patchAndReplaceUsesWithIf(I, Leader, [I, this](Use &u) {
+      return !PREInsts.count(cast<Instruction>(u.getUser()));
+    });
+
+    // patchAndReplaceAllUsesWith(I, Leader);
   }
 }
 
 void NewGVN::snapshotIR(Instruction *I) {
+  unsigned numUses = 0;
   for (Use &U : I->uses()) {
+    if (auto *UI = dyn_cast<Instruction>(U.getUser()))
+      if (PREInsts.count(UI))
+        continue;
     Snapshot[I].insert(&U);
   }
 }
@@ -3981,7 +3998,8 @@ Value *NewGVN::findPHIOfOpsLeader(const Expression *E,
     return CE->getConstantValue();
   if (auto *VE = dyn_cast<VariableExpression>(E)) {
     auto *V = VE->getVariableValue();
-    if (alwaysAvailable(V) || DT->dominates(getBlockForValue(V), BB))
+    if (V != OrigInst &&
+        (alwaysAvailable(V) || DT->dominates(getBlockForValue(V), BB)))
       return VE->getVariableValue();
   }
 
@@ -3998,6 +4016,8 @@ Value *NewGVN::findPHIOfOpsLeader(const Expression *E,
     // Anything that isn't an instruction is always available.
     if (!MemberInst)
       return Member;
+    if (comesBeforeRPO(OrigInst, MemberInst))
+      continue;
     if (DT->dominates(getBlockForValue(MemberInst), BB))
       return Member;
   }
