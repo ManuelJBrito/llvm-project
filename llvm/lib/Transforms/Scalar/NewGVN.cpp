@@ -691,7 +691,7 @@ public:
          TargetLibraryInfo *TLI, AliasAnalysis *AA, MemorySSA *MSSA,
          const DataLayout &DL)
       : F(F), DT(DT), TLI(TLI), AA(AA), MSSA(MSSA), AC(AC), DL(DL),
-        PredInfo(nullptr),
+        PredInfo(std::make_unique<PredicateInfo>(F, *DT, *AC)),
         SQ(DL, TLI, DT, AC, /*CtxI=*/nullptr, /*UseInstrInfo=*/false,
            /*CanUseUndef=*/false) {}
 
@@ -1654,7 +1654,7 @@ const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) const {
 
 NewGVN::ExprResult
 NewGVN::performSymbolicPredicateInfoEvaluation(IntrinsicInst *I) const {
-  PredicateBase *PI = nullptr;
+  auto *PI = PredInfo->getPredicateInfoFor(I);
   if (!PI)
     return ExprResult::none();
 
@@ -1952,7 +1952,7 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
   const PredicateBase *LastPredInfo = nullptr;
   // See if we know something about the comparison itself, like it is the target
   // of an assume.
-  PredicateBase *CmpPI = nullptr;
+  auto *CmpPI = PredInfo->getPredicateInfoFor(I);
   if (isa_and_nonnull<PredicateAssume>(CmpPI))
     return ExprResult::some(
         createConstantExpression(ConstantInt::getTrue(CI->getType())));
@@ -1993,8 +1993,7 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
   // See if our operands have predicate info, so that we may be able to derive
   // something from a previous comparison.
   for (const auto &Op : CI->operands()) {
-    PredicateBase *PI = nullptr;
-    // PredInfo->getPredicateInfoFor(Op);
+    auto *PI = PredInfo->getPredicateInfoFor(Op);
     if (const auto *PBranch = dyn_cast_or_null<PredicateBranch>(PI)) {
       if (PI == LastPredInfo)
         continue;
@@ -3888,7 +3887,7 @@ void NewGVN::replaceInstruction(Instruction *I, Value *V) {
 void NewGVN::updateIR(Instruction *I, CongruenceClass *CC) {
   if (!EnableUpdate)
     return;
-  if (PREInsts.count(I))
+  if (PREInsts.count(I) || PredInfo->getPredicateInfoFor(I))
     return;
   // Find a dominating leader and replace all uses of I
   if (isa<StoreInst>(I))
@@ -3906,10 +3905,10 @@ void NewGVN::updateIR(Instruction *I, CongruenceClass *CC) {
                       DT->dominates(cast<Instruction>(Leader), I))) {
     snapshotIR(I);
     patchAndReplaceUsesWithIf(I, Leader, [I, this](Use &u) {
-      return !PREInsts.count(cast<Instruction>(u.getUser()));
+      if (auto *UI = dyn_cast<Instruction>(u.getUser()))
+        return !PREInsts.count(UI) && !PredInfo->getPredicateInfoFor(UI);
+      return true;
     });
-
-    // patchAndReplaceAllUsesWith(I, Leader);
   }
 }
 
@@ -3917,7 +3916,7 @@ void NewGVN::snapshotIR(Instruction *I) {
   unsigned numUses = 0;
   for (Use &U : I->uses()) {
     if (auto *UI = dyn_cast<Instruction>(U.getUser()))
-      if (PREInsts.count(UI))
+      if (PREInsts.count(UI) || PredInfo->getPredicateInfoFor(UI))
         continue;
     Snapshot[I].insert(&U);
   }
@@ -4269,7 +4268,9 @@ bool NewGVN::eliminateInstructions(Function &F) {
           // metadata.  Skip this if we are replacing predicateinfo with its
           // original operand, as we already know we can just drop it.
           auto *ReplacedInst = cast<Instruction>(U->get());
-          patchReplacementInstruction(ReplacedInst, DominatingLeader);
+          auto *PI = PredInfo->getPredicateInfoFor(ReplacedInst);
+          if (!PI || DominatingLeader != PI->OriginalOp)
+            patchReplacementInstruction(ReplacedInst, DominatingLeader);
           U->set(DominatingLeader);
           // This is now a use of the dominating leader, which means if the
           // dominating leader was dead, it's now live!
