@@ -1243,45 +1243,45 @@ GVNPass::AnalyzeLoadAvailability(LoadInst *Load, MemDepResult DepInfo,
     // If the dependence is to a store that writes to a superset of the bits
     // read by the load, we can extract the bits we need for the load from the
     // stored value.
-    if (StoreInst *DepSI = dyn_cast<StoreInst>(DepInst)) {
-      // Can't forward from non-atomic to atomic without violating memory model.
-      if (Address && Load->isAtomic() <= DepSI->isAtomic()) {
-        int Offset =
-            analyzeLoadFromClobberingStore(Load->getType(), Address, DepSI, DL);
-        if (Offset != -1)
-          return AvailableValue::get(DepSI->getValueOperand(), Offset);
-      }
-    }
+    // if (StoreInst *DepSI = dyn_cast<StoreInst>(DepInst)) {
+    //   // Can't forward from non-atomic to atomic without violating memory model.
+    //   if (Address && Load->isAtomic() <= DepSI->isAtomic()) {
+    //     int Offset =
+    //         analyzeLoadFromClobberingStore(Load->getType(), Address, DepSI, DL);
+    //     if (Offset != -1)
+    //       return AvailableValue::get(DepSI->getValueOperand(), Offset);
+    //   }
+    // }
 
     // Check to see if we have something like this:
     //    load i32* P
     //    load i8* (P+1)
     // if we have this, replace the later with an extraction from the former.
-    if (LoadInst *DepLoad = dyn_cast<LoadInst>(DepInst)) {
-      // If this is a clobber and L is the first instruction in its block, then
-      // we have the first instruction in the entry block.
-      // Can't forward from non-atomic to atomic without violating memory model.
-      if (DepLoad != Load && Address &&
-          Load->isAtomic() <= DepLoad->isAtomic()) {
-        Type *LoadType = Load->getType();
-        int Offset = -1;
+    // if (LoadInst *DepLoad = dyn_cast<LoadInst>(DepInst)) {
+    //   // If this is a clobber and L is the first instruction in its block, then
+    //   // we have the first instruction in the entry block.
+    //   // Can't forward from non-atomic to atomic without violating memory model.
+    //   if (DepLoad != Load && Address &&
+    //       Load->isAtomic() <= DepLoad->isAtomic()) {
+    //     Type *LoadType = Load->getType();
+    //     int Offset = -1;
 
-        // If MD reported clobber, check it was nested.
-        if (DepInfo.isClobber() &&
-            canCoerceMustAliasedValueToLoad(DepLoad, LoadType, DL)) {
-          const auto ClobberOff = MD->getClobberOffset(DepLoad);
-          // GVN has no deal with a negative offset.
-          Offset = (ClobberOff == std::nullopt || *ClobberOff < 0)
-                       ? -1
-                       : *ClobberOff;
-        }
-        if (Offset == -1)
-          Offset =
-              analyzeLoadFromClobberingLoad(LoadType, Address, DepLoad, DL);
-        if (Offset != -1)
-          return AvailableValue::getLoad(DepLoad, Offset);
-      }
-    }
+    //     // If MD reported clobber, check it was nested.
+    //     if (DepInfo.isClobber() &&
+    //         canCoerceMustAliasedValueToLoad(DepLoad, LoadType, DL)) {
+    //       const auto ClobberOff = MD->getClobberOffset(DepLoad);
+    //       // GVN has no deal with a negative offset.
+    //       Offset = (ClobberOff == std::nullopt || *ClobberOff < 0)
+    //                    ? -1
+    //                    : *ClobberOff;
+    //     }
+    //     if (Offset == -1)
+    //       Offset =
+    //           analyzeLoadFromClobberingLoad(LoadType, Address, DepLoad, DL);
+    //     if (Offset != -1)
+    //       return AvailableValue::getLoad(DepLoad, Offset);
+    //   }
+    // }
 
     // If the clobbering value is a memset/memcpy/memmove, see if we can
     // forward a value on from it.
@@ -1289,8 +1289,14 @@ GVNPass::AnalyzeLoadAvailability(LoadInst *Load, MemDepResult DepInfo,
       if (Address && !Load->isAtomic()) {
         int Offset = analyzeLoadFromClobberingMemInst(Load->getType(), Address,
                                                       DepMI, DL);
-        if (Offset != -1)
-          return AvailableValue::getMI(DepMI, Offset);
+        if (Offset != -1) {
+          if (auto *PossibleConstant = getConstantMemInstValueForLoad(
+                  DepMI, Offset, Load->getType(), DL)) {
+            LLVM_DEBUG(dbgs() << "Coercing load from meminst " << *DepMI
+                              << " to constant " << *PossibleConstant << "\n");
+            return AvailableValue::get(PossibleConstant);
+          }
+        }
       }
     }
 
@@ -1347,21 +1353,21 @@ GVNPass::AnalyzeLoadAvailability(LoadInst *Load, MemDepResult DepInfo,
   // Check if load with Addr dependent from select can be converted to select
   // between load values. There must be no instructions between the found
   // loads and DepInst that may clobber the loads.
-  if (auto *Sel = dyn_cast<SelectInst>(DepInst)) {
-    assert(Sel->getType() == Load->getPointerOperandType());
-    auto Loc = MemoryLocation::get(Load);
-    Value *V1 =
-        findDominatingValue(Loc.getWithNewPtr(Sel->getTrueValue()),
-                            Load->getType(), DepInst, getAliasAnalysis());
-    if (!V1)
-      return std::nullopt;
-    Value *V2 =
-        findDominatingValue(Loc.getWithNewPtr(Sel->getFalseValue()),
-                            Load->getType(), DepInst, getAliasAnalysis());
-    if (!V2)
-      return std::nullopt;
-    return AvailableValue::getSelect(Sel, V1, V2);
-  }
+  // if (auto *Sel = dyn_cast<SelectInst>(DepInst)) {
+  //   assert(Sel->getType() == Load->getPointerOperandType());
+  //   auto Loc = MemoryLocation::get(Load);
+  //   Value *V1 =
+  //       findDominatingValue(Loc.getWithNewPtr(Sel->getTrueValue()),
+  //                           Load->getType(), DepInst, getAliasAnalysis());
+  //   if (!V1)
+  //     return std::nullopt;
+  //   Value *V2 =
+  //       findDominatingValue(Loc.getWithNewPtr(Sel->getFalseValue()),
+  //                           Load->getType(), DepInst, getAliasAnalysis());
+  //   if (!V2)
+  //     return std::nullopt;
+  //   return AvailableValue::getSelect(Sel, V1, V2);
+  // }
 
   // Unknown def - must be conservative
   LLVM_DEBUG(
@@ -3043,7 +3049,7 @@ bool GVNPass::performScalarPRE(Instruction *CurInst) {
     // on the function.
     unsigned SuccNum = GetSuccessorNumber(PREPred, CurrentBlock);
     if (isCriticalEdge(PREPred->getTerminator(), SuccNum)) {
-      toSplit.push_back(std::make_pair(PREPred->getTerminator(), SuccNum));
+      // toSplit.push_back(std::make_pair(PREPred->getTerminator(), SuccNum));
       return false;
     }
     // We need to insert somewhere, so let's give it a shot
