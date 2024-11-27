@@ -2666,7 +2666,8 @@ void NewGVN::removePREInst(Instruction *I, Instruction *PREInst) {
         ExpressionToClass.erase(Iter);
     }
   } else if (OldClass->getLeader() == PREInst) {
-    OldClass->setLeader(getNextValueLeader(OldClass));
+    OldClass->setLeader({getNextValueLeader(OldClass),
+                         InstrToDFSNum(getNextValueLeader(OldClass))});
     OldClass->resetNextLeader();
   } else if (PREInst == OldClass->getNextLeader().first)
     OldClass->resetNextLeader();
