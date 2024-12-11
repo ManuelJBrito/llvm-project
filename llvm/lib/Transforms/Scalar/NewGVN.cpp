@@ -154,6 +154,9 @@ static cl::opt<bool> EnableStoreRefinement("enable-store-refinement",
 static cl::opt<bool> EnablePhiOfOps("enable-phi-of-ops", cl::init(true),
                                     cl::Hidden);
 
+static cl::opt<bool> EnableUpdate("enable-update", cl::init(true),
+                                    cl::Hidden);
+
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
 //===----------------------------------------------------------------------===//
@@ -630,6 +633,15 @@ class NewGVN {
   // Deletion info.
   SmallPtrSet<Instruction *, 8> InstructionsToErase;
 
+  // Checkpointing data structures.
+  DenseMap<Instruction *, SmallPtrSet<Use *, 8>> Snapshot;
+  DenseMap<Instruction *, SmallVector<std::pair<unsigned, MDNode *>, 4>> SnapshotMD;
+
+  // Set of rolled back instructions. This is for the case where a rolledback
+  // instruction ends up not changing classes, their uses still need to be
+  // udpate.
+  SmallPtrSet<Value *, 8> RolledBack;
+
 public:
   NewGVN(Function &F, DominatorTree *DT, AssumptionCache *AC,
          TargetLibraryInfo *TLI, AliasAnalysis *AA, MemorySSA *MSSA,
@@ -784,6 +796,9 @@ private:
   void deleteInstructionsInBlock(BasicBlock *);
   Value *findPHIOfOpsLeader(const Expression *, const Instruction *,
                             const BasicBlock *) const;
+
+  // Checkpointing.
+  void updateIR(Instruction *, CongruenceClass *);
 
   // Main loop of value numbering
   void iterateInstructions();
@@ -2042,7 +2057,8 @@ void NewGVN::moveMemoryToNewCongruenceClass(Instruction *I,
                       << NewClass->getID()
                       << " due to new memory instruction becoming leader\n");
   }
-  setMemoryClass(InstMA, NewClass);
+  if (setMemoryClass(InstMA, NewClass))
+    ChangedPartition = true;
   // Now, fixup the old class if necessary
   if (OldClass->getMemoryLeader() == InstMA) {
     if (!OldClass->definesNoMemory()) {
@@ -2217,8 +2233,11 @@ void NewGVN::performCongruenceFinding(Instruction *I, const Expression *E) {
     if (ClassChanged) {
       moveValueToNewCongruenceClass(I, E, IClass, EClass);
     }
+    updateIR(I, EClass);
     ChangedPartition = true;
-  }
+  } else if (RolledBack.erase(I))
+    updateIR(I, EClass);
+
   // If we changed the class of the store, we want to ensure nothing finds the
   // old store expression.  In particular, loads do not compare against stored
   // value, so they will find old store expressions (and associated class
@@ -2333,7 +2352,8 @@ void NewGVN::processOutgoingEdges(Instruction *TI, BasicBlock *B) {
     auto *MA = getMemoryAccess(TI);
     if (MA && !isa<MemoryUse>(MA)) {
       auto *CC = ensureLeaderOfMemoryClass(MA);
-      setMemoryClass(MA, CC);
+      if (setMemoryClass(MA, CC))
+        ChangedPartition = true;
     }
   }
 }
@@ -2810,10 +2830,11 @@ void NewGVN::valueNumberMemoryPhi(MemoryPhi *MP) {
   // InitialClass.  Note: The only case this should happen is if we have at
   // least one self-argument.
   if (Filtered.begin() == Filtered.end()) {
-    setMemoryClass(MP, TOPClass);
+    if (setMemoryClass(MP, TOPClass))
+      ChangedPartition = true;
     return;
   }
-
+  
   // Transform the remaining operands into operand leaders.
   // FIXME: mapped_iterator should have a range version.
   auto LookupFunc = [&](const Use &U) {
@@ -2846,7 +2867,8 @@ void NewGVN::valueNumberMemoryPhi(MemoryPhi *MP) {
   assert(OldState != MPS_Invalid && "Invalid memory phi state");
   auto NewState = AllEqual ? MPS_Equivalent : MPS_Unique;
   MemoryPhiState[MP] = NewState;
-  setMemoryClass(MP, CC);
+  if (setMemoryClass(MP, CC))
+    ChangedPartition = true;
 }
 
 // Value number a single instruction, symbolically evaluating, performing
@@ -3050,6 +3072,11 @@ void NewGVN::verifyIterationSettled(Function &F) {
   // Use index corresponding to entry block.
   CacheIdx = 0;
   iterateInstructions();
+  for (auto &KV : SnapshotMD) {
+    auto *I = KV.first;
+    for (auto MDN : KV.second)
+      I->setMetadata(MDN.first, MDN.second);
+  }
   DenseSet<std::pair<const CongruenceClass *, const CongruenceClass *>>
       EqualClasses;
   for (const auto &KV : ValueToClass) {
@@ -3201,6 +3228,20 @@ bool NewGVN::runGVN() {
     ++NumGVNMaxIterations;
     ChangedPartition = false;
     iterateInstructions();
+    // Rollback IR updates.
+    for (auto &KV : Snapshot) {
+      auto *I = KV.first;
+      RolledBack.insert(I);
+      auto Uses = KV.second;
+      for (Use *U : Uses)
+        U->set(I);
+    }
+     // Rollback intercepted flags.
+    for (auto &KV : SnapshotMD) {
+      auto *I = KV.first;
+      for (auto MDN : KV.second) 
+        I->setMetadata(MDN.first, MDN.second);
+    }
   }
   
   verifyMemoryCongruency();
@@ -3412,9 +3453,15 @@ void NewGVN::convertClassToLoadsAndStores(
   }
 }
 
-static void patchAndReplaceAllUsesWith(Instruction *I, Value *Repl) {
+static void
+patchAndReplaceUsesWithIf(Instruction *I, Value *Repl,
+                          llvm::function_ref<bool(Use &U)> ShouldReplace) {
   patchReplacementInstruction(I, Repl);
-  I->replaceAllUsesWith(Repl);
+  I->replaceUsesWithIf(Repl, ShouldReplace);
+}
+
+static void patchAndReplaceAllUsesWith(Instruction *I, Value *Repl) {
+  patchAndReplaceUsesWithIf(I, Repl, [](Use &use) { return true; });
 }
 
 void NewGVN::deleteInstructionsInBlock(BasicBlock *BB) {
@@ -3541,6 +3588,47 @@ Value *NewGVN::findPHIOfOpsLeader(const Expression *E,
       return Member;
   }
   return nullptr;
+}
+
+void NewGVN::updateIR(Instruction *I, CongruenceClass *CC) {
+  if (!EnableUpdate)
+    return;
+  if (isa<StoreInst>(I))
+    return;
+
+  Value *Leader = CC->getStoredValue() ? CC->getStoredValue() : CC->getLeader();
+  if (!Leader || Leader == I)
+    return;
+
+  bool hasPredInfo = llvm::any_of(I->users(), [this](User *U) {
+    return PredInfo->getPredicateInfoFor(U) != nullptr;
+  });
+  if (alwaysAvailable(Leader) || DT->dominates(cast<Instruction>(Leader), I)) {
+    // Snapshot uses before udpating.
+    for (Use &U : I->uses())
+      Snapshot[I].insert(&U);
+    
+    // Snapshot leader metadata.
+    auto *ILeader = dyn_cast<Instruction>(Leader);
+    // If it's in SnapshotMD, it is already the most complete.
+    if (ILeader && ILeader->hasMetadata() && !SnapshotMD.count(ILeader)) {
+      SmallVector<std::pair<unsigned, MDNode *>, 4> Metadata;
+      ILeader->getAllMetadata(Metadata);
+      SnapshotMD[ILeader] = Metadata;
+    }
+    patchAndReplaceUsesWithIf(I, Leader, [this, hasPredInfo](Use &u) {
+      // Don't replace into ssa_copies and cmps if I has predicate info.
+      User *UI = u.getUser();
+      auto *PI = PredInfo->getPredicateInfoFor(UI);
+      if (PI)
+        return false;
+      if (hasPredInfo && isa<CmpInst>(UI))
+        return false;
+      if (match(UI, m_Intrinsic<Intrinsic::assume>()))
+        return false;
+      return true;
+    });
+  }
 }
 
 bool NewGVN::eliminateInstructions(Function &F) {

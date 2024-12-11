@@ -525,7 +525,7 @@ define void @test12(ptr %p) {
 ; CHECK:       bb2:
 ; CHECK-NEXT:    br label [[BB3:%.*]]
 ; CHECK:       bb3:
-; CHECK-NEXT:    br i1 true, label [[BB6:%.*]], label [[BB7:%.*]]
+; CHECK-NEXT:    br i1 [[TMP1]], label [[BB6:%.*]], label [[BB7:%.*]]
 ; CHECK:       bb6:
 ; CHECK-NEXT:    br label [[BB7]]
 ; CHECK:       bb7:

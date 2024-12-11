@@ -10,9 +10,7 @@ define void @fn1(i1 %bc) {
 ; CHECK-NEXT:    br label [[FOR_COND:%.*]]
 ; CHECK:       for.cond:
 ; CHECK-NEXT:    [[LV:%.*]] = load i32, ptr @a, align 4
-; CHECK-NEXT:    [[BF_CLEAR:%.*]] = and i32 [[LV]], -131072
-; CHECK-NEXT:    [[BF_SET:%.*]] = or i32 1, [[BF_CLEAR]]
-; CHECK-NEXT:    [[BF_CLEAR_1:%.*]] = and i32 [[BF_SET]], -131072
+; CHECK-NEXT:    [[BF_CLEAR_1:%.*]] = and i32 [[LV]], -131072
 ; CHECK-NEXT:    [[BF_SET_1:%.*]] = or i32 1, [[BF_CLEAR_1]]
 ; CHECK-NEXT:    br i1 [[BC]], label [[FOR_COND]], label [[EXIT:%.*]]
 ; CHECK:       exit:

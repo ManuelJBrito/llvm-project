@@ -7,6 +7,8 @@ define void @tinkywinky(ptr %b) {
 ; CHECK-NEXT:    br label [[BODY:%.*]]
 ; CHECK:       body:
 ; CHECK-NEXT:    store i64 undef, ptr [[B:%.*]], align 4
+; CHECK-NEXT:    [[B2:%.*]] = load i64, ptr [[B]], align 4
+; CHECK-NEXT:    store i64 [[B2]], ptr [[B]], align 4
 ; CHECK-NEXT:    br i1 undef, label [[BODY]], label [[END:%.*]]
 ; CHECK:       end:
 ; CHECK-NEXT:    br label [[BODY]]
