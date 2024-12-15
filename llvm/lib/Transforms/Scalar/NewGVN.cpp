@@ -2085,8 +2085,8 @@ void NewGVN::moveValueToNewCongruenceClass(Instruction *I, const Expression *E,
 
   // Ensure that the leader has the lowest RPO. If the leader changed notify all
   // members of the class.
-  if (NewClass->getLeader() != I)
-    NewClass->addPossibleLeader({I, InstrToDFSNum(I)});
+  if (NewClass->getLeader() != I && NewClass->addPossibleLeader({I, InstrToDFSNum(I)}))
+    ChangedPartition = true;
 
   // Handle our special casing of stores.
   if (auto *SI = dyn_cast<StoreInst>(I)) {
@@ -2553,14 +2553,13 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
       return nullptr;
   }
 
-  if (!OpPHI)
-    return nullptr;
-
   SmallVector<ValPair, 4> PHIOps;
   SmallPtrSet<Value *, 4> Deps;
-  auto *PHIBlock = getBlockForValue(OpPHI);
-  for (unsigned PredNum = 0; PredNum < OpPHI->getNumOperands(); ++PredNum) {
-    auto *PredBB = OpPHI->getIncomingBlock(PredNum);
+  auto *PHIBlock = OpPHI ? getBlockForValue(OpPHI)
+                         : (isa<LoadInst>(I) ? nullptr : getBlockForValue(I));
+  if (!PHIBlock || pred_size(PHIBlock) < 2)
+    return nullptr;
+  for (auto *PredBB : predecessors(PHIBlock)) {
     Value *FoundVal = nullptr;
     SmallPtrSet<Value *, 4> CurrentDeps;
     // We could just skip unreachable edges entirely but it's tricky to do
@@ -2629,7 +2628,7 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
   bool NewPHI = false;
   if (!ValuePHI) {
     ValuePHI =
-        PHINode::Create(I->getType(), OpPHI->getNumOperands(), "phiofops");
+        PHINode::Create(I->getType(), pred_size(PHIBlock), "phiofops");
     addPhiOfOps(ValuePHI, PHIBlock, I);
     NewPHI = true;
     NumGVNPHIOfOpsCreated++;
@@ -2882,7 +2881,7 @@ void NewGVN::valueNumberInstruction(Instruction *I) {
       Symbolized = performSymbolicEvaluation(I, Visited);
       // Make a phi of ops if necessary
       if (Symbolized && !isa<ConstantExpression>(Symbolized) &&
-          !isa<VariableExpression>(Symbolized) && PHINodeUses.count(I)) {
+          !isa<VariableExpression>(Symbolized)) {
         auto *PHIE = makePossiblePHIOfOps(I, Visited);
         // If we created a phi of ops, use it.
         // If we couldn't create one, make sure we don't leave one lying around
@@ -3243,7 +3242,7 @@ bool NewGVN::runGVN() {
         I->setMetadata(MDN.first, MDN.second);
     }
   }
-  
+
   verifyMemoryCongruency();
   verifyIterationSettled(F);
   verifyStoreExpressions();
@@ -3594,6 +3593,9 @@ void NewGVN::updateIR(Instruction *I, CongruenceClass *CC) {
   if (!EnableUpdate)
     return;
   if (isa<StoreInst>(I))
+    return;
+  auto *II = dyn_cast<IntrinsicInst>(I);
+  if (II && II->getIntrinsicID() == Intrinsic::ssa_copy)
     return;
 
   Value *Leader = CC->getStoredValue() ? CC->getStoredValue() : CC->getLeader();
