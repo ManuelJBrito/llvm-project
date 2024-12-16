@@ -77,8 +77,7 @@ define void @f4(ptr %x)  {
 ; CHECK:       bb1:
 ; CHECK-NEXT:    br label [[BB2]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ [[Y]], [[BB0:%.*]] ], [ false, [[BB1]] ]
-; CHECK-NEXT:    call void @g(i1 [[PHIOFOPS]])
+; CHECK-NEXT:    call void @g(i1 [[Y]])
 ; CHECK-NEXT:    ret void
 ;
 bb0:

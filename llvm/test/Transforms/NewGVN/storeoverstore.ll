@@ -15,10 +15,9 @@ define i32 @foo(ptr, i32)  {
 ; CHECK:       4:
 ; CHECK-NEXT:    br label [[TMP5]]
 ; CHECK:       5:
-; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i1 [ [[TMP3]], [[TMP2:%.*]] ], [ true, [[TMP4]] ]
-; CHECK-NEXT:    [[TMP7:%.*]] = phi i32 [ 10, [[TMP2]] ], [ 15, [[TMP4]] ]
+; CHECK-NEXT:    [[TMP7:%.*]] = phi i32 [ 10, [[TMP2:%.*]] ], [ 15, [[TMP4]] ]
 ; CHECK-NEXT:    [[DOT0:%.*]] = phi i32 [ 10, [[TMP4]] ], [ 5, [[TMP2]] ]
-; CHECK-NEXT:    br i1 [[PHIOFOPS1]], label [[TMP6:%.*]], label [[TMP8:%.*]]
+; CHECK-NEXT:    br i1 [[TMP3]], label [[TMP6:%.*]], label [[TMP8:%.*]]
 ; CHECK:       6:
 ; CHECK-NEXT:    br label [[TMP8]]
 ; CHECK:       7:
@@ -62,10 +61,9 @@ define i32 @foo2(ptr, i32)  {
 ; CHECK:       5:
 ; CHECK-NEXT:    br label [[TMP6]]
 ; CHECK:       6:
-; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i1 [ false, [[TMP5]] ], [ true, [[TMP4]] ]
 ; CHECK-NEXT:    [[TMP8:%.*]] = phi i32 [ 10, [[TMP5]] ], [ 15, [[TMP4]] ]
 ; CHECK-NEXT:    [[DOT0:%.*]] = phi i32 [ 10, [[TMP4]] ], [ 5, [[TMP5]] ]
-; CHECK-NEXT:    br i1 [[PHIOFOPS1]], label [[TMP7:%.*]], label [[TMP9:%.*]]
+; CHECK-NEXT:    br i1 [[TMP3]], label [[TMP7:%.*]], label [[TMP9:%.*]]
 ; CHECK:       7:
 ; CHECK-NEXT:    br label [[TMP9]]
 ; CHECK:       8:
