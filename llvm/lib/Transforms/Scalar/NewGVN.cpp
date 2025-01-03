@@ -355,6 +355,7 @@ public:
   void insert(MemberType *M) { Members.insert(M); }
   void erase(MemberType *M) { Members.erase(M); }
   void swap(MemberSet &Other) { Members.swap(Other); }
+  MemberSet getMembers() { return Members; }
 
   // Memory member set
   bool memory_empty() const { return MemoryMembers.empty(); }
@@ -541,6 +542,15 @@ class NewGVN {
   CongruenceClass *TOPClass = nullptr;
   std::vector<CongruenceClass *> CongruenceClasses;
   unsigned NextCongruenceNum = 0;
+
+  // Memory SuperClass
+  // Aggregates classes of values that can be coerced to each other.
+  // For example loads from class A '<load i32, ptr p, mem0>' can be coerced to
+  // loads of i16 therefore a load from class A can replace a load from class B
+  // '<load i16, ptr p, mem0>'.
+  // 
+  // A memory SuperClass is identified by a pointer and a MemoryDef. 
+  DenseMap<std::pair<Value *, const MemoryAccess *>, SmallPtrSet<CongruenceClass*, 8>>  SuperClasses;
 
   // Value Mappings.
   DenseMap<Value *, CongruenceClass *> ValueToClass;
@@ -791,7 +801,7 @@ private:
 
   // Elimination.
   struct ValueDFS;
-  void convertClassToDFSOrdered(const CongruenceClass &,
+  void convertClassToDFSOrdered(CongruenceClass::MemberSet,
                                 SmallVectorImpl<ValueDFS> &,
                                 DenseMap<const Value *, unsigned int> &,
                                 SmallPtrSetImpl<Instruction *> &) const;
@@ -2124,6 +2134,23 @@ void NewGVN::moveValueToNewCongruenceClass(Instruction *I, const Expression *E,
     }
     NewClass->incStoreCount();
   }
+
+  auto *OldE = OldClass->getDefiningExpr();
+  if (isa_and_nonnull<LoadExpression>(OldE) ||
+      isa_and_nonnull<StoreExpression>(OldE)) {
+    auto *ME = cast<MemoryExpression>(OldE);
+    const MemoryAccess *MD = ME->getMemoryLeader();
+
+    Value *Ptr = nullptr;
+    if (auto *LE = dyn_cast<LoadExpression>(OldE))
+      Ptr = LE->getLoadInst()->getPointerOperand();
+    else {
+      auto *SE = cast<StoreExpression>(OldE);
+      Ptr = SE->getStoreInst()->getPointerOperand();
+    }
+    SuperClasses[{Ptr, MD}].erase(OldClass);
+  }
+
   // True if there is no memory instructions left in a class that had memory
   // instructions before.
 
@@ -2205,6 +2232,21 @@ void NewGVN::performCongruenceFinding(Instruction *I, const Expression *E,
       } else {
         NewClass->setLeader({I, InstrToDFSNum(I)});
       }
+
+      if (isa<LoadExpression>(E) || isa<StoreExpression>(E)) {
+        auto *ME = cast<MemoryExpression>(E);
+        const MemoryAccess *MD = ME->getMemoryLeader();
+
+        Value *Ptr = nullptr;
+        if (auto *LE = dyn_cast<LoadExpression>(E))
+          Ptr = LE->getLoadInst()->getPointerOperand();
+        else {
+          auto *SE = cast<StoreExpression>(E);
+          Ptr = SE->getStoreInst()->getPointerOperand();
+        }
+        SuperClasses[{Ptr, MD}].insert(NewClass);
+      }
+
       assert(!isa<VariableExpression>(E) &&
              "VariableExpression should have been handled already");
 
@@ -3424,7 +3466,7 @@ struct NewGVN::ValueDFS {
 // seem
 // dead (have no non-dead uses) are stored in ProbablyDead.
 void NewGVN::convertClassToDFSOrdered(
-    const CongruenceClass &Dense, SmallVectorImpl<ValueDFS> &DFSOrderedSet,
+    CongruenceClass::MemberSet Dense, SmallVectorImpl<ValueDFS> &DFSOrderedSet,
     DenseMap<const Value *, unsigned int> &UseCounts,
     SmallPtrSetImpl<Instruction *> &ProbablyDead) const {
   for (auto *D : Dense) {
@@ -3710,6 +3752,97 @@ bool NewGVN::eliminateInstructions(Function &F) {
 
   // Map to store the use counts
   DenseMap<const Value *, unsigned int> UseCounts;
+  for (auto SC : SuperClasses) {
+    auto Classes = SC.second;
+    if (Classes.size() == 1)
+      continue;
+    SmallPtrSet<Instruction *, 8> ProbablyDead;
+    CongruenceClass::MemberSet SuperDense;
+    for (auto *CC : Classes) {
+      for (auto *M : *CC)
+        if (M->getType()->isSized() && !M->getType()->isPointerTy())
+          SuperDense.insert(M);
+    }
+    using LeaderDFS = std::tuple<Instruction *, unsigned, unsigned>;
+    DenseMap<unsigned, LeaderDFS> LeaderMap;
+    // Convert SuperClass to DFSOrdered Vector
+    SmallVector<ValueDFS, 8> DFSOrderedSet;
+    convertClassToDFSOrdered(SuperDense, DFSOrderedSet, UseCounts,
+                             ProbablyDead);
+    llvm::sort(DFSOrderedSet);
+    for (auto &VD : DFSOrderedSet) {
+      unsigned MemberDFSIn = VD.DFSIn;
+      unsigned MemberDFSOut = VD.DFSOut;
+      Value *Def = VD.Def.getPointer();
+      bool FromStore = VD.Def.getInt();
+
+      auto *DefInst = dyn_cast_or_null<Instruction>(Def);
+      if (DefInst && AllTempInstructions.count(DefInst)) {
+        auto *PN = cast<PHINode>(DefInst);
+
+        // If this is a value phi and that's the expression we used, insert
+        // it into the program
+        // remove from temp instruction list.
+        AllTempInstructions.erase(PN);
+        auto *DefBlock = getBlockForValue(Def);
+        LLVM_DEBUG(dbgs() << "Inserting fully real phi of ops" << *Def
+                          << " into block "
+                          << getBlockName(getBlockForValue(Def)) << "\n");
+        PN->insertBefore(&DefBlock->front());
+        Def = PN;
+        NumGVNPHIOfOpsEliminations++;
+      }
+
+      // Ensure that the leaders are in scope.
+      unsigned MinSize = -1;
+      unsigned MaxSize = 0;
+      for (auto &KV : LeaderMap) {
+        unsigned Size = KV.first;
+        unsigned DFSIn = std::get<1>(KV.second);
+        unsigned DFSOut = std::get<2>(KV.second);
+
+        if (MemberDFSIn < DFSIn || MemberDFSOut > DFSOut)
+          LeaderMap.erase(Size);
+        else {
+          MinSize = MinSize > Size ? Size : MinSize;
+          MaxSize = MaxSize < Size ? Size : MaxSize;
+        }
+      }
+
+      Type *DefTy = Def->getType();
+      unsigned DefSize = DefTy->getPrimitiveSizeInBits();
+
+      // Look for a suitable leader. We want the smallest memory access that can
+      // be coerced to Def's type.
+      if (MinSize >= DefSize) {
+        for (unsigned CurrSize = MinSize; CurrSize <= MaxSize; CurrSize++) {
+          if (!LeaderMap.count(CurrSize))
+            continue;
+          LeaderDFS LeaderInfo = LeaderMap[CurrSize];
+          Instruction *Leader = std::get<0>(LeaderInfo);
+          if (auto InsertPoint = Leader->getInsertionPointAfterDef()) {
+            Value *CoercedValue =
+                getValueForLoad(Leader, 0, DefTy, &**InsertPoint, DL);
+            if (!CoercedValue)
+              continue;
+            patchAndReplaceAllUsesWith(cast<Instruction>(Def), CoercedValue);
+            markInstructionForDeletion(cast<Instruction>(Def));
+            // Update LeaderMap, so that we can use the coerced value to
+            // eliminate other instructions.
+            if (auto *ICV = dyn_cast<Instruction>(CoercedValue))
+              // Use DFSInfo from Leader.
+              LeaderMap[DefSize] = std::make_tuple(ICV, std::get<1>(LeaderInfo),
+                                                   std::get<2>(LeaderInfo));
+            break;
+          }
+        }
+      }
+      // Could not find a replacement, added it to LeaderMap.
+      LeaderMap[DefSize] =
+          std::make_tuple(cast<Instruction>(Def), MemberDFSIn, MemberDFSOut);
+    }
+  }
+
   for (auto *CC : reverse(CongruenceClasses)) {
     LLVM_DEBUG(dbgs() << "Eliminating in congruence class " << CC->getID()
                       << "\n");
@@ -3766,7 +3899,7 @@ bool NewGVN::eliminateInstructions(Function &F) {
 
         // Convert the members to DFS ordered sets and then merge them.
         SmallVector<ValueDFS, 8> DFSOrderedSet;
-        convertClassToDFSOrdered(*CC, DFSOrderedSet, UseCounts, ProbablyDead);
+        convertClassToDFSOrdered(CC->getMembers(), DFSOrderedSet, UseCounts, ProbablyDead);
 
         // Sort the whole thing.
         llvm::sort(DFSOrderedSet);
