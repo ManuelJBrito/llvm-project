@@ -3614,48 +3614,6 @@ void NewGVN::replaceInstruction(Instruction *I, Value *V) {
   markInstructionForDeletion(I);
 }
 
-namespace {
-
-// This is a stack that contains both the value and dfs info of where
-// that value is valid.
-class ValueDFSStack {
-public:
-  Value *back() const { return ValueStack.back(); }
-  std::pair<int, int> dfs_back() const { return DFSStack.back(); }
-
-  void push_back(Value *V, int DFSIn, int DFSOut) {
-    ValueStack.emplace_back(V);
-    DFSStack.emplace_back(DFSIn, DFSOut);
-  }
-
-  bool empty() const { return DFSStack.empty(); }
-
-  bool isInScope(int DFSIn, int DFSOut) const {
-    if (empty())
-      return false;
-    return DFSIn >= DFSStack.back().first && DFSOut <= DFSStack.back().second;
-  }
-
-  void popUntilDFSScope(int DFSIn, int DFSOut) {
-
-    // These two should always be in sync at this point.
-    assert(ValueStack.size() == DFSStack.size() &&
-           "Mismatch between ValueStack and DFSStack");
-    while (
-        !DFSStack.empty() &&
-        !(DFSIn >= DFSStack.back().first && DFSOut <= DFSStack.back().second)) {
-      DFSStack.pop_back();
-      ValueStack.pop_back();
-    }
-  }
-
-private:
-  SmallVector<Value *, 8> ValueStack;
-  SmallVector<std::pair<int, int>, 8> DFSStack;
-};
-
-} // end anonymous namespace
-
 // Given an expression, get the congruence class for it.
 CongruenceClass *NewGVN::getClassForExpression(const Expression *E) const {
   if (auto *VE = dyn_cast<VariableExpression>(E))
@@ -3844,11 +3802,8 @@ bool NewGVN::eliminateInstructions(Function &F) {
     } else {
       // If this is a singleton, we can skip it.
       if (CC->size() != 1 || RealToTemp.count(Leader)) {
-        // This is a stack because equality replacement/etc may place
-        // constants in the middle of the member list, and we want to use
-        // those constant values in preference to the current leader, over
-        // the scope of those constants.
-        ValueDFSStack EliminationStack;
+        Instruction *ILeader;
+        int DFSIn = 0, DFSOut = 0;
 
         // Convert the members to DFS ordered sets and then merge them.
         SmallVector<ValueDFS, 8> DFSOrderedSet;
@@ -3882,40 +3837,24 @@ bool NewGVN::eliminateInstructions(Function &F) {
             NumGVNPHIOfOpsEliminations++;
           }
 
-          if (EliminationStack.empty()) {
+          if (!ILeader) {
             LLVM_DEBUG(dbgs() << "Elimination Stack is empty\n");
           } else {
             LLVM_DEBUG(dbgs() << "Elimination Stack Top DFS numbers are ("
-                              << EliminationStack.dfs_back().first << ","
-                              << EliminationStack.dfs_back().second << ")\n");
+                              << DFSIn << "," << DFSOut << ")\n");
           }
 
           LLVM_DEBUG(dbgs() << "Current DFS numbers are (" << MemberDFSIn << ","
                             << MemberDFSOut << ")\n");
-          // First, we see if we are out of scope or empty.  If so,
-          // and there equivalences, we try to replace the top of
-          // stack with equivalences (if it's on the stack, it must
-          // not have been eliminated yet).
-          // Then we synchronize to our current scope, by
-          // popping until we are back within a DFS scope that
-          // dominates the current member.
-          // Then, what happens depends on a few factors
-          // If the stack is now empty, we need to push
-          // If we have a constant or a local equivalence we want to
-          // start using, we also push.
-          // Otherwise, we walk along, processing members who are
-          // dominated by this scope, and eliminate them.
-          bool ShouldPush = Def && EliminationStack.empty();
-          bool OutOfScope =
-              !EliminationStack.isInScope(MemberDFSIn, MemberDFSOut);
+          // If we have no leader or the current leader is out of scope, use Def
+          // as the new leader.
+          bool ShouldPush = Def && !ILeader;
+          bool OutOfScope = MemberDFSIn < DFSIn || MemberDFSOut > DFSOut;
 
           if (OutOfScope || ShouldPush) {
-            // Sync to our current scope.
-            EliminationStack.popUntilDFSScope(MemberDFSIn, MemberDFSOut);
-            bool ShouldPush = Def && EliminationStack.empty();
-            if (ShouldPush) {
-              EliminationStack.push_back(Def, MemberDFSIn, MemberDFSOut);
-            }
+            ILeader = cast<Instruction>(Def);
+            DFSIn = MemberDFSIn;
+            DFSOut = MemberDFSOut;
           }
 
           // Skip the Def's, we only want to eliminate on their uses.  But mark
@@ -3934,8 +3873,8 @@ bool NewGVN::eliminateInstructions(Function &F) {
             // stored values here. If the stored value is really dead, it will
             // still be marked for deletion when we process it in its own class.
             auto *DefI = dyn_cast<Instruction>(Def);
-            if (!EliminationStack.empty() && DefI && !FromStore) {
-              Value *DominatingLeader = EliminationStack.back();
+            if (ILeader && DefI && !FromStore) {
+              Value *DominatingLeader = ILeader;
               if (DominatingLeader != Def) {
                 // Even if the instruction is removed, we still need to update
                 // flags/metadata due to downstreams users of the leader.
@@ -3969,10 +3908,10 @@ bool NewGVN::eliminateInstructions(Function &F) {
 
           // If we get to this point, and the stack is empty we must have a use
           // with nothing we can use to eliminate this use, so just skip it.
-          if (EliminationStack.empty())
+          if (!ILeader)
             continue;
 
-          Value *DominatingLeader = EliminationStack.back();
+          Value *DominatingLeader = ILeader;
 
           auto *II = dyn_cast<IntrinsicInst>(DominatingLeader);
           bool isSSACopy = II && II->getIntrinsicID() == Intrinsic::ssa_copy;
@@ -4034,25 +3973,23 @@ bool NewGVN::eliminateInstructions(Function &F) {
     if (CC->getStoreCount() > 0) {
       convertClassToLoadsAndStores(*CC, PossibleDeadStores);
       llvm::sort(PossibleDeadStores);
-      ValueDFSStack EliminationStack;
+      Instruction *ILeader;
+      int DFSIn = 0, DFSOut = 0;
       for (auto &VD : PossibleDeadStores) {
         int MemberDFSIn = VD.DFSIn;
         int MemberDFSOut = VD.DFSOut;
         Instruction *Member = cast<Instruction>(VD.Def.getPointer());
-        if (EliminationStack.empty() ||
-            !EliminationStack.isInScope(MemberDFSIn, MemberDFSOut)) {
-          // Sync to our current scope.
-          EliminationStack.popUntilDFSScope(MemberDFSIn, MemberDFSOut);
-          if (EliminationStack.empty()) {
-            EliminationStack.push_back(Member, MemberDFSIn, MemberDFSOut);
-            continue;
-          }
+        if (!ILeader || MemberDFSIn < DFSIn || MemberDFSOut > DFSOut) {
+          ILeader = Member;
+          DFSIn = MemberDFSIn;
+          DFSOut = MemberDFSOut;
+          continue;
         }
         // We already did load elimination, so nothing to do here.
         if (isa<LoadInst>(Member))
           continue;
-        assert(!EliminationStack.empty());
-        Instruction *Leader = cast<Instruction>(EliminationStack.back());
+        assert(ILeader);
+        Instruction *Leader = ILeader;
         (void)Leader;
         assert(DT->dominates(Leader->getParent(), Member->getParent()));
         // Member is dominater by Leader, and thus dead
