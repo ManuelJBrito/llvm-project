@@ -13,8 +13,8 @@ define i32 @main() #0 {
 ; CHECK:       if.then:
 ; CHECK-NEXT:    br label [[IF_END]]
 ; CHECK:       if.end:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[TMP0]], [[ENTRY:%.*]] ], [ [[NEG]], [[IF_THEN]] ]
-; CHECK-NEXT:    [[STOREMERGE:%.*]] = phi i32 [ [[TMP0]], [[IF_THEN]] ], [ [[NEG]], [[ENTRY]] ]
+; CHECK-NEXT:    [[STOREMERGE:%.*]] = phi i32 [ [[TMP0]], [[IF_THEN]] ], [ [[NEG]], [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[TMP0]], [[ENTRY]] ], [ [[NEG]], [[IF_THEN]] ]
 ; CHECK-NEXT:    [[CMP2:%.*]] = icmp ult i32 [[STOREMERGE]], [[PHIOFOPS]]
 ; CHECK-NEXT:    br i1 [[CMP2]], label [[IF_THEN3:%.*]], label [[IF_END6:%.*]]
 ; CHECK:       if.then3:

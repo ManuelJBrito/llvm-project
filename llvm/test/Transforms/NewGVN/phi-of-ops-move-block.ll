@@ -19,9 +19,9 @@ define void @test() {
 ; CHECK:       preheader.split:
 ; CHECK-NEXT:    br label [[PREHEADER_SPLIT]]
 ; CHECK:       critedge:
-; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i1 [ false, [[BB1]] ], [ true, [[LR_PH]] ]
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ [[CMP0]], [[BB1]] ], [ true, [[LR_PH]] ]
 ; CHECK-NEXT:    [[DOT05_LCSSA:%.*]] = phi i32 [ 0, [[BB1]] ], [ -1, [[LR_PH]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ [[CMP0]], [[BB1]] ], [ true, [[LR_PH]] ]
+; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i1 [ false, [[BB1]] ], [ true, [[LR_PH]] ]
 ; CHECK-NEXT:    [[ADD1]] = add nsw i32 [[STOREMERGE]], -1
 ; CHECK-NEXT:    br i1 [[PHIOFOPS]], label [[BB1]], label [[END:%.*]]
 ; CHECK:       end:
@@ -71,9 +71,9 @@ define void @test2() {
 ; CHECK:       split2:
 ; CHECK-NEXT:    br label [[CRITEDGE]]
 ; CHECK:       critedge:
-; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i1 [ false, [[BB1]] ], [ true, [[SPLIT2]] ], [ true, [[SPLIT1]] ]
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ [[CMP1]], [[BB1]] ], [ true, [[SPLIT2]] ], [ true, [[SPLIT1]] ]
 ; CHECK-NEXT:    [[LCSSA:%.*]] = phi i32 [ 0, [[BB1]] ], [ -1, [[SPLIT1]] ], [ -1, [[SPLIT2]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ [[CMP1]], [[BB1]] ], [ true, [[SPLIT2]] ], [ true, [[SPLIT1]] ]
+; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i1 [ false, [[BB1]] ], [ true, [[SPLIT2]] ], [ true, [[SPLIT1]] ]
 ; CHECK-NEXT:    [[ADD]] = add nsw i32 [[STOREMERGE]], -1
 ; CHECK-NEXT:    br i1 [[PHIOFOPS]], label [[BB1]], label [[EXIT:%.*]]
 ; CHECK:       exit:

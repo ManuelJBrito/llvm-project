@@ -12,8 +12,8 @@ define void @test1() {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    br label [[FOR_COND:%.*]]
 ; CHECK:       for.cond:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 0, [[ENTRY:%.*]] ], [ [[Y_0:%.*]], [[FOR_INC6:%.*]] ]
-; CHECK-NEXT:    [[Y_0]] = phi i32 [ 1, [[ENTRY]] ], [ [[INC7:%.*]], [[FOR_INC6]] ]
+; CHECK-NEXT:    [[Y_0:%.*]] = phi i32 [ 1, [[ENTRY:%.*]] ], [ [[INC7:%.*]], [[FOR_INC6:%.*]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 0, [[ENTRY]] ], [ [[Y_0]], [[FOR_INC6]] ]
 ; CHECK-NEXT:    br i1 undef, label [[FOR_INC6]], label [[FOR_BODY_LR_PH:%.*]]
 ; CHECK:       for.body.lr.ph:
 ; CHECK-NEXT:    br label [[FOR_BODY4:%.*]]
@@ -63,8 +63,8 @@ define void @test2(i1 %c, ptr %ptr, i64 %N) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    br label [[HEADER:%.*]]
 ; CHECK:       header:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i64 [ -1, [[ENTRY:%.*]] ], [ [[IV:%.*]], [[LATCH:%.*]] ]
-; CHECK-NEXT:    [[IV]] = phi i64 [ [[IV_NEXT:%.*]], [[LATCH]] ], [ 0, [[ENTRY]] ]
+; CHECK-NEXT:    [[IV:%.*]] = phi i64 [ [[IV_NEXT:%.*]], [[LATCH:%.*]] ], [ 0, [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i64 [ -1, [[ENTRY]] ], [ [[IV]], [[LATCH]] ]
 ; CHECK-NEXT:    br i1 [[C:%.*]], label [[IF_THEN:%.*]], label [[IF_ELSE:%.*]]
 ; CHECK:       if.then:
 ; CHECK-NEXT:    [[CMP1:%.*]] = icmp eq i64 [[IV]], 0

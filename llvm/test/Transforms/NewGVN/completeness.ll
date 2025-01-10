@@ -11,8 +11,8 @@ define i32 @test1(i32, ptr) {
 ; CHECK:       5:
 ; CHECK-NEXT:    br label [[TMP6]]
 ; CHECK:       6:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 105, [[TMP5]] ], [ 75, [[TMP4]] ]
 ; CHECK-NEXT:    [[DOT0:%.*]] = phi i32 [ 5, [[TMP4]] ], [ 7, [[TMP5]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 105, [[TMP5]] ], [ 75, [[TMP4]] ]
 ; CHECK-NEXT:    ret i32 [[PHIOFOPS]]
 ;
   %3 = icmp ne i32 %0, 0
@@ -39,9 +39,9 @@ define i32 @test1b(i32, ptr) {
 ; CHECK:       5:
 ; CHECK-NEXT:    br label [[TMP6]]
 ; CHECK:       6:
-; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i32 [ 105, [[TMP5]] ], [ 75, [[TMP4]] ]
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 1575, [[TMP5]] ], [ 1125, [[TMP4]] ]
 ; CHECK-NEXT:    [[DOT0:%.*]] = phi i32 [ 5, [[TMP4]] ], [ 7, [[TMP5]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 1575, [[TMP5]] ], [ 1125, [[TMP4]] ]
+; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i32 [ 105, [[TMP5]] ], [ 75, [[TMP4]] ]
 ; CHECK-NEXT:    ret i32 [[PHIOFOPS]]
 ;
   %3 = icmp ne i32 %0, 0
@@ -95,8 +95,8 @@ define i32 @test3(i1 %which) {
 ; CHECK:       delay:
 ; CHECK-NEXT:    br label [[FINAL]]
 ; CHECK:       final:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ -877, [[ENTRY:%.*]] ], [ 113, [[DELAY]] ]
-; CHECK-NEXT:    [[A:%.*]] = phi i32 [ 1000, [[ENTRY]] ], [ 10, [[DELAY]] ]
+; CHECK-NEXT:    [[A:%.*]] = phi i32 [ 1000, [[ENTRY:%.*]] ], [ 10, [[DELAY]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ -877, [[ENTRY]] ], [ 113, [[DELAY]] ]
 ; CHECK-NEXT:    ret i32 [[PHIOFOPS]]
 ;
 
@@ -119,8 +119,8 @@ define <2 x i32> @test3vec(i1 %which) {
 ; CHECK:       delay:
 ; CHECK-NEXT:    br label [[FINAL]]
 ; CHECK:       final:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi <2 x i32> [ <i32 -877, i32 -877>, [[ENTRY:%.*]] ], [ <i32 113, i32 113>, [[DELAY]] ]
-; CHECK-NEXT:    [[A:%.*]] = phi <2 x i32> [ <i32 1000, i32 1000>, [[ENTRY]] ], [ <i32 10, i32 10>, [[DELAY]] ]
+; CHECK-NEXT:    [[A:%.*]] = phi <2 x i32> [ <i32 1000, i32 1000>, [[ENTRY:%.*]] ], [ <i32 10, i32 10>, [[DELAY]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi <2 x i32> [ <i32 -877, i32 -877>, [[ENTRY]] ], [ <i32 113, i32 113>, [[DELAY]] ]
 ; CHECK-NEXT:    ret <2 x i32> [[PHIOFOPS]]
 ;
 
@@ -143,8 +143,8 @@ define <2 x i32> @test3vec2(i1 %which) {
 ; CHECK:       delay:
 ; CHECK-NEXT:    br label [[FINAL]]
 ; CHECK:       final:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi <2 x i32> [ <i32 -877, i32 -2167>, [[ENTRY:%.*]] ], [ <i32 113, i32 303>, [[DELAY]] ]
-; CHECK-NEXT:    [[A:%.*]] = phi <2 x i32> [ <i32 1000, i32 2500>, [[ENTRY]] ], [ <i32 10, i32 30>, [[DELAY]] ]
+; CHECK-NEXT:    [[A:%.*]] = phi <2 x i32> [ <i32 1000, i32 2500>, [[ENTRY:%.*]] ], [ <i32 10, i32 30>, [[DELAY]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi <2 x i32> [ <i32 -877, i32 -2167>, [[ENTRY]] ], [ <i32 113, i32 303>, [[DELAY]] ]
 ; CHECK-NEXT:    ret <2 x i32> [[PHIOFOPS]]
 ;
 
@@ -172,11 +172,11 @@ define i32 @test4(i32, ptr, ptr noalias, ptr noalias) {
 ; CHECK:       7:
 ; CHECK-NEXT:    br label [[TMP8]]
 ; CHECK:       8:
-; CHECK-NEXT:    [[PHIOFOPS2:%.*]] = phi i32 [ 7, [[TMP7]] ], [ 5, [[TMP6]] ]
-; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i32 [ 105, [[TMP7]] ], [ 75, [[TMP6]] ]
-; CHECK-NEXT:    [[TMP11:%.*]] = phi i32 [ 735, [[TMP7]] ], [ 375, [[TMP6]] ]
 ; CHECK-NEXT:    [[DOT01:%.*]] = phi i32 [ 5, [[TMP6]] ], [ 7, [[TMP7]] ]
 ; CHECK-NEXT:    [[DOT0:%.*]] = phi ptr [ [[TMP2]], [[TMP6]] ], [ [[TMP3]], [[TMP7]] ]
+; CHECK-NEXT:    [[TMP11:%.*]] = phi i32 [ 735, [[TMP7]] ], [ 375, [[TMP6]] ]
+; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i32 [ 105, [[TMP7]] ], [ 75, [[TMP6]] ]
+; CHECK-NEXT:    [[PHIOFOPS2:%.*]] = phi i32 [ 7, [[TMP7]] ], [ 5, [[TMP6]] ]
 ; CHECK-NEXT:    ret i32 [[TMP11]]
 ;
   store i32 5, ptr %2, align 4
@@ -227,10 +227,10 @@ define i64 @test5(i64 %arg) {
 ; CHECK:       bb14:
 ; CHECK-NEXT:    br label [[BB15:%.*]]
 ; CHECK:       bb15:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i64 [ [[TMP12]], [[BB14]] ], [ [[TMP25:%.*]], [[BB15]] ]
 ; CHECK-NEXT:    [[TMP16:%.*]] = phi i64 [ [[TMP24:%.*]], [[BB15]] ], [ [[TMP11]], [[BB14]] ]
 ; CHECK-NEXT:    [[TMP17:%.*]] = phi i64 [ [[TMP22:%.*]], [[BB15]] ], [ [[TMP10]], [[BB14]] ]
 ; CHECK-NEXT:    [[TMP18:%.*]] = phi i64 [ [[TMP20:%.*]], [[BB15]] ], [ 0, [[BB14]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i64 [ [[TMP12]], [[BB14]] ], [ [[TMP25:%.*]], [[BB15]] ]
 ; CHECK-NEXT:    store i64 [[PHIOFOPS]], ptr [[TMP]], align 8
 ; CHECK-NEXT:    [[TMP20]] = add nuw nsw i64 [[TMP18]], 1
 ; CHECK-NEXT:    [[TMP21:%.*]] = getelementptr inbounds [100 x i64], ptr @global, i64 0, i64 [[TMP20]]
@@ -301,9 +301,9 @@ define i8 @test6(ptr %addr) {
 ; CHECK-NEXT:  entry-block:
 ; CHECK-NEXT:    br label [[MAIN_LOOP:%.*]]
 ; CHECK:       main-loop:
-; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i1 [ true, [[ENTRY_BLOCK:%.*]] ], [ false, [[CORE:%.*]] ]
+; CHECK-NEXT:    [[PHI:%.*]] = phi i8 [ 0, [[ENTRY_BLOCK:%.*]] ], [ 1, [[CORE:%.*]] ]
 ; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ false, [[ENTRY_BLOCK]] ], [ true, [[CORE]] ]
-; CHECK-NEXT:    [[PHI:%.*]] = phi i8 [ 0, [[ENTRY_BLOCK]] ], [ 1, [[CORE]] ]
+; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i1 [ true, [[ENTRY_BLOCK]] ], [ false, [[CORE]] ]
 ; CHECK-NEXT:    store volatile i8 0, ptr [[ADDR:%.*]], align 1
 ; CHECK-NEXT:    br i1 [[PHIOFOPS1]], label [[BUSY_WAIT_PHI_0:%.*]], label [[EXIT:%.*]]
 ; CHECK:       busy-wait-phi-0:
@@ -395,8 +395,8 @@ define void @test9() {
 ; CHECK:       bb2:
 ; CHECK-NEXT:    br label [[BB6:%.*]]
 ; CHECK:       bb6:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ -13, [[BB2]] ], [ [[TMP11:%.*]], [[BB6]] ]
 ; CHECK-NEXT:    [[TMP7:%.*]] = phi i32 [ 1, [[BB2]] ], [ [[TMP8:%.*]], [[BB6]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ -13, [[BB2]] ], [ [[TMP11:%.*]], [[BB6]] ]
 ; CHECK-NEXT:    [[TMP8]] = add nuw nsw i32 [[TMP7]], 1
 ; CHECK-NEXT:    [[TMP11]] = add i32 -14, [[TMP8]]
 ; CHECK-NEXT:    br label [[BB6]]

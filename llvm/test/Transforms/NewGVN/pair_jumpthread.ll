@@ -35,8 +35,8 @@ define signext i32 @testBI(i32 signext %v) {
 ; CHECK-NEXT:    [[DOTPRE:%.*]] = and i64 [[RETVAL_SROA_0_0_INSERT_INSERT_I11_I]], 1
 ; CHECK-NEXT:    br label [[_ZL6CALLEEI_EXIT]]
 ; CHECK:       _ZL6calleei.exit:
-; CHECK-NEXT:    [[TMP1:%.*]] = phi i64 [ 1, [[IF_THEN_I]] ], [ [[DOTPRE]], [[IF_ELSE_I]] ]
 ; CHECK-NEXT:    [[RETVAL_SROA_0_0_I:%.*]] = phi i64 [ [[RETVAL_SROA_0_0_INSERT_INSERT_I_I]], [[IF_THEN_I]] ], [ [[RETVAL_SROA_0_0_INSERT_INSERT_I11_I]], [[IF_ELSE_I]] ]
+; CHECK-NEXT:    [[TMP1:%.*]] = phi i64 [ 1, [[IF_THEN_I]] ], [ [[DOTPRE]], [[IF_ELSE_I]] ]
 ; CHECK-NEXT:    [[RC_SROA_43_0_EXTRACT_SHIFT:%.*]] = lshr i64 [[RETVAL_SROA_0_0_I]], 32
 ; CHECK-NEXT:    [[RC_SROA_43_0_EXTRACT_TRUNC:%.*]] = trunc i64 [[RC_SROA_43_0_EXTRACT_SHIFT]] to i32
 ; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i64 [[TMP1]], 0
@@ -147,8 +147,8 @@ define signext i32 @testIB(i32 signext %v) {
 ; CHECK-NEXT:    [[DOTPRE:%.*]] = and i64 [[RETVAL_SROA_0_0_INSERT_INSERT_I10_I]], 4294967296
 ; CHECK-NEXT:    br label [[_ZL6CALLEEI_EXIT]]
 ; CHECK:       _ZL6calleei.exit:
-; CHECK-NEXT:    [[TMP1:%.*]] = phi i64 [ 4294967296, [[IF_THEN_I]] ], [ [[DOTPRE]], [[IF_ELSE_I]] ]
 ; CHECK-NEXT:    [[RETVAL_SROA_0_0_I:%.*]] = phi i64 [ [[RETVAL_SROA_0_0_INSERT_INSERT_I_I]], [[IF_THEN_I]] ], [ [[RETVAL_SROA_0_0_INSERT_INSERT_I10_I]], [[IF_ELSE_I]] ]
+; CHECK-NEXT:    [[TMP1:%.*]] = phi i64 [ 4294967296, [[IF_THEN_I]] ], [ [[DOTPRE]], [[IF_ELSE_I]] ]
 ; CHECK-NEXT:    [[RC_SROA_0_0_EXTRACT_TRUNC:%.*]] = trunc i64 [[RETVAL_SROA_0_0_I]] to i32
 ; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i64 [[TMP1]], 0
 ; CHECK-NEXT:    br i1 [[TOBOOL]], label [[IF_END:%.*]], label [[IF_THEN:%.*]]

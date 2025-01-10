@@ -55,8 +55,8 @@ define void @d() {
 ; CHECK:       for.end19:
 ; CHECK-NEXT:    br label [[CLEANUP20]]
 ; CHECK:       cleanup20:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ true, [[FOR_END19]] ], [ [[COND1]], [[CLEANUP14]] ]
 ; CHECK-NEXT:    [[CLEANUP_DEST21:%.*]] = phi i32 [ [[CLEANUP_DEST15]], [[CLEANUP14]] ], [ 0, [[FOR_END19]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ true, [[FOR_END19]] ], [ [[COND1]], [[CLEANUP14]] ]
 ; CHECK-NEXT:    br i1 [[PHIOFOPS]], label [[FOR_COND]], label [[CLEANUP23:%.*]]
 ; CHECK:       cleanup23:
 ; CHECK-NEXT:    ret void

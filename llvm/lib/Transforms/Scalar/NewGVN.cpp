@@ -2645,7 +2645,7 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
 
   SmallVector<ValPair, 4> PHIOps;
   SmallPtrSet<Value *, 4> Deps;
-  auto *PHIBlock = OpPHI ? getBlockForValue(OpPHI) : getBlockForValue(I);
+  auto *PHIBlock = SamePHIBlock ? SamePHIBlock : getBlockForValue(I);
   if (!PHIBlock || pred_size(PHIBlock) < 2)
     return nullptr;
   unsigned PRE = RealToPREInst.count(I);
@@ -2746,7 +2746,10 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
   }
   auto *ValuePHI = RealToTemp.lookup(I);
   bool NewPHI = false;
-  if (!ValuePHI) {
+  // Only use the old ValuePHI if it is in the same block.
+  if (!ValuePHI || TempToBlock[ValuePHI] != PHIBlock) {
+    if (TempToBlock[ValuePHI] != PHIBlock)
+      removePhiOfOps(I, ValuePHI);
     ValuePHI =
         PHINode::Create(I->getType(), pred_size(PHIBlock), "phiofops");
     addPhiOfOps(ValuePHI, PHIBlock, I);
@@ -2985,8 +2988,7 @@ void NewGVN::valueNumberMemoryPhi(MemoryPhi *MP) {
   // removed).
   CongruenceClass *CC =
       AllEqual ? getMemoryClass(AllSameValue) : ensureLeaderOfMemoryClass(MP);
-  auto OldState = MemoryPhiState.lookup(MP);
-  assert(OldState != MPS_Invalid && "Invalid memory phi state");
+  assert(MemoryPhiState.lookup(MP) != MPS_Invalid && "Invalid memory phi state");
   auto NewState = AllEqual ? MPS_Equivalent : MPS_Unique;
   MemoryPhiState[MP] = NewState;
   if (setMemoryClass(MP, CC))
@@ -3020,8 +3022,12 @@ void NewGVN::valueNumberInstruction(Instruction *I) {
         } else {
           if (auto *Op = RealToTemp.lookup(I))
             removePhiOfOps(I, Op);
-          if (auto *PREOp = RealToPREInst.lookup(I))
-            removePREInst(I, PREOp);
+          if (auto *PREOp = RealToPREInst.lookup(I)) {
+            if (isa<VariableExpression>(Symbolized) &&
+                cast<VariableExpression>(Symbolized)->getVariableValue() !=
+                    PREOp)
+              removePREInst(I, PREOp);
+          }
         }
       } else if (auto *Op = RealToTemp.lookup(I))
         removePhiOfOps(I, Op);
@@ -3127,14 +3133,14 @@ void NewGVN::verifyMemoryCongruency() const {
             MemoryToDFSNum(Pair.first) == 0)
           return false;
         if (auto *MemDef = dyn_cast<MemoryDef>(Pair.first))
-          return !isInstructionTriviallyDead(MemDef->getMemoryInst());
+          return !InstructionsToErase.count(MemDef->getMemoryInst());
 
         // We could have phi nodes which operands are all trivially dead,
         // so we don't process them.
         if (auto *MemPHI = dyn_cast<MemoryPhi>(Pair.first)) {
           for (const auto &U : MemPHI->incoming_values()) {
             if (auto *I = dyn_cast<Instruction>(&*U)) {
-              if (!isInstructionTriviallyDead(I))
+              if (!InstructionsToErase.count(I))
                 return true;
             }
           }
@@ -3774,7 +3780,6 @@ bool NewGVN::eliminateInstructions(Function &F) {
       unsigned MemberDFSIn = VD.DFSIn;
       unsigned MemberDFSOut = VD.DFSOut;
       Value *Def = VD.Def.getPointer();
-      bool FromStore = VD.Def.getInt();
 
       auto *DefInst = dyn_cast_or_null<Instruction>(Def);
       if (DefInst && AllTempInstructions.count(DefInst)) {
@@ -3788,7 +3793,7 @@ bool NewGVN::eliminateInstructions(Function &F) {
         LLVM_DEBUG(dbgs() << "Inserting fully real phi of ops" << *Def
                           << " into block "
                           << getBlockName(getBlockForValue(Def)) << "\n");
-        PN->insertBefore(&DefBlock->front());
+        PN->insertBefore(DefBlock->getFirstNonPHIIt());
         Def = PN;
         NumGVNPHIOfOpsEliminations++;
       }
@@ -3923,7 +3928,7 @@ bool NewGVN::eliminateInstructions(Function &F) {
             LLVM_DEBUG(dbgs() << "Inserting fully real phi of ops" << *Def
                               << " into block "
                               << getBlockName(getBlockForValue(Def)) << "\n");
-            PN->insertBefore(&DefBlock->front());
+            PN->insertBefore(DefBlock->getFirstNonPHIIt());
             Def = PN;
             NumGVNPHIOfOpsEliminations++;
           }

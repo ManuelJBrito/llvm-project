@@ -17,8 +17,8 @@ define i32 @unsafe(i1 %arg, i32 %arg1) {
 ; CHECK:       [[BB7]]:
 ; CHECK-NEXT:    br i1 true, label %[[BB8]], label %[[BB5]]
 ; CHECK:       [[BB8]]:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[ARG1]], %[[BB6]] ], [ 0, %[[BB7]] ]
 ; CHECK-NEXT:    [[PHI9:%.*]] = phi i32 [ 0, %[[BB7]] ], [ 1, %[[BB6]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[ARG1]], %[[BB6]] ], [ 0, %[[BB7]] ]
 ; CHECK-NEXT:    store i32 [[PHIOFOPS]], ptr null, align 4
 ; CHECK-NEXT:    br label %[[BB4]]
 ;
@@ -66,8 +66,8 @@ define i32 @unsafe_load(i1 %arg) {
 ; CHECK:       [[BB5]]:
 ; CHECK-NEXT:    br i1 true, label %[[BB6]], label %[[BB2]]
 ; CHECK:       [[BB6]]:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[LOAD]], %[[BB3]] ], [ 0, %[[BB5]] ]
 ; CHECK-NEXT:    [[PHI7:%.*]] = phi i32 [ 0, %[[BB5]] ], [ 1, %[[BB3]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[LOAD]], %[[BB3]] ], [ 0, %[[BB5]] ]
 ; CHECK-NEXT:    store i32 [[PHIOFOPS]], ptr null, align 4
 ; CHECK-NEXT:    br label %[[BB1]]
 ;

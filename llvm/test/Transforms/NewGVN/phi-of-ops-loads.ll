@@ -7,9 +7,9 @@ define void @hoisted-load(ptr %p, ptr %q) {
 ; CHECK-NEXT:    [[N60:%.*]] = load i8, ptr [[P:%.*]], align 1
 ; CHECK-NEXT:    br label [[BB57:%.*]]
 ; CHECK:       bb57:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ true, [[BB56:%.*]] ], [ [[N62:%.*]], [[BB229:%.*]] ]
-; CHECK-NEXT:    [[N59:%.*]] = phi i1 [ false, [[BB229]] ], [ true, [[BB56]] ]
+; CHECK-NEXT:    [[N59:%.*]] = phi i1 [ false, [[BB229:%.*]] ], [ true, [[BB56:%.*]] ]
 ; CHECK-NEXT:    [[IDX:%.*]] = phi i8 [ 0, [[BB56]] ], [ [[INC:%.*]], [[BB229]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ true, [[BB56]] ], [ [[N62:%.*]], [[BB229]] ]
 ; CHECK-NEXT:    [[N62]] = icmp ne i8 [[N60]], 2
 ; CHECK-NEXT:    br i1 [[PHIOFOPS]], label [[BB229]], label [[BB237:%.*]]
 ; CHECK:       bb229:
