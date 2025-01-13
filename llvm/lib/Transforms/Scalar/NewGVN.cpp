@@ -162,6 +162,9 @@ static cl::opt<bool> EnableUpdate("enable-update", cl::init(true),
 static cl::opt<bool> EnablePRE("enable-newgvn-pre", cl::init(true),
                                     cl::Hidden);
 
+static cl::opt<bool> EnableValueCoercion("enable-value-coercion", cl::init(false),
+                                    cl::Hidden);
+
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
 //===----------------------------------------------------------------------===//
@@ -1057,9 +1060,9 @@ const Expression *NewGVN::createBinaryExpression(unsigned Opcode, Type *T,
   E->op_push_back(lookupOperandLeader(Arg1));
   E->op_push_back(lookupOperandLeader(Arg2));
 
-  Value *V = simplifyBinOp(Opcode, E->getOperand(0), E->getOperand(1), Q);
-  if (auto Simplified = checkExprResults(E, I, V))
-    return Simplified;
+    Value *V = simplifyBinOp(Opcode, E->getOperand(0), E->getOperand(1), Q);
+    if (auto Simplified = checkExprResults(E, I, V))
+      return Simplified;
   return E;
 }
 
@@ -2134,21 +2137,22 @@ void NewGVN::moveValueToNewCongruenceClass(Instruction *I, const Expression *E,
     }
     NewClass->incStoreCount();
   }
+  if (EnableValueCoercion) {
+    auto *OldE = OldClass->getDefiningExpr();
+    if (isa_and_nonnull<LoadExpression>(OldE) ||
+        isa_and_nonnull<StoreExpression>(OldE)) {
+      auto *ME = cast<MemoryExpression>(OldE);
+      const MemoryAccess *MD = ME->getMemoryLeader();
 
-  auto *OldE = OldClass->getDefiningExpr();
-  if (isa_and_nonnull<LoadExpression>(OldE) ||
-      isa_and_nonnull<StoreExpression>(OldE)) {
-    auto *ME = cast<MemoryExpression>(OldE);
-    const MemoryAccess *MD = ME->getMemoryLeader();
-
-    Value *Ptr = nullptr;
-    if (auto *LE = dyn_cast<LoadExpression>(OldE))
-      Ptr = LE->getLoadInst()->getPointerOperand();
-    else {
-      auto *SE = cast<StoreExpression>(OldE);
-      Ptr = SE->getStoreInst()->getPointerOperand();
+      Value *Ptr = nullptr;
+      if (auto *LE = dyn_cast<LoadExpression>(OldE))
+        Ptr = LE->getLoadInst()->getPointerOperand();
+      else {
+        auto *SE = cast<StoreExpression>(OldE);
+        Ptr = SE->getStoreInst()->getPointerOperand();
+      }
+      SuperClasses[{Ptr, MD}].erase(OldClass);
     }
-    SuperClasses[{Ptr, MD}].erase(OldClass);
   }
 
   // True if there is no memory instructions left in a class that had memory
@@ -2233,7 +2237,7 @@ void NewGVN::performCongruenceFinding(Instruction *I, const Expression *E,
         NewClass->setLeader({I, InstrToDFSNum(I)});
       }
 
-      if (isa<LoadExpression>(E) || isa<StoreExpression>(E)) {
+      if (EnableValueCoercion && (isa<LoadExpression>(E) || isa<StoreExpression>(E))) {
         auto *ME = cast<MemoryExpression>(E);
         const MemoryAccess *MD = ME->getMemoryLeader();
 
