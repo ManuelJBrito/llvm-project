@@ -158,6 +158,8 @@ static cl::opt<bool> EnableSimpl("enable-simpl", cl::init(true), cl::Hidden);
 
 static cl::opt<bool> EnableSSI("enable-ssi", cl::init(true), cl::Hidden);
 
+static cl::opt<bool> EnableMSSA("enable-mssa", cl::init(true), cl::Hidden);
+
 
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
@@ -3101,7 +3103,8 @@ void OptPRE::valueNumberInstruction(Instruction *I) {
   if (!I->isTerminator()) {
     const Expression *Symbolized = nullptr;
     SmallPtrSet<Value *, 2> Visited;
-    if (DebugCounter::shouldExecute(VNCounter)) {
+    if (DebugCounter::shouldExecute(VNCounter) 
+          && (EnableMSSA || !I->mayReadOrWriteMemory())) {
       auto Res = performSymbolicEvaluation(I, Visited);
       Symbolized = Res.Expr;
       addAdditionalUsers(Res, I);
@@ -3186,6 +3189,8 @@ bool OptPRE::singleReachablePHIPath(
 // testing/debugging.
 void OptPRE::verifyMemoryCongruency() const {
 #ifndef NDEBUG
+  if (!EnableMSSA)
+    return;
   // Verify that the memory table equivalence and memory member set match
   for (const auto *CC : CongruenceClasses) {
     if (CC == TOPClass || CC->isDead())
