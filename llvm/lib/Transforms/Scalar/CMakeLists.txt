@@ -16,6 +16,7 @@ add_llvm_component_library(LLVMScalarOpts
   Float2Int.cpp
   GuardWidening.cpp
   GVN.cpp
+  GVNExpression.cpp
   GVNHoist.cpp
   GVNSink.cpp
   IVUsersPrinter.cpp
@@ -60,6 +61,7 @@ add_llvm_component_library(LLVMScalarOpts
   MergedLoadStoreMotion.cpp
   NaryReassociate.cpp
   NewGVN.cpp
+  OptPRE.cpp
   PartiallyInlineLibCalls.cpp
   PlaceSafepoints.cpp
   Reassociate.cpp

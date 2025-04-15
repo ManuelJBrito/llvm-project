@@ -120,6 +120,7 @@
 #include "llvm/Transforms/Scalar/MemCpyOptimizer.h"
 #include "llvm/Transforms/Scalar/MergedLoadStoreMotion.h"
 #include "llvm/Transforms/Scalar/NewGVN.h"
+#include "llvm/Transforms/Scalar/OptPRE.h"
 #include "llvm/Transforms/Scalar/Reassociate.h"
 #include "llvm/Transforms/Scalar/SCCP.h"
 #include "llvm/Transforms/Scalar/SROA.h"
@@ -195,8 +196,14 @@ static cl::opt<bool> ExtraVectorizerPasses(
     "extra-vectorizer-passes", cl::init(false), cl::Hidden,
     cl::desc("Run cleanup optimization passes after vectorization"));
 
+static cl::opt<bool> SkipGVN("skip-gvn", cl::init(false), cl::Hidden,
+                               cl::desc("Skip value numbering"));
+
 static cl::opt<bool> RunNewGVN("enable-newgvn", cl::init(false), cl::Hidden,
                                cl::desc("Run the NewGVN pass"));
+
+static cl::opt<bool> RunOptPRE("enable-optpre", cl::init(false), cl::Hidden,
+                               cl::desc("Run the OptPRE pass"));
 
 static cl::opt<bool> EnableLoopInterchange(
     "enable-loopinterchange", cl::init(false), cl::Hidden,
@@ -698,10 +705,14 @@ PassBuilder::buildFunctionSimplificationPipeline(OptimizationLevel Level,
 
   // Eliminate redundancies.
   FPM.addPass(MergedLoadStoreMotionPass());
-  if (RunNewGVN)
-    FPM.addPass(NewGVNPass());
-  else
-    FPM.addPass(GVNPass());
+  if (!SkipGVN) {
+    if (RunNewGVN)
+      FPM.addPass(NewGVNPass());
+    else if (RunOptPRE)
+      FPM.addPass(OptPREPass());
+    else
+      FPM.addPass(GVNPass());
+  }
 
   // Sparse conditional constant propagation.
   // FIXME: It isn't clear why we do this *after* loop passes rather than
@@ -1996,10 +2007,14 @@ PassBuilder::buildLTODefaultPipeline(OptimizationLevel Level,
                /*AllowSpeculation=*/true),
       /*USeMemorySSA=*/true, /*UseBlockFrequencyInfo=*/false));
 
-  if (RunNewGVN)
-    MainFPM.addPass(NewGVNPass());
-  else
-    MainFPM.addPass(GVNPass());
+  if (!SkipGVN) {
+    if (RunNewGVN)
+      MainFPM.addPass(NewGVNPass());
+    else if (RunOptPRE)
+      MainFPM.addPass(OptPREPass());
+    else
+      MainFPM.addPass(GVNPass());
+  }
 
   // Remove dead memcpy()'s.
   MainFPM.addPass(MemCpyOptPass());
