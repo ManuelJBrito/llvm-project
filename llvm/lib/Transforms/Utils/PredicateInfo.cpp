@@ -243,6 +243,7 @@ class PredicateInfoBuilder {
   Function &F;
   DominatorTree &DT;
   AssumptionCache &AC;
+  bool Skip;
 
   // This stores info about each operand or comparison result we make copies
   // of. The real ValueInfos start at index 1, index 0 is unused so that we
@@ -279,8 +280,8 @@ class PredicateInfoBuilder {
 
 public:
   PredicateInfoBuilder(PredicateInfo &PI, Function &F, DominatorTree &DT,
-                       AssumptionCache &AC)
-      : PI(PI), F(F), DT(DT), AC(AC) {
+                       AssumptionCache &AC, bool Skip = false)
+      : PI(PI), F(F), DT(DT), AC(AC), Skip(Skip) {
     // Push an empty operand info so that we can detect 0 as not finding one
     ValueInfos.resize(1);
   }
@@ -496,6 +497,8 @@ void PredicateInfoBuilder::processSwitch(
 
 // Build predicate info for our function
 void PredicateInfoBuilder::buildPredicateInfo() {
+  if (Skip)
+    return;
   DT.updateDFSNumbers();
   // Collect operands to rename from all conditional branch terminators, as well
   // as assume statements.
@@ -753,7 +756,14 @@ PredicateInfoBuilder::getValueInfo(Value *Operand) const {
 PredicateInfo::PredicateInfo(Function &F, DominatorTree &DT,
                              AssumptionCache &AC)
     : F(F) {
-  PredicateInfoBuilder Builder(*this, F, DT, AC);
+  PredicateInfoBuilder Builder(*this, F, DT, AC, false);
+  Builder.buildPredicateInfo();
+}
+
+PredicateInfo::PredicateInfo(Function &F, DominatorTree &DT,
+                             AssumptionCache &AC, bool Skip)
+    : F(F) {
+  PredicateInfoBuilder Builder(*this, F, DT, AC, Skip);
   Builder.buildPredicateInfo();
 }
 

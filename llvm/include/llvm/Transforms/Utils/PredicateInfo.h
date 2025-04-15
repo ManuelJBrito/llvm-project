@@ -177,6 +177,7 @@ public:
 class PredicateInfo {
 public:
   PredicateInfo(Function &, DominatorTree &, AssumptionCache &);
+  PredicateInfo(Function &, DominatorTree &, AssumptionCache &, bool Skip);
   ~PredicateInfo();
 
   void verifyPredicateInfo() const;

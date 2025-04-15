@@ -156,6 +156,9 @@ static cl::opt<bool> EnablePhiOfOps("enable-phi-of-ops-optpre", cl::init(true),
 
 static cl::opt<bool> EnableSimpl("enable-simpl", cl::init(true), cl::Hidden);
 
+static cl::opt<bool> EnableSSI("enable-ssi", cl::init(true), cl::Hidden);
+
+
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
 //===----------------------------------------------------------------------===//
@@ -660,7 +663,7 @@ public:
          TargetLibraryInfo *TLI, AliasAnalysis *AA, MemorySSA *MSSA,
          const DataLayout &DL)
       : F(F), DT(DT), TLI(TLI), AA(AA), MSSA(MSSA), AC(AC), DL(DL),
-        PredInfo(std::make_unique<PredicateInfo>(F, *DT, *AC)),
+        PredInfo(std::make_unique<PredicateInfo>(F, *DT, *AC, !EnableSSI)),
         SQ(DL, TLI, DT, AC, /*CtxI=*/nullptr, /*UseInstrInfo=*/false,
            /*CanUseUndef=*/false) {}
 
