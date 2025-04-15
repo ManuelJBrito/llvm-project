@@ -154,6 +154,8 @@ static cl::opt<bool> EnableStoreRefinement("enable-store-refinement-optpre",
 static cl::opt<bool> EnablePhiOfOps("enable-phi-of-ops-optpre", cl::init(true),
                                     cl::Hidden);
 
+static cl::opt<bool> EnableSimpl("enable-simpl", cl::init(true), cl::Hidden);
+
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
 //===----------------------------------------------------------------------===//
@@ -1066,7 +1068,7 @@ const Expression *OptPRE::createBinaryExpression(unsigned Opcode, Type *T,
   E->setType(T);
   E->setOpcode(Opcode);
   E->allocateOperands(ArgRecycler, ExpressionAllocator);
-  if (Instruction::isCommutative(Opcode)) {
+  if (EnableSimpl && Instruction::isCommutative(Opcode)) {
     // Ensure that commutative instructions that only differ by a permutation
     // of their operands get the same value number by sorting the operand value
     // numbers.  Since all commutative instructions have two operands it is more
@@ -1077,6 +1079,8 @@ const Expression *OptPRE::createBinaryExpression(unsigned Opcode, Type *T,
   E->op_push_back(lookupOperandLeader(Arg1));
   E->op_push_back(lookupOperandLeader(Arg2));
 
+  if (!EnableSimpl)
+    return E;
   Value *V = simplifyBinOp(Opcode, E->getOperand(0), E->getOperand(1), Q);
   if (auto Simplified = checkExprResults(E, I, V)) {
     addAdditionalUsers(Simplified, I);
@@ -1139,7 +1143,7 @@ OptPRE::ExprResult OptPRE::createExpression(Instruction *I) const {
 
   bool AllConstant = setBasicExpressionInfo(I, E);
 
-  if (I->isCommutative()) {
+  if (EnableSimpl && I->isCommutative()) {
     // Ensure that commutative instructions that only differ by a permutation
     // of their operands get the same value number by sorting the operand value
     // numbers.  Since all commutative instructions have two operands it is more
@@ -1153,11 +1157,13 @@ OptPRE::ExprResult OptPRE::createExpression(Instruction *I) const {
     // Sort the operand value numbers so x<y and y>x get the same value
     // number.
     CmpInst::Predicate Predicate = CI->getPredicate();
-    if (shouldSwapOperands(E->getOperand(0), E->getOperand(1))) {
+    if (EnableSimpl && shouldSwapOperands(E->getOperand(0), E->getOperand(1))) {
       E->swapOperands(0, 1);
       Predicate = CmpInst::getSwappedPredicate(Predicate);
     }
     E->setOpcode((CI->getOpcode() << 8) | Predicate);
+    if (!EnableSimpl)
+      return ExprResult::some(E);
     // TODO: 25% of our time is spent in simplifyCmpInst with pointer operands
     assert(I->getOperand(0)->getType() == I->getOperand(1)->getType() &&
            "Wrong types on cmp instruction");
@@ -1167,47 +1173,49 @@ OptPRE::ExprResult OptPRE::createExpression(Instruction *I) const {
         simplifyCmpInst(Predicate, E->getOperand(0), E->getOperand(1), Q);
     if (auto Simplified = checkExprResults(E, I, V))
       return Simplified;
-  } else if (isa<SelectInst>(I)) {
-    if (isa<Constant>(E->getOperand(0)) ||
-        E->getOperand(1) == E->getOperand(2)) {
-      assert(E->getOperand(1)->getType() == I->getOperand(1)->getType() &&
-             E->getOperand(2)->getType() == I->getOperand(2)->getType());
-      Value *V = simplifySelectInst(E->getOperand(0), E->getOperand(1),
-                                    E->getOperand(2), Q);
+  } else if (EnableSimpl){
+    if (isa<SelectInst>(I)) {
+      if (isa<Constant>(E->getOperand(0)) ||
+          E->getOperand(1) == E->getOperand(2)) {
+        assert(E->getOperand(1)->getType() == I->getOperand(1)->getType() &&
+              E->getOperand(2)->getType() == I->getOperand(2)->getType());
+        Value *V = simplifySelectInst(E->getOperand(0), E->getOperand(1),
+                                      E->getOperand(2), Q);
+        if (auto Simplified = checkExprResults(E, I, V))
+          return Simplified;
+      }
+    } else if (I->isBinaryOp()) {
+      Value *V =
+          simplifyBinOp(E->getOpcode(), E->getOperand(0), E->getOperand(1), Q);
       if (auto Simplified = checkExprResults(E, I, V))
         return Simplified;
+    } else if (auto *CI = dyn_cast<CastInst>(I)) {
+      Value *V =
+          simplifyCastInst(CI->getOpcode(), E->getOperand(0), CI->getType(), Q);
+      if (auto Simplified = checkExprResults(E, I, V))
+        return Simplified;
+    } else if (auto *GEPI = dyn_cast<GetElementPtrInst>(I)) {
+      Value *V = simplifyGEPInst(GEPI->getSourceElementType(), *E->op_begin(),
+                                ArrayRef(std::next(E->op_begin()), E->op_end()),
+                                GEPI->getNoWrapFlags(), Q);
+      if (auto Simplified = checkExprResults(E, I, V))
+        return Simplified;
+    } else if (AllConstant) {
+      // We don't bother trying to simplify unless all of the operands
+      // were constant.
+      // TODO: There are a lot of Simplify*'s we could call here, if we
+      // wanted to.  The original motivating case for this code was a
+      // zext i1 false to i8, which we don't have an interface to
+      // simplify (IE there is no SimplifyZExt).
+
+      SmallVector<Constant *, 8> C;
+      for (Value *Arg : E->operands())
+        C.emplace_back(cast<Constant>(Arg));
+
+      if (Value *V = ConstantFoldInstOperands(I, C, DL, TLI))
+        if (auto Simplified = checkExprResults(E, I, V))
+          return Simplified;
     }
-  } else if (I->isBinaryOp()) {
-    Value *V =
-        simplifyBinOp(E->getOpcode(), E->getOperand(0), E->getOperand(1), Q);
-    if (auto Simplified = checkExprResults(E, I, V))
-      return Simplified;
-  } else if (auto *CI = dyn_cast<CastInst>(I)) {
-    Value *V =
-        simplifyCastInst(CI->getOpcode(), E->getOperand(0), CI->getType(), Q);
-    if (auto Simplified = checkExprResults(E, I, V))
-      return Simplified;
-  } else if (auto *GEPI = dyn_cast<GetElementPtrInst>(I)) {
-    Value *V = simplifyGEPInst(GEPI->getSourceElementType(), *E->op_begin(),
-                               ArrayRef(std::next(E->op_begin()), E->op_end()),
-                               GEPI->getNoWrapFlags(), Q);
-    if (auto Simplified = checkExprResults(E, I, V))
-      return Simplified;
-  } else if (AllConstant) {
-    // We don't bother trying to simplify unless all of the operands
-    // were constant.
-    // TODO: There are a lot of Simplify*'s we could call here, if we
-    // wanted to.  The original motivating case for this code was a
-    // zext i1 false to i8, which we don't have an interface to
-    // simplify (IE there is no SimplifyZExt).
-
-    SmallVector<Constant *, 8> C;
-    for (Value *Arg : E->operands())
-      C.emplace_back(cast<Constant>(Arg));
-
-    if (Value *V = ConstantFoldInstOperands(I, C, DL, TLI))
-      if (auto Simplified = checkExprResults(E, I, V))
-        return Simplified;
   }
   return ExprResult::some(E);
 }
