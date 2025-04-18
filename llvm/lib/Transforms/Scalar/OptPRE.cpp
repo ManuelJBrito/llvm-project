@@ -160,6 +160,8 @@ static cl::opt<bool> EnableSSI("enable-ssi", cl::init(true), cl::Hidden);
 
 static cl::opt<bool> EnableMSSA("enable-mssa", cl::init(true), cl::Hidden);
 
+static cl::opt<std::string> Assumption("assumption", cl::init("optimistic"), cl::Hidden);
+
 
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
@@ -2439,7 +2441,7 @@ void OptPRE::performCongruenceFinding(Instruction *I, const Expression *E) {
 // any newly reachable blocks and instructions for processing.
 void OptPRE::updateReachableEdge(BasicBlock *From, BasicBlock *To) {
   // Check if the Edge was reachable before.
-  if (ReachableEdges.insert({From, To}).second) {
+  if (Assumption == "balanced" || ReachableEdges.insert({From, To}).second) {
     // If this block wasn't reachable before, all instructions are touched.
     if (ReachableBlocks.insert(To).second) {
       LLVM_DEBUG(dbgs() << "Block " << getBlockName(To)
@@ -2892,9 +2894,23 @@ void OptPRE::initializeCongruenceClasses(Function &F) {
   //  The live on entry def gets put into it's own class
   MemoryAccessToClass[MSSA->getLiveOnEntryDef()] =
       createMemoryClass(MSSA->getLiveOnEntryDef());
+  
+  assert((Assumption == "pessimistic" || Assumption == "balanced" || Assumption == "optimistic")
+          && "Unknown assumption");
+
+  if (Assumption == "pessimistic") {
+    for (const llvm::BasicBlock &BB : F) {
+        ReachableBlocks.insert(&BB);
+    }
+  }
 
   for (auto *DTN : nodes(DT)) {
     BasicBlock *BB = DTN->getBlock();
+    if (Assumption == "pessimistic" || Assumption == "balanced") {
+      for (auto *Succ : successors(BB)) {
+        ReachableEdges.insert({BB, Succ});
+      }
+    }
     // All MemoryAccesses are equivalent to live on entry to start. They must
     // be initialized to something so that initial changes are noticed. For
     // the maximal answer, we initialize them all to be the same as
@@ -3484,12 +3500,16 @@ bool OptPRE::runGVN() {
   // instruction.
   ExpressionToClass.reserve(ICount);
 
-  // Initialize the touched instructions to include the entry block.
-  const auto &InstRange = BlockInstRange.lookup(&F.getEntryBlock());
-  TouchedInstructions.set(InstRange.first, InstRange.second);
   LLVM_DEBUG(dbgs() << "Block " << getBlockName(&F.getEntryBlock())
                     << " marked reachable\n");
   ReachableBlocks.insert(&F.getEntryBlock());
+
+  // Initialize the touched instructions to include the reachable blocks.
+  for (auto *BB : ReachableBlocks) {
+    const auto &InstRange = BlockInstRange.lookup(BB);
+    TouchedInstructions.set(InstRange.first, InstRange.second);
+  }
+  
   // Use index corresponding to entry block.
   CacheIdx = 0;
 
@@ -3517,7 +3537,7 @@ bool OptPRE::runGVN() {
   };
 
   for (auto &BB : make_filter_range(F, UnreachableBlockPred)) {
-    LLVM_DEBUG(dbgs() << "We believe block " << getBlockName(&BB)
+  LLVM_DEBUG(dbgs() << "We believe block " << getBlockName(&BB)
                       << " is unreachable\n");
     deleteInstructionsInBlock(&BB);
     Changed = true;
