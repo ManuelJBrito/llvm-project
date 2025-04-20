@@ -162,6 +162,7 @@ static cl::opt<bool> EnableMSSA("enable-mssa", cl::init(true), cl::Hidden);
 
 static cl::opt<std::string> Assumption("assumption", cl::init("optimistic"), cl::Hidden);
 
+static cl::opt<bool> EnableNaiveFP("enable-naive-fp", cl::init(false), cl::Hidden);
 
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
@@ -641,6 +642,7 @@ class OptPRE {
   // individual and ranges, as well as "find next element" This
   // enables us to use it as a worklist with essentially 0 cost.
   BitVector TouchedInstructions;
+  bool ChangedPartition = true;
 
   DenseMap<const BasicBlock *, std::pair<unsigned, unsigned>> BlockInstRange;
   mutable DenseMap<const IntrinsicInst *, const Value *> IntrinsicInstPred;
@@ -870,6 +872,8 @@ private:
 
   // Main loop of value numbering
   void iterateTouchedInstructions();
+  void iterateTouchedInstructionsSemiNaiveImpl();
+  void iterateTouchedInstructionsNaiveImpl();
 
   // Utilities.
   void cleanupTables();
@@ -2057,6 +2061,8 @@ OptPRE::performSymbolicEvaluation(Instruction *I,
 // instructions in the container.  Then erase value from the map.
 template <typename Map, typename KeyType>
 void OptPRE::touchAndErase(Map &M, const KeyType &Key) {
+  if (EnableNaiveFP)
+    return;
   const auto Result = M.find_as(Key);
   if (Result != M.end()) {
     for (const typename Map::mapped_type::value_type Mapped : Result->second)
@@ -2086,6 +2092,8 @@ void OptPRE::addAdditionalUsers(ExprResult &Res, Instruction *User) const {
 }
 
 void OptPRE::markUsersTouched(Value *V) {
+  if (EnableNaiveFP)
+    return;
   // Now mark the users as touched.
   for (auto *User : V->users()) {
     assert(isa<Instruction>(User) && "Use of value not within an instruction?");
@@ -2100,11 +2108,15 @@ void OptPRE::addMemoryUsers(const MemoryAccess *To, MemoryAccess *U) const {
 }
 
 void OptPRE::markMemoryDefTouched(const MemoryAccess *MA) {
+  if (EnableNaiveFP)
+    return;
   TouchedInstructions.set(MemoryToDFSNum(MA));
 }
 
 void OptPRE::markMemoryUsersTouched(const MemoryAccess *MA) {
   if (isa<MemoryUse>(MA))
+    return;
+ if (EnableNaiveFP)
     return;
   for (const auto *U : MA->users())
     TouchedInstructions.set(MemoryToDFSNum(U));
@@ -2125,6 +2137,8 @@ void OptPRE::markMemoryLeaderChangeTouched(CongruenceClass *CC) {
 // Touch the instructions that need to be updated after a congruence class has a
 // leader change, and mark changed values.
 void OptPRE::markValueLeaderChangeTouched(CongruenceClass *CC) {
+ if (EnableNaiveFP)
+    return;
   for (auto *M : *CC) {
     if (auto *I = dyn_cast<Instruction>(M))
       TouchedInstructions.set(InstrToDFSNum(I));
@@ -2407,6 +2421,7 @@ void OptPRE::performCongruenceFinding(Instruction *I, const Expression *E) {
   if (ClassChanged || LeaderChanged) {
     LLVM_DEBUG(dbgs() << "New class " << EClass->getID() << " for expression "
                       << *E << "\n");
+    ChangedPartition = true;
     if (ClassChanged) {
       moveValueToNewCongruenceClass(I, E, IClass, EClass);
       markPhiOfOpsChanged(E);
@@ -2440,32 +2455,37 @@ void OptPRE::performCongruenceFinding(Instruction *I, const Expression *E) {
 // Process the fact that Edge (from, to) is reachable, including marking
 // any newly reachable blocks and instructions for processing.
 void OptPRE::updateReachableEdge(BasicBlock *From, BasicBlock *To) {
+  bool NewReachableEdge = ReachableEdges.insert({From, To}).second;
   // Check if the Edge was reachable before.
-  if (Assumption == "balanced" || ReachableEdges.insert({From, To}).second) {
+  if (Assumption == "balanced" || NewReachableEdge) {
+    if (NewReachableEdge)
+      ChangedPartition = true;
     // If this block wasn't reachable before, all instructions are touched.
     if (ReachableBlocks.insert(To).second) {
       LLVM_DEBUG(dbgs() << "Block " << getBlockName(To)
                         << " marked reachable\n");
+      if (EnableNaiveFP)
+        return;
       const auto &InstRange = BlockInstRange.lookup(To);
       TouchedInstructions.set(InstRange.first, InstRange.second);
-    } else {
-      LLVM_DEBUG(dbgs() << "Block " << getBlockName(To)
-                        << " was reachable, but new edge {"
-                        << getBlockName(From) << "," << getBlockName(To)
-                        << "} to it found\n");
+    } else if (!EnableNaiveFP) {
+        LLVM_DEBUG(dbgs() << "Block " << getBlockName(To)
+                          << " was reachable, but new edge {"
+                          << getBlockName(From) << "," << getBlockName(To)
+                          << "} to it found\n");
 
-      // We've made an edge reachable to an existing block, which may
-      // impact predicates. Otherwise, only mark the phi nodes as touched, as
-      // they are the only thing that depend on new edges. Anything using their
-      // values will get propagated to if necessary.
-      if (MemoryAccess *MemPhi = getMemoryAccess(To))
-        TouchedInstructions.set(InstrToDFSNum(MemPhi));
+        // We've made an edge reachable to an existing block, which may
+        // impact predicates. Otherwise, only mark the phi nodes as touched, as
+        // they are the only thing that depend on new edges. Anything using their
+        // values will get propagated to if necessary.
+        if (MemoryAccess *MemPhi = getMemoryAccess(To))
+          TouchedInstructions.set(InstrToDFSNum(MemPhi));
 
-      // FIXME: We should just add a union op on a Bitvector and
-      // SparseBitVector.  We can do it word by word faster than we are doing it
-      // here.
-      for (auto InstNum : RevisitOnReachabilityChange[To])
-        TouchedInstructions.set(InstNum);
+        // FIXME: We should just add a union op on a Bitvector and
+        // SparseBitVector.  We can do it word by word faster than we are doing it
+        // here.
+        for (auto InstNum : RevisitOnReachabilityChange[To])
+          TouchedInstructions.set(InstNum);
     }
   }
 }
@@ -3318,8 +3338,10 @@ void OptPRE::verifyIterationSettled(Function &F) {
     BeforeIteration.insert({KV.first, *KV.second});
   }
 
-  TouchedInstructions.set();
-  TouchedInstructions.reset(0);
+  if (!EnableNaiveFP) {
+    TouchedInstructions.set();
+    TouchedInstructions.reset(0);
+  }
   OpSafeForPHIOfOps.clear();
   CacheIdx = 0;
   iterateTouchedInstructions();
@@ -3382,10 +3404,53 @@ void OptPRE::verifyStoreExpressions() const {
 #endif
 }
 
-// This is the main value numbering loop, it iterates over the initial touched
+// This is the main value numbering loop. 
+// This can be achieved either using a naive or worklist implementation(default).
+void OptPRE::iterateTouchedInstructions() {
+  if (EnableNaiveFP)
+    iterateTouchedInstructionsNaiveImpl();
+  else
+    iterateTouchedInstructionsSemiNaiveImpl();
+}
+
+// NaiveImpl: 
+void OptPRE::iterateTouchedInstructionsNaiveImpl() {
+ assert(TouchedInstructions.none() && "Naive Impl should not changed TouchedInstructions");
+  while (ChangedPartition) {
+    ChangedPartition = false;
+    for (auto *DTN : depth_first(DT->getRootNode())) {
+      BasicBlock *CurrBlock = DTN->getBlock();
+      if (!ReachableBlocks.count(CurrBlock))
+        continue;
+
+      // Use the appropriate cache for "OpIsSafeForPHIOfOps".
+      CacheIdx = RPOOrdering.lookup(DT->getNode(CurrBlock)) - 1;
+      updateProcessedCount(CurrBlock);
+      if (auto *MP = getMemoryAccess(CurrBlock)) {
+        LLVM_DEBUG(dbgs() << "Processing MemoryPhi " << *MP << "\n");
+          valueNumberMemoryPhi(MP);
+          updateProcessedCount(MP);
+      }
+
+      for (auto &I : *CurrBlock) {
+        if (isInstructionTriviallyDead(&I, TLI)) {
+          LLVM_DEBUG(dbgs() << "Skipping trivially dead instruction " << I
+                            << "\n");
+          markInstructionForDeletion(&I);
+          continue;
+        }
+        valueNumberInstruction(&I);
+        updateProcessedCount(&I);
+      }
+      assert(TouchedInstructions.none() && "Naive Impl should not changed TouchedInstructions");
+    }
+  }
+}
+
+// SemiNaiveImpl: it iterates over the initial touched
 // instruction set, propagating value numbers, marking things touched, etc,
 // until the set of touched instructions is completely empty.
-void OptPRE::iterateTouchedInstructions() {
+void OptPRE::iterateTouchedInstructionsSemiNaiveImpl() {
   uint64_t Iterations = 0;
   // Figure out where touchedinstructions starts
   int FirstInstr = TouchedInstructions.find_first();
@@ -3505,9 +3570,11 @@ bool OptPRE::runGVN() {
   ReachableBlocks.insert(&F.getEntryBlock());
 
   // Initialize the touched instructions to include the reachable blocks.
-  for (auto *BB : ReachableBlocks) {
-    const auto &InstRange = BlockInstRange.lookup(BB);
-    TouchedInstructions.set(InstRange.first, InstRange.second);
+  if (!EnableNaiveFP) {
+    for (auto *BB : ReachableBlocks) {
+      const auto &InstRange = BlockInstRange.lookup(BB);
+      TouchedInstructions.set(InstRange.first, InstRange.second);
+    }
   }
   
   // Use index corresponding to entry block.
