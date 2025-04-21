@@ -76,6 +76,7 @@
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/MemorySSA.h"
+#include "llvm/Analysis/MemorySSAUpdater.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Argument.h"
@@ -498,6 +499,7 @@ class OptPRE {
   AliasAnalysis *AA = nullptr;
   MemorySSA *MSSA = nullptr;
   MemorySSAWalker *MSSAWalker = nullptr;
+  MemorySSAUpdater *MSSAU = nullptr;
   AssumptionCache *AC = nullptr;
   const DataLayout &DL;
   std::unique_ptr<PredicateInfo> PredInfo;
@@ -1527,7 +1529,6 @@ OptPRE::performSymbolicLoadCoercion(Type *LoadType, Value *LoadPtr,
 
 const Expression *OptPRE::performSymbolicLoadEvaluation(Instruction *I) const {
   auto *LI = cast<LoadInst>(I);
-
   // We can eliminate in favor of non-simple loads, but we won't be able to
   // eliminate the loads themselves.
   if (!LI->isSimple())
@@ -1535,12 +1536,11 @@ const Expression *OptPRE::performSymbolicLoadEvaluation(Instruction *I) const {
 
   Value *LoadAddressLeader = lookupOperandLeader(LI->getPointerOperand());
   // Load of undef is UB.
-  if (isa<UndefValue>(LoadAddressLeader))
+  if (isa<UndefValue>(LoadAddressLeader) || isa<ConstantPointerNull>(LoadAddressLeader))
     return createConstantExpression(PoisonValue::get(LI->getType()));
   MemoryAccess *OriginalAccess = getMemoryAccess(I);
   MemoryAccess *DefiningAccess =
       MSSAWalker->getClobberingMemoryAccess(OriginalAccess);
-
   if (!MSSA->isLiveOnEntryDef(DefiningAccess)) {
     if (auto *MD = dyn_cast<MemoryDef>(DefiningAccess)) {
       Instruction *DefiningInst = MD->getMemoryInst();
@@ -2734,21 +2734,21 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
     return nullptr;
 
   SmallPtrSet<const Value *, 8> ProcessedPHIs;
-  // TODO: We don't do phi translation on memory accesses because it's
-  // complicated. For a load, we'd need to be able to simulate a new memoryuse,
-  // which we don't have a good way of doing ATM.
   auto *MemAccess = getMemoryAccess(I);
-  // If the memory operation is defined by a memory operation this block that
-  // isn't a MemoryPhi, transforming the pointer backwards through a scalar phi
-  // can't help, as it would still be killed by that memory operation.
-  if (MemAccess && !isa<MemoryPhi>(MemAccess->getDefiningAccess()) &&
-      MemAccess->getDefiningAccess()->getBlock() == I->getParent())
-    return nullptr;
+  MemoryPhi *MemPhiOp = nullptr;
+  if (MemAccess) {
+    MemPhiOp = dyn_cast<MemoryPhi>(MemAccess->getDefiningAccess());
+    // If the memory operation is defined by a memory operation in this block that
+    // isn't a MemoryPhi, transforming the pointer backwards through a scalar
+    // phi can't help, as it would still be killed by that memory operation.
+    if (!MemPhiOp && MemAccess->getDefiningAccess()->getBlock() == I->getParent())
+      return nullptr;
+  }
 
   // Convert op of phis to phi of ops
   SmallPtrSet<const Value *, 10> VisitedOps;
   SmallVector<Value *, 4> Ops(I->operand_values());
-  BasicBlock *SamePHIBlock = nullptr;
+  BasicBlock *SamePHIBlock = MemPhiOp ? MemPhiOp->getBlock() : nullptr;
   PHINode *OpPHI = nullptr;
   if (!DebugCounter::shouldExecute(PHIOfOpsCounter))
     return nullptr;
@@ -2776,15 +2776,14 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
       return nullptr;
   }
 
-  if (!OpPHI)
-    return nullptr;
-
   SmallVector<ValPair, 4> PHIOps;
   SmallPtrSet<Value *, 4> Deps;
-  auto *PHIBlock = getBlockForValue(OpPHI);
+  auto *PHIBlock = OpPHI ? getBlockForValue(OpPHI) : getBlockForValue(I);
+  assert(PHIBlock && "Should have found block for value");
+  if (pred_size(PHIBlock) < 2)
+    return nullptr;
   RevisitOnReachabilityChange[PHIBlock].reset(InstrToDFSNum(I));
-  for (unsigned PredNum = 0; PredNum < OpPHI->getNumOperands(); ++PredNum) {
-    auto *PredBB = OpPHI->getIncomingBlock(PredNum);
+  for (auto *PredBB : predecessors(PHIBlock)) {
     Value *FoundVal = nullptr;
     SmallPtrSet<Value *, 4> CurrentDeps;
     // We could just skip unreachable edges entirely but it's tricky to do
@@ -2796,8 +2795,12 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
       // Emit the temporal instruction in the predecessor basic block where the
       // corresponding value is defined.
       ValueOp->insertBefore(PredBB->getTerminator());
-      if (MemAccess)
-        TempToMemory.insert({ValueOp, MemAccess});
+      if (MemAccess) {
+        auto *NewAccess =
+            MSSAU->createMemoryAccessInBB(ValueOp, /*Definition=*/nullptr,
+                                          PredBB, MemorySSA::BeforeTerminator);
+        MSSAU->insertUse(cast<MemoryUse>(NewAccess), /*RenameUses=*/false);
+      }
       bool SafeForPHIOfOps = true;
       VisitedOps.clear();
       for (auto &Op : ValueOp->operands()) {
@@ -2825,6 +2828,8 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
       FoundVal = !SafeForPHIOfOps ? nullptr
                                   : findLeaderForInst(ValueOp, Visited,
                                                       MemAccess, I, PredBB);
+      if (MemAccess)
+        MSSAU->removeMemoryAccess(ValueOp, true);
       ValueOp->eraseFromParent();
       if (!FoundVal) {
         // We failed to find a leader for the current ValueOp, but this might
@@ -2843,7 +2848,13 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
       FoundVal = PoisonValue::get(I->getType());
       RevisitOnReachabilityChange[PHIBlock].set(InstrToDFSNum(I));
     }
-
+    // If FoundVal dominates PHIBlock just use that
+    if (!alwaysAvailable(FoundVal) && DT->dominates(getBlockForValue(FoundVal), PHIBlock)) {
+      for (auto *Dep : Deps)
+        addAdditionalUsers(Dep, I);
+      RevisitOnReachabilityChange[PHIBlock].set(InstrToDFSNum(I));
+      return createVariableExpression(FoundVal);
+    }
     PHIOps.push_back({FoundVal, PredBB});
     LLVM_DEBUG(dbgs() << "Found phi of ops operand " << *FoundVal << " in "
                       << getBlockName(PredBB) << "\n");
@@ -2852,11 +2863,19 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
     addAdditionalUsers(Dep, I);
   sortPHIOps(PHIOps);
   auto *E = performSymbolicPHIEvaluation(PHIOps, I, PHIBlock);
-  if (isa<ConstantExpression>(E) || isa<VariableExpression>(E)) {
+  bool Simpl = false;
+  if (isa<ConstantExpression>(E))
+    Simpl = true;
+  else if (auto *VE = dyn_cast<VariableExpression>(E)) {
+    auto *V = VE->getVariableValue();
+    if (isa<Argument>(V) || DT->dominates(getBlockForValue(V), PHIBlock))
+      Simpl = true;
+  }
+  if (Simpl) {
     LLVM_DEBUG(
-        dbgs()
-        << "Not creating real PHI of ops because it simplified to existing "
-           "value or constant\n");
+      dbgs()
+      << "Not creating real PHI of ops because it simplified to existing "
+        "dominating value or constant\n");
     // We have leaders for all operands, but do not create a real PHI node with
     // those leaders as operands, so the link between the operands and the
     // PHI-of-ops is not materialized in the IR. If any of those leaders
@@ -2871,7 +2890,7 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
   bool NewPHI = false;
   if (!ValuePHI) {
     ValuePHI =
-        PHINode::Create(I->getType(), OpPHI->getNumOperands(), "phiofops");
+        PHINode::Create(I->getType(), pred_size(PHIBlock), "phiofops");
     addPhiOfOps(ValuePHI, PHIBlock, I);
     NewPHI = true;
     NumGVNPHIOfOpsCreated++;
@@ -2891,6 +2910,14 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
   RevisitOnReachabilityChange[PHIBlock].set(InstrToDFSNum(I));
   LLVM_DEBUG(dbgs() << "Created phi of ops " << *ValuePHI << " for " << *I
                     << "\n");
+  // The ValuePHI was simplified to an existing value that value does no dominate I.
+  // We want to use the expression for the phi to ensure it gets materialized
+  // during eliminateInstructions.
+  if (isa<VariableExpression>(E)) {
+    bool HasBackedge = false;
+    bool OriginalOpsConstant = true;
+    return createPHIExpression(PHIOps, I, PHIBlock, HasBackedge, OriginalOpsConstant);
+  }
 
   return E;
 }
@@ -3147,7 +3174,7 @@ void OptPRE::valueNumberInstruction(Instruction *I) {
 
       // Make a phi of ops if necessary
       if (Symbolized && !isa<ConstantExpression>(Symbolized) &&
-          !isa<VariableExpression>(Symbolized) && PHINodeUses.count(I)) {
+          !isa<VariableExpression>(Symbolized)) {
         auto *PHIE = makePossiblePHIOfOps(I, Visited);
         // If we created a phi of ops, use it.
         // If we couldn't create one, make sure we don't leave one lying around
@@ -3338,10 +3365,12 @@ void OptPRE::verifyIterationSettled(Function &F) {
     BeforeIteration.insert({KV.first, *KV.second});
   }
 
-  if (!EnableNaiveFP) {
+  if (EnableNaiveFP) {
+    ChangedPartition = true;
+  } else {
     TouchedInstructions.set();
     TouchedInstructions.reset(0);
-  }
+  } 
   OpSafeForPHIOfOps.clear();
   CacheIdx = 0;
   iterateTouchedInstructions();
@@ -3519,6 +3548,8 @@ bool OptPRE::runGVN() {
   bool Changed = false;
   NumFuncArgs = F.arg_size();
   MSSAWalker = MSSA->getWalker();
+  MemorySSAUpdater Updater(MSSA);
+  MSSAU = &Updater;
   SingletonDeadExpression = new (ExpressionAllocator) DeadExpression();
 
   // Count number of instructions for sizing of hash tables, and come
