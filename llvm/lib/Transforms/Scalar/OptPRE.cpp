@@ -71,8 +71,10 @@
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/CFGPrinter.h"
+#include "llvm/Analysis/CFG.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/GlobalsModRef.h"
+#include "llvm/Analysis/InstructionPrecedenceTracking.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/MemorySSA.h"
@@ -154,6 +156,8 @@ static cl::opt<bool> EnableStoreRefinement("enable-store-refinement-optpre",
 /// Currently, the generation "phi of ops" can result in correctness issues.
 static cl::opt<bool> EnablePhiOfOps("enable-phi-of-ops-optpre", cl::init(true),
                                     cl::Hidden);
+
+static cl::opt<bool> EnablePRE("enable-pre-optpre", cl::init(true), cl::Hidden);
 
 static cl::opt<bool> EnableSimpl("enable-simpl", cl::init(true), cl::Hidden);
 
@@ -500,6 +504,7 @@ class OptPRE {
   MemorySSA *MSSA = nullptr;
   MemorySSAWalker *MSSAWalker = nullptr;
   MemorySSAUpdater *MSSAU = nullptr;
+  ImplicitControlFlowTracking *ICF = nullptr;
   AssumptionCache *AC = nullptr;
   const DataLayout &DL;
   std::unique_ptr<PredicateInfo> PredInfo;
@@ -570,6 +575,9 @@ class OptPRE {
   // numbering.  The way to test if something is using them is to check
   // RealToTemp.
   DenseSet<Instruction *> AllTempInstructions;
+
+  DenseMap<Instruction *, Instruction *> InstrToPREInsertion;
+  DenseSet<Instruction *> PREInsertedInstructions;
 
   // This is the set of instructions to revisit on a reachability change.  At
   // the end of the main iteration loop it will contain at least all the phi of
@@ -792,6 +800,8 @@ private:
                            SmallPtrSetImpl<const Value *> &);
   void addPhiOfOps(PHINode *Op, BasicBlock *BB, Instruction *ExistingValue);
   void removePhiOfOps(Instruction *I, PHINode *PHITemp);
+  void removePREInst(Instruction *I, Instruction *PREInst);
+  bool okayForPRE(Instruction *I, BasicBlock *Pred, BasicBlock *PHIBlock);
 
   // Value number an Instruction or MemoryPhi.
   void valueNumberMemoryPhi(MemoryPhi *);
@@ -2359,7 +2369,9 @@ void OptPRE::performCongruenceFinding(Instruction *I, const Expression *E) {
   // TOP.
 
   CongruenceClass *IClass = ValueToClass.lookup(I);
-  assert(IClass && "Should have found a IClass");
+  // assert(IClass && "Should have found a IClass");
+  if (!IClass)
+    IClass = TOPClass;
   // Dead classes should have been eliminated from the mapping.
   assert(!IClass->isDead() && "Found a dead class");
 
@@ -2590,6 +2602,15 @@ void OptPRE::removePhiOfOps(Instruction *I, PHINode *PHITemp) {
   // are the start of OptPRE, and which were added, but right nowt he cost of
   // tracking is more than the cost of checking for more phi of ops.
 }
+            
+
+// Remove the PRE inserted instruction for I
+void OptPRE::removePREInst(Instruction *I, Instruction *PREInst) {
+  // Cleanup partition.
+  performCongruenceFinding(PREInst, createDeadExpression());
+  InstrToPREInsertion.erase(I);
+  PREInsertedInstructions.erase(PREInst);
+}
 
 // Add PHI Op in BB as a PHI of operations version of ExistingValue.
 void OptPRE::addPhiOfOps(PHINode *Op, BasicBlock *BB,
@@ -2716,6 +2737,68 @@ Value *OptPRE::findLeaderForInst(Instruction *TransInst,
   return FoundVal;
 }
 
+bool OptPRE::okayForPRE(Instruction *CurInst, BasicBlock *PredBB, BasicBlock *PHIBB) {
+  if (!EnablePRE)
+    return false;
+  
+  if (InstrToPREInsertion.count(CurInst))
+    return false;
+  
+  if (isa<AllocaInst>(CurInst) || CurInst->isTerminator() ||
+      isa<PHINode>(CurInst) || CurInst->getType()->isVoidTy() ||
+      CurInst->mayReadFromMemory() || CurInst->mayHaveSideEffects() ||
+      isa<DbgInfoIntrinsic>(CurInst))
+    return false;
+
+  // Don't do PRE on compares. The PHI would prevent CodeGenPrepare from
+  // sinking the compare again, and it would force the code generator to
+  // move the i1 from processor flags or predicate registers into a general
+  // purpose register.
+  if (isa<CmpInst>(CurInst))
+    return false;
+
+  // Don't do PRE on GEPs. The inserted PHI would prevent CodeGenPrepare from
+  // sinking the addressing mode computation back to its uses. Extending the
+  // GEP's live range increases the register pressure, and therefore it can
+  // introduce unnecessary spills.
+  //
+  // This doesn't prevent Load PRE. PHI translation will make the GEP available
+  // to the load by moving it to the predecessor block if necessary.
+  if (isa<GetElementPtrInst>(CurInst))
+    return false;
+
+  if (auto *CallB = dyn_cast<CallBase>(CurInst)) {
+    // We don't currently value number ANY inline asm calls.
+    if (CallB->isInlineAsm())
+      return false;
+  }
+
+  if (isBackedge(PredBB, PHIBB))
+    return false;
+
+  if (!isSafeToSpeculativelyExecute(CurInst)) {
+    // It is only valid to insert a new instruction if the current instruction
+    // is always executed. An instruction with implicit control flow could
+    // prevent us from doing it. If we cannot speculate the execution, then
+    // PRE should be prohibited.
+    if (ICF->isDominatedByICFIFromSameBlock(CurInst))
+      return false;
+  }
+
+  // Don't do PRE across indirect branch.
+  if (isa<IndirectBrInst>(PredBB->getTerminator()))
+    return false;
+
+  // Critical Edge give up.
+  // TODO: Split these.
+  // TODO: We can do better the value might be fully anticipated at
+  // PreBB despite being the source of a critical edge.
+  unsigned SuccNum = GetSuccessorNumber(PredBB, PHIBB);
+  if (isCriticalEdge(PredBB->getTerminator(), SuccNum))
+    return false;
+  return true;
+}
+
 // When we see an instruction that is an op of phis, generate the equivalent phi
 // of ops form.
 const Expression *
@@ -2828,17 +2911,34 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
       FoundVal = !SafeForPHIOfOps ? nullptr
                                   : findLeaderForInst(ValueOp, Visited,
                                                       MemAccess, I, PredBB);
-      if (MemAccess)
-        MSSAU->removeMemoryAccess(ValueOp, true);
-      ValueOp->eraseFromParent();
+     
       if (!FoundVal) {
-        // We failed to find a leader for the current ValueOp, but this might
-        // change in case of the translated operands change.
-        if (SafeForPHIOfOps)
-          for (auto *Dep : CurrentDeps)
-            addAdditionalUsers(Dep, I);
+        if (!okayForPRE(I, PredBB, PHIBlock)) {
+          LLVM_DEBUG(dbgs() << "Could not find leader, and cannot insert instruction\n");
+          if (MemAccess)
+            MSSAU->removeMemoryAccess(ValueOp, true);
+          ValueOp->eraseFromParent();
 
-        return nullptr;
+          // We failed to find a leader for the current ValueOp, but this might
+          // change in case of the translated operands change.
+          if (SafeForPHIOfOps)
+            for (auto *Dep : CurrentDeps)
+              addAdditionalUsers(Dep, I);
+
+          return nullptr;
+        }
+        
+        ValueOp->setName(I->getName()+".pre");
+        ICF->insertInstructionTo(ValueOp, PredBB);
+        auto E = performSymbolicEvaluation(ValueOp, Visited);
+        performCongruenceFinding(ValueOp, E.Expr);
+        PREInsertedInstructions.insert(ValueOp);
+        InstrToPREInsertion[I] = ValueOp;
+        FoundVal = ValueOp;
+      } else {
+        if (MemAccess)
+          MSSAU->removeMemoryAccess(ValueOp, true);
+        ValueOp->eraseFromParent();
       }
       Deps.insert(CurrentDeps.begin(), CurrentDeps.end());
     } else {
@@ -2847,13 +2947,6 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
                         << " because the block is unreachable\n");
       FoundVal = PoisonValue::get(I->getType());
       RevisitOnReachabilityChange[PHIBlock].set(InstrToDFSNum(I));
-    }
-    // If FoundVal dominates PHIBlock just use that
-    if (!alwaysAvailable(FoundVal) && DT->dominates(getBlockForValue(FoundVal), PHIBlock)) {
-      for (auto *Dep : Deps)
-        addAdditionalUsers(Dep, I);
-      RevisitOnReachabilityChange[PHIBlock].set(InstrToDFSNum(I));
-      return createVariableExpression(FoundVal);
     }
     PHIOps.push_back({FoundVal, PredBB});
     LLVM_DEBUG(dbgs() << "Found phi of ops operand " << *FoundVal << " in "
@@ -3072,7 +3165,7 @@ std::pair<unsigned, unsigned> OptPRE::assignDFSNumbers(BasicBlock *B,
     // There's no need to call isInstructionTriviallyDead more than once on
     // an instruction. Therefore, once we know that an instruction is dead
     // we change its DFS number so that it doesn't get value numbered.
-    if (isInstructionTriviallyDead(&I, TLI)) {
+    if (isInstructionTriviallyDead(&I, TLI) && !PREInsertedInstructions.count(&I)) {
       InstrDFS[&I] = 0;
       LLVM_DEBUG(dbgs() << "Skipping trivially dead instruction " << I << "\n");
       markInstructionForDeletion(&I);
@@ -3180,8 +3273,11 @@ void OptPRE::valueNumberInstruction(Instruction *I) {
         // If we couldn't create one, make sure we don't leave one lying around
         if (PHIE) {
           Symbolized = PHIE;
-        } else if (auto *Op = RealToTemp.lookup(I)) {
-          removePhiOfOps(I, Op);
+        } else {
+          if (auto *Op = RealToTemp.lookup(I))
+            removePhiOfOps(I, Op);
+          if (auto *PREInst = InstrToPREInsertion.lookup(I))
+            removePREInst(I, PREInst);
         }
       }
     } else {
@@ -3543,6 +3639,8 @@ void OptPRE::iterateTouchedInstructionsSemiNaiveImpl() {
 
 // This is the main transformation entry point.
 bool OptPRE::runGVN() {
+  LLVM_DEBUG(dbgs() << "Function " << F.getName() << "\n");
+
   if (DebugCounter::isCounterSet(VNCounter))
     StartingVNCounter = DebugCounter::getCounterState(VNCounter);
   bool Changed = false;
@@ -3550,6 +3648,8 @@ bool OptPRE::runGVN() {
   MSSAWalker = MSSA->getWalker();
   MemorySSAUpdater Updater(MSSA);
   MSSAU = &Updater;
+  ImplicitControlFlowTracking ImplicitCFT;
+  ICF = &ImplicitCFT;
   SingletonDeadExpression = new (ExpressionAllocator) DeadExpression();
 
   // Count number of instructions for sizing of hash tables, and come
@@ -3615,6 +3715,19 @@ bool OptPRE::runGVN() {
   verifyMemoryCongruency();
   verifyIterationSettled(F);
   verifyStoreExpressions();
+
+  // Recompute DFS numbers to account for PRE inserted instructions.
+  ICount = 1;
+  InstrDFS.clear();
+  DFSToInstr.clear();
+  DFSToInstr.emplace_back(nullptr);
+  BlockInstRange.clear();
+  for (auto *DTN : depth_first(DT->getRootNode())) {
+    BasicBlock *B = DTN->getBlock();
+    const auto &BlockRange = assignDFSNumbers(B, ICount);
+    BlockInstRange.insert({B, BlockRange});
+    ICount += BlockRange.second - BlockRange.first;
+  }
 
   Changed |= eliminateInstructions(F);
 
