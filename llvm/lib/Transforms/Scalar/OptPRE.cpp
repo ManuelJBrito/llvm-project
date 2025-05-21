@@ -72,6 +72,7 @@
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/CFGPrinter.h"
 #include "llvm/Analysis/CFG.h"
+#include "llvm/Analysis/DomTreeUpdater.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/InstructionPrecedenceTracking.h"
@@ -107,11 +108,13 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar/GVNExpression.h"
 #include "llvm/Transforms/Utils/AssumeBundleBuilder.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/PredicateInfo.h"
 #include "llvm/Transforms/Utils/VNCoercion.h"
 #include <algorithm>
 #include <cassert>
+#include <unordered_set>
 #include <cstdint>
 #include <iterator>
 #include <map>
@@ -168,6 +171,18 @@ static cl::opt<bool> EnableMSSA("enable-mssa", cl::init(true), cl::Hidden);
 static cl::opt<std::string> Assumption("assumption", cl::init("optimistic"), cl::Hidden);
 
 static cl::opt<bool> EnableNaiveFP("enable-naive-fp", cl::init(false), cl::Hidden);
+
+static cl::list<std::string>
+    SkipFuncs("skip-funcs", cl::value_desc("function names"),
+                   cl::desc("Skip Value Numbering for functions whose name "
+                            "match this"),
+                   cl::CommaSeparated, cl::Hidden);
+
+bool isFunctionInSkipList(StringRef FunctionName) {
+  static std::unordered_set<std::string> SkipFuncNames(SkipFuncs.begin(),
+                                                        SkipFuncs.end());
+  return SkipFuncNames.count(std::string(FunctionName));
+}
 
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
@@ -802,6 +817,7 @@ private:
   void removePhiOfOps(Instruction *I, PHINode *PHITemp);
   void removePREInst(Instruction *I, Instruction *PREInst);
   bool okayForPRE(Instruction *I, BasicBlock *Pred, BasicBlock *PHIBlock);
+  bool safeForPRE(Instruction *PREInst, BasicBlock *InsertBB);
 
   // Value number an Instruction or MemoryPhi.
   void valueNumberMemoryPhi(MemoryPhi *);
@@ -829,9 +845,9 @@ private:
   bool someEquivalentDominates(const Instruction *, const Instruction *) const;
   Value *lookupOperandLeader(Value *) const;
   CongruenceClass *getClassForExpression(const Expression *E) const;
-  void performCongruenceFinding(Instruction *, const Expression *);
+  void performCongruenceFinding(Instruction *, const Expression *, bool);
   void moveValueToNewCongruenceClass(Instruction *, const Expression *,
-                                     CongruenceClass *, CongruenceClass *);
+                                     CongruenceClass *, CongruenceClass *, bool);
   void moveMemoryToNewCongruenceClass(Instruction *, MemoryAccess *,
                                       CongruenceClass *, CongruenceClass *);
   Value *getNextValueLeader(CongruenceClass *) const;
@@ -867,6 +883,7 @@ private:
   void deleteInstructionsInBlock(BasicBlock *);
   Value *findPHIOfOpsLeader(const Expression *, const Instruction *,
                             const BasicBlock *) const;
+  Value *findPREOpLeader(Value *, const BasicBlock *);
 
   // Various instruction touch utilities
   template <typename Map, typename KeyType>
@@ -947,10 +964,10 @@ static std::string getBlockName(const BasicBlock *B) {
 }
 #endif
 
-// Get a MemoryAccess for an instruction, fake or real.
+// Get a MemoryAccess for an instruction.
 MemoryUseOrDef *OptPRE::getMemoryAccess(const Instruction *I) const {
   auto *Result = MSSA->getMemoryAccess(I);
-  return Result ? Result : TempToMemory.lookup(I);
+  return Result ? Result : nullptr;
 }
 
 // Get a MemoryPhi for a basic block. These are all real.
@@ -1049,7 +1066,10 @@ PHIExpression *OptPRE::createPHIExpression(ArrayRef<ValPair> PHIOperands,
       return false;
     OriginalOpsConstant = OriginalOpsConstant && isa<Constant>(P.first);
     HasBackedge = HasBackedge || isBackedge(BB, PHIBlock);
-    return lookupOperandLeader(P.first) != I;
+    // Only do self-lookup for PHIs.
+    if (isa<PHINode>(I))
+      return lookupOperandLeader(P.first) != I;
+    return true;
   });
   std::transform(Filtered.begin(), Filtered.end(), op_inserter(E),
                  [&](const ValPair &P) -> Value * {
@@ -1572,6 +1592,11 @@ const Expression *OptPRE::performSymbolicLoadEvaluation(Instruction *I) const {
                                         DefiningAccess);
   // If our MemoryLeader is not our defining access, add a use to the
   // MemoryLeader, so that we get reprocessed when it changes.
+  //
+  // If this is a Temp evaluation for makePossiblePHIOfOps, use the original memory access.
+  // Otherwise this will create a dangling ref in MemoryToUsers.
+  if (auto *OrigMA = TempToMemory.lookup(I))
+    OriginalAccess = OrigMA;
   if (LE->getMemoryLeader() != DefiningAccess)
     addMemoryUsers(LE->getMemoryLeader(), OriginalAccess);
   return LE;
@@ -2267,7 +2292,7 @@ void OptPRE::moveMemoryToNewCongruenceClass(Instruction *I,
 // Update OldClass and NewClass for the move (including changing leaders, etc).
 void OptPRE::moveValueToNewCongruenceClass(Instruction *I, const Expression *E,
                                            CongruenceClass *OldClass,
-                                           CongruenceClass *NewClass) {
+                                           CongruenceClass *NewClass, bool isTemp = false) {
   if (I == OldClass->getNextLeader().first)
     OldClass->resetNextLeader();
 
@@ -2278,7 +2303,8 @@ void OptPRE::moveValueToNewCongruenceClass(Instruction *I, const Expression *E,
   // members of the class.
   if (NewClass->getLeader() != I &&
       NewClass->addPossibleLeader({I, InstrToDFSNum(I)})) {
-    markValueLeaderChangeTouched(NewClass);
+    if (!isTemp)
+      markValueLeaderChangeTouched(NewClass);
   }
 
   // Handle our special casing of stores.
@@ -2353,7 +2379,8 @@ void OptPRE::moveValueToNewCongruenceClass(Instruction *I, const Expression *E,
     OldClass->setLeader({getNextValueLeader(OldClass),
                          InstrToDFSNum(getNextValueLeader(OldClass))});
     OldClass->resetNextLeader();
-    markValueLeaderChangeTouched(OldClass);
+    if (!isTemp)
+      markValueLeaderChangeTouched(OldClass);
   }
 }
 
@@ -2364,7 +2391,7 @@ void OptPRE::markPhiOfOpsChanged(const Expression *E) {
 }
 
 // Perform congruence finding on a given value numbering expression.
-void OptPRE::performCongruenceFinding(Instruction *I, const Expression *E) {
+void OptPRE::performCongruenceFinding(Instruction *I, const Expression *E, bool isTemp = false) {
   // This is guaranteed to return something, since it will at least find
   // TOP.
 
@@ -2373,7 +2400,7 @@ void OptPRE::performCongruenceFinding(Instruction *I, const Expression *E) {
   if (!IClass)
     IClass = TOPClass;
   // Dead classes should have been eliminated from the mapping.
-  assert(!IClass->isDead() && "Found a dead class");
+  assert((!IClass->isDead() || isTemp) && "Found a dead class");
 
   CongruenceClass *EClass = nullptr;
   if (const auto *VE = dyn_cast<VariableExpression>(E)) {
@@ -2435,15 +2462,17 @@ void OptPRE::performCongruenceFinding(Instruction *I, const Expression *E) {
                       << *E << "\n");
     ChangedPartition = true;
     if (ClassChanged) {
-      moveValueToNewCongruenceClass(I, E, IClass, EClass);
-      markPhiOfOpsChanged(E);
+      moveValueToNewCongruenceClass(I, E, IClass, EClass, isTemp);
+      if (!isTemp)
+        markPhiOfOpsChanged(E);
     }
-
-    markUsersTouched(I);
-    if (MemoryAccess *MA = getMemoryAccess(I))
-      markMemoryUsersTouched(MA);
-    if (auto *CI = dyn_cast<CmpInst>(I))
-      markPredicateUsersTouched(CI);
+    if (!isTemp) {
+      markUsersTouched(I);
+      if (MemoryAccess *MA = getMemoryAccess(I))
+        markMemoryUsersTouched(MA);
+      if (auto *CI = dyn_cast<CmpInst>(I))
+        markPredicateUsersTouched(CI);
+    }
   }
   // If we changed the class of the store, we want to ensure nothing finds the
   // old store expression.  In particular, loads do not compare against stored
@@ -2607,9 +2636,11 @@ void OptPRE::removePhiOfOps(Instruction *I, PHINode *PHITemp) {
 // Remove the PRE inserted instruction for I
 void OptPRE::removePREInst(Instruction *I, Instruction *PREInst) {
   // Cleanup partition.
-  performCongruenceFinding(PREInst, createDeadExpression());
+  performCongruenceFinding(PREInst, createDeadExpression(), true);
   InstrToPREInsertion.erase(I);
   PREInsertedInstructions.erase(PREInst);
+  ICF->removeInstruction(PREInst);
+  MSSAU->removeMemoryAccess(PREInst);
 }
 
 // Add PHI Op in BB as a PHI of operations version of ExistingValue.
@@ -2721,8 +2752,6 @@ Value *OptPRE::findLeaderForInst(Instruction *TransInst,
   InstrDFS.erase(TransInst);
   AllTempInstructions.erase(TransInst);
   TempToBlock.erase(TransInst);
-  if (MemAccess)
-    TempToMemory.erase(TransInst);
   if (!E)
     return nullptr;
   auto *FoundVal = findPHIOfOpsLeader(E, OrigInst, PredBB);
@@ -2746,8 +2775,7 @@ bool OptPRE::okayForPRE(Instruction *CurInst, BasicBlock *PredBB, BasicBlock *PH
   
   if (isa<AllocaInst>(CurInst) || CurInst->isTerminator() ||
       isa<PHINode>(CurInst) || CurInst->getType()->isVoidTy() ||
-      CurInst->mayReadFromMemory() || CurInst->mayHaveSideEffects() ||
-      isa<DbgInfoIntrinsic>(CurInst))
+      CurInst->mayHaveSideEffects() || isa<DbgInfoIntrinsic>(CurInst))
     return false;
 
   // Don't do PRE on compares. The PHI would prevent CodeGenPrepare from
@@ -2762,8 +2790,7 @@ bool OptPRE::okayForPRE(Instruction *CurInst, BasicBlock *PredBB, BasicBlock *PH
   // GEP's live range increases the register pressure, and therefore it can
   // introduce unnecessary spills.
   //
-  // This doesn't prevent Load PRE. PHI translation will make the GEP available
-  // to the load by moving it to the predecessor block if necessary.
+  // This prevents Load PRE. 
   if (isa<GetElementPtrInst>(CurInst))
     return false;
 
@@ -2796,6 +2823,23 @@ bool OptPRE::okayForPRE(Instruction *CurInst, BasicBlock *PredBB, BasicBlock *PH
   unsigned SuccNum = GetSuccessorNumber(PredBB, PHIBB);
   if (isCriticalEdge(PredBB->getTerminator(), SuccNum))
     return false;
+  return true;
+}
+
+bool OptPRE::safeForPRE(Instruction *PREInst, BasicBlock *InsertBB) {
+  // The instruction can only be materialized if all operands are available.
+  // TODO: materialize GEP operands if it eliminates a load.
+  // TODO: value coercion
+  for (Use &U : PREInst->operands()) {
+    Value *Op = U.get();
+    if (Value *PREOpLeader = findPREOpLeader(Op, InsertBB)) {
+      // If a leader is found, we can replace the operand.
+      U.set(PREOpLeader);
+    } else {
+      // If any operand has no leader, it's not safe.
+      return false;
+    }
+  }
   return true;
 }
 
@@ -2866,7 +2910,18 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
   if (pred_size(PHIBlock) < 2)
     return nullptr;
   RevisitOnReachabilityChange[PHIBlock].reset(InstrToDFSNum(I));
-  for (auto *PredBB : predecessors(PHIBlock)) {
+  
+  // Sort the predecessors. This is to cover the case where there are two or more
+  // unavailable blocks and one dominates the other(s).
+  // This guarantees that if an insertion is made it is in the dominating block
+  // and it can be used by the dominated blocks.
+  SmallVector<BasicBlock *, 4> SortedPreds(predecessors(PHIBlock));
+  llvm::sort(SortedPreds, [&](BasicBlock *B1, BasicBlock *B2) {
+    return BlockInstRange.lookup(B1).first < BlockInstRange.lookup(B2).first;
+  });
+  for (auto *PredBB : SortedPreds) {
+    if (!DT->isReachableFromEntry(PredBB))
+      return nullptr;
     Value *FoundVal = nullptr;
     SmallPtrSet<Value *, 4> CurrentDeps;
     // We could just skip unreachable edges entirely but it's tricky to do
@@ -2883,6 +2938,7 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
             MSSAU->createMemoryAccessInBB(ValueOp, /*Definition=*/nullptr,
                                           PredBB, MemorySSA::BeforeTerminator);
         MSSAU->insertUse(cast<MemoryUse>(NewAccess), /*RenameUses=*/false);
+        TempToMemory.insert({ValueOp, MemAccess});
       }
       bool SafeForPHIOfOps = true;
       VisitedOps.clear();
@@ -2898,6 +2954,7 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
           if (getBlockForValue(ValuePHI) == PHIBlock)
             Op = ValuePHI->getIncomingValueForBlock(PredBB);
         }
+        Op = lookupOperandLeader(Op);
         // If we phi-translated the op, it must be safe.
         SafeForPHIOfOps =
             SafeForPHIOfOps &&
@@ -2911,14 +2968,16 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
       FoundVal = !SafeForPHIOfOps ? nullptr
                                   : findLeaderForInst(ValueOp, Visited,
                                                       MemAccess, I, PredBB);
-     
       if (!FoundVal) {
-        if (!okayForPRE(I, PredBB, PHIBlock)) {
+        if (!okayForPRE(I, PredBB, PHIBlock) || !safeForPRE(ValueOp, PredBB)) {
           LLVM_DEBUG(dbgs() << "Could not find leader, and cannot insert instruction\n");
+          if (auto *MA = MSSA->getMemoryAccess(ValueOp)) {
+            MSSAU->removeMemoryAccess(MA, true);
+          }
           if (MemAccess)
-            MSSAU->removeMemoryAccess(ValueOp, true);
+            TempToMemory.erase(ValueOp);
           ValueOp->eraseFromParent();
-
+          
           // We failed to find a leader for the current ValueOp, but this might
           // change in case of the translated operands change.
           if (SafeForPHIOfOps)
@@ -2931,15 +2990,19 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
         ValueOp->setName(I->getName()+".pre");
         ICF->insertInstructionTo(ValueOp, PredBB);
         auto E = performSymbolicEvaluation(ValueOp, Visited);
-        performCongruenceFinding(ValueOp, E.Expr);
+        addAdditionalUsers(E, I);
+        performCongruenceFinding(ValueOp, E.Expr, true);
         PREInsertedInstructions.insert(ValueOp);
         InstrToPREInsertion[I] = ValueOp;
         FoundVal = ValueOp;
       } else {
-        if (MemAccess)
-          MSSAU->removeMemoryAccess(ValueOp, true);
+        if (auto *MA = MSSA->getMemoryAccess(ValueOp)) {
+          MSSAU->removeMemoryAccess(MA, true);
+        }
         ValueOp->eraseFromParent();
       }
+      if (MemAccess)
+        TempToMemory.erase(ValueOp);  
       Deps.insert(CurrentDeps.begin(), CurrentDeps.end());
     } else {
       LLVM_DEBUG(dbgs() << "Skipping phi of ops operand for incoming block "
@@ -2974,8 +3037,10 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
     // PHI-of-ops is not materialized in the IR. If any of those leaders
     // changes, the PHI-of-op may change also, so we need to add the operands as
     // additional users.
-    for (auto &O : PHIOps)
-      addAdditionalUsers(O.first, I);
+    for (auto &O : PHIOps) {
+      if (O.first != I)
+        addAdditionalUsers(O.first, I);
+    }
 
     return E;
   }
@@ -3483,7 +3548,8 @@ void OptPRE::verifyIterationSettled(Function &F) {
     auto *AfterCC = KV.second;
     // Note that the classes can't change at this point, so we memoize the set
     // that are equal.
-    if (!EqualClasses.count({BeforeCC, AfterCC})) {
+    // TOP Class might be different due do temp evaluations for PRE.
+    if ((BeforeCC == TOPClass && AfterCC == TOPClass) || EqualClasses.count({BeforeCC, AfterCC})) {
       assert(BeforeCC->isEquivalentTo(AfterCC) &&
              "Value number changed after main loop completed!");
       EqualClasses.insert({BeforeCC, AfterCC});
@@ -3665,6 +3731,19 @@ bool OptPRE::runGVN() {
   // The dominator tree does guarantee that, for a given dom tree node, it's
   // parent must occur before it in the RPO ordering. Thus, we only need to sort
   // the siblings.
+
+  DomTreeUpdater DTU(DT, DomTreeUpdater::UpdateStrategy::Lazy);
+  // Merge unconditional branches, allowing PRE to catch more
+  // optimization opportunities.
+  for (BasicBlock &BB : llvm::make_early_inc_range(F)) {
+    bool removedBlock = MergeBlockIntoPredecessor(&BB, &DTU, nullptr, MSSAU, nullptr);
+    if (removedBlock)
+      ++NumGVNBlocksDeleted;
+
+    Changed |= removedBlock;
+  }
+  DTU.flush();
+
   ReversePostOrderTraversal<Function *> RPOT(&F);
   unsigned Counter = 0;
   for (auto &B : RPOT) {
@@ -3716,18 +3795,6 @@ bool OptPRE::runGVN() {
   verifyIterationSettled(F);
   verifyStoreExpressions();
 
-  // Recompute DFS numbers to account for PRE inserted instructions.
-  ICount = 1;
-  InstrDFS.clear();
-  DFSToInstr.clear();
-  DFSToInstr.emplace_back(nullptr);
-  BlockInstRange.clear();
-  for (auto *DTN : depth_first(DT->getRootNode())) {
-    BasicBlock *B = DTN->getBlock();
-    const auto &BlockRange = assignDFSNumbers(B, ICount);
-    BlockInstRange.insert({B, BlockRange});
-    ICount += BlockRange.second - BlockRange.first;
-  }
 
   Changed |= eliminateInstructions(F);
 
@@ -4034,6 +4101,8 @@ CongruenceClass *OptPRE::getClassForExpression(const Expression *E) const {
 
 // Given a value and a basic block we are trying to see if it is available in,
 // see if the value has a leader available in that block.
+// TODO : Identify value coercion opportunities.
+// Example : load i32 can be coerced to load i16.
 Value *OptPRE::findPHIOfOpsLeader(const Expression *E,
                                   const Instruction *OrigInst,
                                   const BasicBlock *BB) const {
@@ -4059,6 +4128,24 @@ Value *OptPRE::findPHIOfOpsLeader(const Expression *E,
     // Anything that isn't an instruction is always available.
     if (!MemberInst)
       return Member;
+    if (DT->dominates(getBlockForValue(MemberInst), BB))
+      return Member;
+  }
+  return nullptr;
+}
+
+// Same as findPHIOfOpsLeader but uses the value class directly instead
+// of the expression lookup.
+Value *OptPRE::findPREOpLeader(Value *PREOp, const BasicBlock *BB) {
+  if (alwaysAvailable(PREOp))
+    return PREOp;
+
+  auto *CC = ValueToClass[PREOp];
+  assert(CC && "PREOp has lower RPO therefore it should have a Class");
+
+  // TODO : Should we speed this up by keeping block level leaders?
+  for (auto *Member : *CC) {
+    auto *MemberInst = dyn_cast<Instruction>(Member);
     if (DT->dominates(getBlockForValue(MemberInst), BB))
       return Member;
   }
@@ -4130,6 +4217,19 @@ bool OptPRE::eliminateInstructions(Function &F) {
       if (ReachablePredCount.lookup(BB) != PHI->getNumIncomingValues())
         ReplaceUnreachablePHIArgs(PHI, BB);
     }
+  }
+
+  // Recompute DFS numbers to account for PRE inserted instructions.
+  unsigned ICount = 1;
+  InstrDFS.clear();
+  DFSToInstr.clear();
+  DFSToInstr.emplace_back(nullptr);
+  BlockInstRange.clear();
+  for (auto *DTN : depth_first(DT->getRootNode())) {
+    BasicBlock *B = DTN->getBlock();
+    const auto &BlockRange = assignDFSNumbers(B, ICount);
+    BlockInstRange.insert({B, BlockRange});
+    ICount += BlockRange.second - BlockRange.first;
   }
 
   // Map to store the use counts
@@ -4218,7 +4318,7 @@ bool OptPRE::eliminateInstructions(Function &F) {
             LLVM_DEBUG(dbgs() << "Inserting fully real phi of ops" << *Def
                               << " into block "
                               << getBlockName(getBlockForValue(Def)) << "\n");
-            PN->insertBefore(&DefBlock->front());
+            PN->insertBefore(DefBlock->begin());
             Def = PN;
             NumGVNPHIOfOpsEliminations++;
           }
@@ -4475,6 +4575,9 @@ PreservedAnalyses OptPREPass::run(Function &F, AnalysisManager<Function> &AM) {
   // Apparently the order in which we get these results matter for
   // the old GVN (see Chandler's comment in GVN.cpp). I'll keep
   // the same order here, just in case.
+  if (isFunctionInSkipList(F.getName()))
+    return PreservedAnalyses::all();
+
   auto &AC = AM.getResult<AssumptionAnalysis>(F);
   auto &DT = AM.getResult<DominatorTreeAnalysis>(F);
   auto &TLI = AM.getResult<TargetLibraryAnalysis>(F);
