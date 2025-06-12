@@ -22,6 +22,7 @@ define void @sort(i64 %.16, i1 %arg) {
 ; CHECK:       WhileEnd:
 ; CHECK-NEXT:    ret void
 ; CHECK:       BoundsCheckFail275:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    unreachable
 ; CHECK:       BoundsCheckOk276:
 ; CHECK-NEXT:    [[TMP7:%.*]] = icmp ult i64 [[TMP6]], [[DOT16]]

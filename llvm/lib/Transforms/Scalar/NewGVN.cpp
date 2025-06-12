@@ -556,6 +556,10 @@ class NewGVN {
   // created that they are known equivalent to.
   DenseMap<const Value *, PHINode *> RealToTemp;
 
+  // When evaluating a phi-of-ops operand over a backedge, ensure we don't use
+  // predinfo from something that comes later.
+  bool isBackedgeEval = false;
+
   // In order to know when we should re-process instructions that have
   // phi-of-ops, we track the set of expressions that they needed as
   // leaders. When we discover new leaders for those expressions, we process the
@@ -831,7 +835,7 @@ private:
 
   // Congruence finding.
   bool someEquivalentDominates(const Instruction *, const Instruction *) const;
-  Value *lookupOperandLeader(Value *) const;
+  Value *lookupOperandLeader(Value *, bool isBackedge = false) const;
   CongruenceClass *getClassForExpression(const Expression *E) const;
   void performCongruenceFinding(Instruction *, const Expression *);
   void moveValueToNewCongruenceClass(Instruction *, const Expression *,
@@ -1092,7 +1096,7 @@ PHIExpression *NewGVN::createPHIExpression(ArrayRef<ValPair> PHIOperands,
     return lookupOperandLeader(P.first) != I;
   });
   llvm::transform(Filtered, op_inserter(E), [&](const ValPair &P) -> Value * {
-    return lookupOperandLeader(P.first);
+    return lookupOperandLeader(P.first, isBackedge(P.second, PHIBlock));
   });
   return E;
 }
@@ -1380,15 +1384,19 @@ bool NewGVN::someEquivalentDominates(const Instruction *Inst,
 
 // See if we have a congruence class and leader for this operand, and if so,
 // return it. Otherwise, return the operand itself.
-Value *NewGVN::lookupOperandLeader(Value *V) const {
+Value *NewGVN::lookupOperandLeader(Value *V, bool isBackedge) const {
   CongruenceClass *CC = ValueToClass.lookup(V);
+  // Real or Temp phi backedge. 
+  isBackedge |= isBackedgeEval;
   if (CC) {
     // Everything in TOP is represented by poison, as it can be any value.
     // We do have to make sure we get the type right though, so we can't set the
     // RepLeader to poison.
     if (CC == TOPClass)
       return PoisonValue::get(V->getType());
-    return CC->getStoredValue() ? CC->getStoredValue() : CC->getLeader();
+    Value *Orig = getCopyOf(V);
+    return CC->getStoredValue() ? CC->getStoredValue()
+                                : (Orig && isBackedge ? Orig : CC->getLeader());
   }
 
   return V;
@@ -2002,11 +2010,11 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
               return ExprResult::some(
                   createConstantExpression(ConstantInt::getTrue(CI->getType())),
                   PI);
-            }
           }
         }
       }
     }
+  }
   // Create expression will take care of simplifyCmpInst
   return createExpression(I);
 }
@@ -2879,9 +2887,14 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
       // constant.  For anything where that is true, and unsafe, we should
       // have made a phi-of-ops (or value numbered it equivalent to something)
       // for the pieces already.
+
+      // When evaluating over a backedge we have to be careful not to break
+      // monotonicity.
+      isBackedgeEval = isBackedge(PredBB, PHIBlock);
       FoundVal = !SafeForPHIOfOps ? nullptr
                                   : findLeaderForInst(ValueOp, Visited,
                                                       MemAccess, I, PredBB);
+      isBackedgeEval = false;
       ValueOp->eraseFromParent();
       if (!FoundVal) {
         // We failed to find a leader for the current ValueOp, but this might
@@ -3969,7 +3982,7 @@ void NewGVN::updateIR(Instruction *I, CongruenceClass *CC) {
       SnapshotMD[ILeader] = Metadata;
     }
 
-    patchAndReplaceAllUsesWith(I, Leader); 
+    patchAndReplaceAllUsesWith(I, Leader);
   }
 }
 

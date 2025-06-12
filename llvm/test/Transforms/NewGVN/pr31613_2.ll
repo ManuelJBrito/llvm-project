@@ -20,9 +20,12 @@ define hidden void @barrier() align 2 {
 ; CHECK-NEXT:    [[CMP_PHI1_SUB:%.*]] = icmp eq i64 [[PHI_ONE]], [[SUB]]
 ; CHECK-NEXT:    br i1 [[CMP_PHI1_SUB]], label [[SECOND:%.*]], label [[FIRST]]
 ; CHECK:       second:
+; CHECK-NEXT:    [[PHI_TWO:%.*]] = phi i64 [ [[SUB]], [[THIRD]] ], [ [[SUB]], [[FIRST]] ]
 ; CHECK-NEXT:    br label [[THIRD]]
 ; CHECK:       third:
-; CHECK-NEXT:    br i1 false, label [[SECOND]], label [[FIRST]]
+; CHECK-NEXT:    [[INC:%.*]] = add i64 [[PHI_TWO]], 1
+; CHECK-NEXT:    [[CMP_INC_SUB:%.*]] = icmp eq i64 [[INC]], [[SUB]]
+; CHECK-NEXT:    br i1 [[CMP_INC_SUB]], label [[SECOND]], label [[FIRST]]
 ;
 entry:
   %callg = tail call i64 @g()
@@ -119,7 +122,10 @@ define void @barrier3(i64 %arg) {
 ; CHECK-NEXT:    [[CMP1:%.*]] = icmp eq i64 [[PHI1]], -1
 ; CHECK-NEXT:    br i1 [[CMP1]], label [[SECONDLOOP:%.*]], label [[FIRSTLOOP]]
 ; CHECK:       secondloop:
-; CHECK-NEXT:    call void @llvm.assume(i1 false)
+; CHECK-NEXT:    [[PHI2:%.*]] = phi i64 [ -1, [[SECONDLOOP]] ], [ -1, [[FIRSTLOOP]] ]
+; CHECK-NEXT:    [[INC:%.*]] = add i64 [[PHI2]], 1
+; CHECK-NEXT:    [[CMP2:%.*]] = icmp eq i64 [[INC]], -1
+; CHECK-NEXT:    call void @llvm.assume(i1 [[CMP2]])
 ; CHECK-NEXT:    br label [[SECONDLOOP]]
 ;
 entry:
