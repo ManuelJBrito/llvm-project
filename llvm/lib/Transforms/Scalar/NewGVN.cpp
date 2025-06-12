@@ -154,6 +154,8 @@ static cl::opt<bool> EnableStoreRefinement("enable-store-refinement",
 static cl::opt<bool> EnablePhiOfOps("enable-phi-of-ops", cl::init(true),
                                     cl::Hidden);
 
+static cl::opt<bool> EnableVerifyMonotone("verify-monotone", cl::init(false),
+                                          cl::Hidden);
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
 //===----------------------------------------------------------------------===//
@@ -533,6 +535,7 @@ class NewGVN {
   // Value Mappings.
   DenseMap<Value *, CongruenceClass *> ValueToClass;
   DenseMap<Value *, const Expression *> ValueToExpression;
+  DenseMap<Value *, Value *> ValueToLeader; 
 
   // Value PHI handling, used to make equivalence between phi(op, op) and
   // op(phi, phi).
@@ -884,6 +887,7 @@ private:
   void verifyMemoryCongruency() const;
   void verifyIterationSettled(Function &F);
   void verifyStoreExpressions() const;
+  void verifyMonotone(Value *I, Value *Leader);
   bool singleReachablePHIPath(SmallPtrSet<const MemoryAccess *, 8> &,
                               const MemoryAccess *, const MemoryAccess *) const;
   BasicBlock *getBlockForValue(Value *V) const;
@@ -1939,52 +1943,52 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
   // something from a previous comparison.
   for (const auto &Op : CI->operands()) {
     auto *PI = PredInfo->getPredicateInfoFor(Op);
-    if (const auto *PBranch = dyn_cast_or_null<PredicateBranch>(PI)) {
-      if (PI == LastPredInfo)
-        continue;
-      LastPredInfo = PI;
+      if (const auto *PBranch = dyn_cast_or_null<PredicateBranch>(PI)) {
+        if (PI == LastPredInfo)
+          continue;
+        LastPredInfo = PI;
       // In phi of ops cases, we may have predicate info that we are evaluating
       // in a different context.
-      if (!DT->dominates(PBranch->To, I->getParent()))
-        continue;
-      // TODO: Along the false edge, we may know more things too, like
-      // icmp of
-      // same operands is false.
-      // TODO: We only handle actual comparison conditions below, not
-      // and/or.
-      auto *BranchCond = dyn_cast<CmpInst>(PBranch->Condition);
-      if (!BranchCond)
-        continue;
-      auto *BranchOp0 = lookupOperandLeader(BranchCond->getOperand(0));
-      auto *BranchOp1 = lookupOperandLeader(BranchCond->getOperand(1));
-      auto BranchPredicate = BranchCond->getPredicate();
-      if (shouldSwapOperands(BranchOp0, BranchOp1)) {
-        std::swap(BranchOp0, BranchOp1);
-        BranchPredicate = BranchCond->getSwappedPredicate();
-      }
-      if (BranchOp0 == Op0 && BranchOp1 == Op1) {
-        if (PBranch->TrueEdge) {
-          // If we know the previous predicate is true and we are in the true
-          // edge then we may be implied true or false.
-          if (auto R = ICmpInst::isImpliedByMatchingCmp(BranchPredicate,
-                                                        OurPredicate)) {
-            auto *C = ConstantInt::getBool(CI->getType(), *R);
-            return ExprResult::some(createConstantExpression(C), PI);
-          }
-        } else {
-          // Just handle the ne and eq cases, where if we have the same
-          // operands, we may know something.
-          if (BranchPredicate == OurPredicate) {
+        if (!DT->dominates(PBranch->To, I->getParent()))
+          continue;
+        // TODO: Along the false edge, we may know more things too, like
+        // icmp of
+        // same operands is false.
+        // TODO: We only handle actual comparison conditions below, not
+        // and/or.
+        auto *BranchCond = dyn_cast<CmpInst>(PBranch->Condition);
+        if (!BranchCond)
+          continue;
+        auto *BranchOp0 = lookupOperandLeader(BranchCond->getOperand(0));
+        auto *BranchOp1 = lookupOperandLeader(BranchCond->getOperand(1));
+        auto BranchPredicate = BranchCond->getPredicate();
+        if (shouldSwapOperands(BranchOp0, BranchOp1)) {
+          std::swap(BranchOp0, BranchOp1);
+          BranchPredicate = BranchCond->getSwappedPredicate();
+        }
+        if (BranchOp0 == Op0 && BranchOp1 == Op1) {
+          if (PBranch->TrueEdge) {
+            // If we know the previous predicate is true and we are in the true
+            // edge then we may be implied true or false.
+            if (auto R = ICmpInst::isImpliedByMatchingCmp(BranchPredicate,
+                                                          OurPredicate)) {
+              auto *C = ConstantInt::getBool(CI->getType(), *R);
+              return ExprResult::some(createConstantExpression(C), PI);
+            }
+          } else {
+            // Just handle the ne and eq cases, where if we have the same
+            // operands, we may know something.
+            if (BranchPredicate == OurPredicate) {
             // Same predicate, same ops,we know it was false, so this is false.
             return ExprResult::some(
                 createConstantExpression(ConstantInt::getFalse(CI->getType())),
-                PI);
-          } else if (BranchPredicate ==
-                     CmpInst::getInversePredicate(OurPredicate)) {
+                                      PI);
+            } else if (BranchPredicate ==
+                       CmpInst::getInversePredicate(OurPredicate)) {
             // Inverse predicate, we know the other was false, so this is true.
-            return ExprResult::some(
-                createConstantExpression(ConstantInt::getTrue(CI->getType())),
-                PI);
+              return ExprResult::some(
+                  createConstantExpression(ConstantInt::getTrue(CI->getType())),
+                  PI);
           }
         }
       }
@@ -2437,6 +2441,7 @@ void NewGVN::performCongruenceFinding(Instruction *I, const Expression *E) {
     if (ClassChanged) {
       moveValueToNewCongruenceClass(I, E, IClass, EClass);
       markPhiOfOpsChanged(E);
+      verifyMonotone(I, EClass->getLeader());
     }
 
     markUsersTouched(I);
@@ -3385,6 +3390,33 @@ void NewGVN::verifyStoreExpressions() const {
 #endif
 }
 
+// Verify that the leader for I is increasing monotonically, in relation
+// to the expression lattice where a < b means that a is simpler than b.
+// NewGVN being an optimistic algorithm should have the maximum number of simplifications
+// in the first iteration, and successive iterations should undo the optimism.
+// Monotonicity + finite lattice => termination
+void NewGVN::verifyMonotone(Value *I, Value *Leader) {
+#ifndef NDEBUG
+  if (EnableVerifyMonotone) {
+    Value *OldLeader = PoisonValue::get(I->getType());
+    // Get previous leader and update the mapping.
+    auto it = ValueToLeader.find(I);
+    if (it != ValueToLeader.end()) {
+      OldLeader = it->second;
+      ValueToLeader[I] = Leader;
+    }
+
+    unsigned BeforeRank = getRank(OldLeader);
+    unsigned AfterRank = getRank(Leader);
+    // Different constants/constantExpr will have the same rank.
+    if (BeforeRank == AfterRank && (BeforeRank == 2 || BeforeRank == 3))
+      assert(OldLeader == Leader && "Monotonicity violation : different constants");
+    else
+      assert(BeforeRank <= AfterRank && "Monotonicity violation");
+  }
+#endif
+}
+
 // This is the main value numbering loop, it iterates over the initial touched
 // instruction set, propagating value numbers, marking things touched, etc,
 // until the set of touched instructions is completely empty.
@@ -3723,7 +3755,7 @@ void NewGVN::convertClassToLoadsAndStores(
 }
 
 static void patchAndReplaceAllUsesWith(Instruction *I, Value *Repl) {
-  patchReplacementInstruction(I, Repl);
+    patchReplacementInstruction(I, Repl);
   I->replaceAllUsesWith(Repl);
 }
 
@@ -4212,11 +4244,11 @@ unsigned int NewGVN::getRank(const Value *V) const {
   if (isa<ConstantExpr>(V))
     return 3;
   if (isa<PoisonValue>(V))
-    return 1;
-  if (isa<UndefValue>(V))
-    return 2;
-  if (isa<Constant>(V))
     return 0;
+  if (isa<UndefValue>(V))
+    return 1;
+  if (isa<Constant>(V))
+    return 2;
   if (auto *A = dyn_cast<Argument>(V))
     return 4 + A->getArgNo();
 
