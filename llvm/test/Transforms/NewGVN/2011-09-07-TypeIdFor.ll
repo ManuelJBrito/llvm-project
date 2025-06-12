@@ -49,18 +49,16 @@ define void @_Z3foov() uwtable personality ptr @__gxx_personality_v0 {
 ; CHECK-NEXT:    br label [[RETURN]]
 ; CHECK:       next2:
 ; CHECK-NEXT:    call void @_Z7cleanupv()
-; CHECK-NEXT:    br i1 [[TMP1]], label [[PPAD3:%.*]], label [[NEXT3:%.*]]
+; CHECK-NEXT:    br i1 false, label [[PPAD3:%.*]], label [[NEXT3:%.*]]
 ; CHECK:       next3:
-; CHECK-NEXT:    br i1 [[TMP2]], label [[PPAD4:%.*]], label [[UNWIND:%.*]]
+; CHECK-NEXT:    br i1 false, label [[PPAD4:%.*]], label [[UNWIND:%.*]]
 ; CHECK:       unwind:
 ; CHECK-NEXT:    resume { ptr, i32 } [[TMP0]]
 ; CHECK:       ppad3:
-; CHECK-NEXT:    [[TMP4:%.*]] = tail call ptr @__cxa_begin_catch(ptr [[EXC_PTR2_I]]) #[[ATTR1]]
-; CHECK-NEXT:    tail call void @__cxa_end_catch() #[[ATTR1]]
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label [[RETURN]]
 ; CHECK:       ppad4:
-; CHECK-NEXT:    [[D_2080_5:%.*]] = tail call ptr @__cxa_begin_catch(ptr [[EXC_PTR2_I]]) #[[ATTR1]]
-; CHECK-NEXT:    tail call void @__cxa_end_catch() #[[ATTR1]]
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label [[RETURN]]
 ; CHECK:       return:
 ; CHECK-NEXT:    ret void

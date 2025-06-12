@@ -515,7 +515,6 @@ declare ptr @wombat()
 ;; recompute the phi of ops instruction (tmp5), the value number will
 ;; change in the verifier, as it goes from a constant value to a
 ;; phi of [true, false]
-;; FIXME : losing predinfo after IR update.
 define void @test12(ptr %p) {
 ; CHECK-LABEL: @test12(
 ; CHECK-NEXT:  bb:
@@ -525,7 +524,7 @@ define void @test12(ptr %p) {
 ; CHECK:       bb2:
 ; CHECK-NEXT:    br label [[BB3:%.*]]
 ; CHECK:       bb3:
-; CHECK-NEXT:    br i1 [[TMP1]], label [[BB6:%.*]], label [[BB7:%.*]]
+; CHECK-NEXT:    br i1 true, label [[BB6:%.*]], label [[BB7:%.*]]
 ; CHECK:       bb6:
 ; CHECK-NEXT:    br label [[BB7]]
 ; CHECK:       bb7:

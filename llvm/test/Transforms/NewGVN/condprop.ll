@@ -219,16 +219,14 @@ different:
   ret i1 %cmp3
 }
 
-;; FIXME : losing predinfo after IR update.
 define i1 @test7_fp(float %x, float %y) {
 ; CHECK-LABEL: @test7_fp(
 ; CHECK-NEXT:    [[CMP:%.*]] = fcmp ogt float [[X:%.*]], [[Y:%.*]]
 ; CHECK-NEXT:    br i1 [[CMP]], label [[SAME:%.*]], label [[DIFFERENT:%.*]]
 ; CHECK:       same:
-; CHECK-NEXT:    [[CMP2:%.*]] = fcmp ule float [[X]], [[Y]]
-; CHECK-NEXT:    ret i1 [[CMP2]]
+; CHECK-NEXT:    ret i1 false
 ; CHECK:       different:
-; CHECK-NEXT:    ret i1 [[CMP]]
+; CHECK-NEXT:    ret i1 false
 ;
   %cmp = fcmp ogt float %x, %y
   br i1 %cmp, label %same, label %different

@@ -341,6 +341,10 @@ public:
   // Forward propagation info
   const Expression *getDefiningExpr() const { return DefiningExpr; }
 
+  // PredicateInfo for the CongruenceClass
+  void insertPI(Instruction *SSACopy) {ClassPredInfo.insert(SSACopy);}
+  MemberSet getClassPI() {return ClassPredInfo;}
+
   // Value member set
   bool empty() const { return Members.empty(); }
   unsigned size() const { return Members.size(); }
@@ -433,6 +437,9 @@ private:
   // Number of stores in this congruence class.
   // This is used so we can detect store equivalence changes properly.
   int StoreCount = 0;
+
+  // Class members with Predicate Info.
+  MemberSet ClassPredInfo;
 };
 
 } // end anonymous namespace
@@ -1974,7 +1981,13 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
   // See if our operands have predicate info, so that we may be able to derive
   // something from a previous comparison.
   for (const auto &Op : CI->operands()) {
-    auto *PI = PredInfo->getPredicateInfoFor(Op);
+    CongruenceClass *CC = ValueToClass.lookup(Op);
+    if (!CC)
+      continue;
+    for (auto *MemberPI : CC->getClassPI()) {
+      auto *PI = getRank(MemberPI) < getRank(CI)
+                     ? PredInfo->getPredicateInfoFor(MemberPI)
+                     : nullptr;
       if (const auto *PBranch = dyn_cast_or_null<PredicateBranch>(PI)) {
         if (PI == LastPredInfo)
           continue;
@@ -2021,6 +2034,7 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
               return ExprResult::some(
                   createConstantExpression(ConstantInt::getTrue(CI->getType())),
                   PI);
+            }
           }
         }
       }
@@ -2388,6 +2402,11 @@ void NewGVN::moveValueToNewCongruenceClass(Instruction *I, const Expression *E,
   if (InstMA)
     moveMemoryToNewCongruenceClass(I, InstMA, OldClass, NewClass);
   ValueToClass[I] = NewClass;
+
+  // Add PredInfo to class.
+  if (getCopyOf(I))
+    NewClass->insertPI(I);
+
   // See if we destroyed the class or need to swap leaders.
   if (OldClass->empty() && OldClass != TOPClass) {
     if (OldClass->getDefiningExpr()) {

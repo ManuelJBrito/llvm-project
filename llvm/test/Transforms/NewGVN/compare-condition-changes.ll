@@ -50,7 +50,6 @@ define void @test2(i1 %c) {
 ; CHECK-NEXT:    [[C_2:%.*]] = icmp eq i32 [[P_2]], 123
 ; CHECK-NEXT:    br i1 [[C_2]], label [[EXIT:%.*]], label [[LOOP_HEADER]]
 ; CHECK:       exit:
-; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    ret void
 ;
 entry:
