@@ -831,6 +831,9 @@ private:
                                                  BasicBlock *PHIBlock) const;
   const Expression *performSymbolicAggrValueEvaluation(Instruction *) const;
   ExprResult performSymbolicCmpEvaluation(Instruction *) const;
+  ExprResult PIEvalHelper(IntrinsicInst *I, const PredicateBase *PI,
+                          CmpInst::Predicate Predicate, Value *Op0,
+                          Value *Op1) const;
   ExprResult performSymbolicPredicateInfoEvaluation(IntrinsicInst *) const;
 
   // Congruence finding.
@@ -1623,22 +1626,10 @@ const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) const {
   return LE;
 }
 
-NewGVN::ExprResult
-NewGVN::performSymbolicPredicateInfoEvaluation(IntrinsicInst *I) const {
-  auto *PI = PredInfo->getPredicateInfoFor(I);
-  if (!PI)
-    return ExprResult::none();
-
-  LLVM_DEBUG(dbgs() << "Found predicate info from instruction !\n");
-
-  const std::optional<PredicateConstraint> &Constraint = PI->getConstraint();
-  if (!Constraint)
-    return ExprResult::none();
-
-  CmpInst::Predicate Predicate = Constraint->Predicate;
-  Value *CmpOp0 = I->getOperand(0);
-  Value *CmpOp1 = Constraint->OtherOp;
-
+NewGVN::ExprResult NewGVN::PIEvalHelper(IntrinsicInst *I,
+                                        const PredicateBase *PI,
+                                        CmpInst::Predicate Predicate,
+                                        Value *CmpOp0, Value *CmpOp1) const {
   Value *FirstOp = lookupOperandLeader(CmpOp0);
   Value *SecondOp = lookupOperandLeader(CmpOp1);
   Value *AdditionallyUsedValue = CmpOp0;
@@ -1659,6 +1650,26 @@ NewGVN::performSymbolicPredicateInfoEvaluation(IntrinsicInst *I) const {
       !cast<ConstantFP>(FirstOp)->isZero())
     return ExprResult::some(createConstantExpression(cast<Constant>(FirstOp)),
                             AdditionallyUsedValue, PI);
+
+  return ExprResult::none();
+}
+
+NewGVN::ExprResult
+NewGVN::performSymbolicPredicateInfoEvaluation(IntrinsicInst *I) const {
+  auto *PI = PredInfo->getPredicateInfoFor(I);
+  if (!PI)
+    return ExprResult::none();
+
+  LLVM_DEBUG(dbgs() << "Found predicate info from instruction !\n");
+
+  const std::optional<PredicateConstraint> &Constraint = PI->getConstraint();
+  if (Constraint)
+    return PIEvalHelper(I, PI, Constraint->Predicate, I->getOperand(0),
+                        Constraint->OtherOp);
+
+  if (auto *Cond = dyn_cast<CmpInst>(PI->Condition))
+    return PIEvalHelper(I, PI, Cond->getPredicate(), Cond->getOperand(0),
+                        Cond->getOperand(1));
 
   return ExprResult::none();
 }

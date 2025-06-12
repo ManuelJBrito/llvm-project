@@ -286,7 +286,7 @@ ret:
 
 declare i32 @yogibar()
 
-;; FIXME : Should simplify to X. 
+;; FIXME : Should simplify to X.
 define i32 @test11(i32 %x) {
 ; CHECK-LABEL: @test11(
 ; CHECK-NEXT:    [[V0:%.*]] = call i32 @yogibar()
@@ -299,7 +299,7 @@ define i32 @test11(i32 %x) {
 ; CHECK-NEXT:    [[CMP2:%.*]] = icmp eq i32 [[X:%.*]], [[V0]]
 ; CHECK-NEXT:    br i1 [[CMP2]], label [[COND_TRUE2:%.*]], label [[NEXT2:%.*]]
 ; CHECK:       cond_true2:
-; CHECK-NEXT:    ret i32 [[V0]]
+; CHECK-NEXT:    ret i32 [[X]]
 ; CHECK:       next2:
 ; CHECK-NEXT:    ret i32 0
 ;
