@@ -2002,11 +2002,11 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
               return ExprResult::some(
                   createConstantExpression(ConstantInt::getTrue(CI->getType())),
                   PI);
+            }
           }
         }
       }
     }
-  }
   // Create expression will take care of simplifyCmpInst
   return createExpression(I);
 }
@@ -3818,6 +3818,7 @@ void NewGVN::convertClassToLoadsAndStores(
 }
 
 static void patchAndReplaceAllUsesWith(Instruction *I, Value *Repl) {
+  if (!match(I, m_Intrinsic<Intrinsic::ssa_copy>()))
     patchReplacementInstruction(I, Repl);
   I->replaceAllUsesWith(Repl);
 }
