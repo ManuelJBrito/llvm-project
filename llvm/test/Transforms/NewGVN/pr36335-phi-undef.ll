@@ -9,8 +9,7 @@ define void @main(i1 %c1, i1 %c2, i32 %x) {
 ; CHECK-NEXT:    br i1 [[C1:%.*]], label [[L:%.*]], label [[END:%.*]]
 ; CHECK:       L:
 ; CHECK-NEXT:    [[XOR:%.*]] = xor i32 [[X:%.*]], -1
-; CHECK-NEXT:    [[NEG:%.*]] = xor i32 [[XOR]], -1
-; CHECK-NEXT:    call void @foo(i32 [[NEG]])
+; CHECK-NEXT:    call void @foo(i32 [[X]])
 ; CHECK-NEXT:    br label [[L]]
 ; CHECK:       end:
 ; CHECK-NEXT:    ret void

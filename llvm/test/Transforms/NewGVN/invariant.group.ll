@@ -112,11 +112,9 @@ define void @indirectLoads() {
 ; CHECK-NEXT:    store ptr [[CALL]], ptr [[A]], align 8
 ; CHECK-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[VTABLE]], align 8
 ; CHECK-NEXT:    call void [[TMP0]](ptr [[CALL]])
-; CHECK-NEXT:    [[VTABLE2:%.*]] = load ptr, ptr [[CALL]], align 8, !invariant.group [[META0]]
-; CHECK-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[VTABLE2]], align 8
+; CHECK-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[VTABLE]], align 8
 ; CHECK-NEXT:    call void [[TMP1]](ptr [[CALL]])
-; CHECK-NEXT:    [[VTABLE4:%.*]] = load ptr, ptr [[CALL]], align 8, !invariant.group [[META0]]
-; CHECK-NEXT:    [[TMP2:%.*]] = load ptr, ptr [[VTABLE4]], align 8
+; CHECK-NEXT:    [[TMP2:%.*]] = load ptr, ptr [[VTABLE]], align 8
 ; CHECK-NEXT:    call void [[TMP2]](ptr [[CALL]])
 ; CHECK-NEXT:    [[TMP3:%.*]] = load ptr, ptr [[VTABLE]], align 8
 ; CHECK-NEXT:    call void [[TMP3]](ptr [[CALL]])

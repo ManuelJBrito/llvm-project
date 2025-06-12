@@ -12,8 +12,7 @@ define i32 @unsafe(i1 %arg, i32 %arg1) {
 ; CHECK-NEXT:    br label %[[BB6]]
 ; CHECK:       [[BB6]]:
 ; CHECK-NEXT:    [[PHI:%.*]] = phi i32 [ [[ARG1]], %[[BB5]] ], [ 0, %[[BB4]] ]
-; CHECK-NEXT:    [[SREM:%.*]] = srem i32 [[ARG1]], [[PHI]]
-; CHECK-NEXT:    store i32 [[SREM]], ptr null, align 4
+; CHECK-NEXT:    store i32 0, ptr null, align 4
 ; CHECK-NEXT:    br i1 [[ARG]], label %[[BB8:.*]], label %[[BB7:.*]]
 ; CHECK:       [[BB7]]:
 ; CHECK-NEXT:    br i1 true, label %[[BB8]], label %[[BB5]]

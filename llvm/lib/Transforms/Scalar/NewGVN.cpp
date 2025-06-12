@@ -671,6 +671,15 @@ class NewGVN {
   // Deletion info.
   SmallPtrSet<Instruction *, 8> InstructionsToErase;
 
+  // Checkpointing data structures.
+  DenseMap<Instruction *, SmallPtrSet<Use *, 8>> Snapshot;
+  DenseMap<Instruction *, SmallVector<std::pair<unsigned, MDNode *>, 4>>
+      SnapshotMD;
+
+  // Set of rolled back instructions. This is for the case where a rolledback
+  // instruction ends up not changing classes, the uses still need to be
+  // udpated.
+  SmallPtrSet<Value *, 8> RolledBack;
 public:
   NewGVN(Function &F, DominatorTree *DT, AssumptionCache *AC,
          TargetLibraryInfo *TLI, AliasAnalysis *AA, MemorySSA *MSSA,
@@ -876,6 +885,10 @@ private:
   void addMemoryUsers(const MemoryAccess *To, MemoryAccess *U) const;
   void addAdditionalUsers(Value *To, Value *User) const;
   void addAdditionalUsers(ExprResult &Res, Instruction *User) const;
+
+  // Checkpointing.
+  void updateIR(Instruction *, CongruenceClass *);
+  void rollbackIR();
 
   // Main loop of value numbering
   void iterateTouchedInstructions();
@@ -2117,10 +2130,41 @@ void NewGVN::addAdditionalUsers(ExprResult &Res, Instruction *User) const {
 }
 
 void NewGVN::markUsersTouched(Value *V) {
-  // Now mark the users as touched.
-  for (auto *User : V->users()) {
-    assert(isa<Instruction>(User) && "Use of value not within an instruction?");
-    TouchedInstructions.set(InstrToDFSNum(User));
+  SmallVector<Instruction *, 8> Worklist;
+  DenseSet<Instruction *> Visited;
+  // Start with the users of V
+  for (User *U : V->users()) {
+    if (Instruction *I = dyn_cast<Instruction>(U)) {
+      Worklist.push_back(I);
+    }
+  }
+
+  // Traverse users recursively
+  while (!Worklist.empty()) {
+    Instruction *Cur = Worklist.pop_back_val();
+
+    if (!Visited.insert(Cur).second)
+      continue;
+    TouchedInstructions.set(InstrToDFSNum(Cur));
+
+    for (User *U : Cur->users()) {
+      if (Instruction *UserInst = dyn_cast<Instruction>(U)) {
+        Worklist.push_back(UserInst);
+        for (Use &Op : U->operands()) {
+          if (auto *OpInst = dyn_cast<Instruction>(Op.get())) {
+            if (OpInst != Cur)
+            Worklist.push_back(OpInst);
+          }
+        }
+      }
+    }
+    if (isa<StoreInst>(Cur)) {
+      auto *MA = getMemoryAccess(Cur);
+      for (const auto *U : MA->users()) {
+        if (auto *UseU = dyn_cast<MemoryUseOrDef>(U))
+          Worklist.push_back(UseU->getMemoryInst());
+      }
+    }
   }
   touchAndErase(AdditionalUsers, V);
 }
@@ -2449,7 +2493,9 @@ void NewGVN::performCongruenceFinding(Instruction *I, const Expression *E) {
       markMemoryUsersTouched(MA);
     if (auto *CI = dyn_cast<CmpInst>(I))
       markPredicateUsersTouched(CI);
-  }
+    updateIR(I, EClass);
+  } else if (RolledBack.erase(I))
+    updateIR(I, EClass);
   // If we changed the class of the store, we want to ensure nothing finds the
   // old store expression.  In particular, loads do not compare against stored
   // value, so they will find old store expressions (and associated class
@@ -3319,10 +3365,12 @@ void NewGVN::verifyIterationSettled(Function &F) {
   std::map<const Value *, CongruenceClass> BeforeIteration;
 
   for (auto &KV : ValueToClass) {
-    if (auto *I = dyn_cast<Instruction>(KV.first))
+    if (auto *I = dyn_cast<Instruction>(KV.first)) {
       // Skip unused/dead instructions.
       if (InstrToDFSNum(I) == 0)
         continue;
+      RolledBack.insert(I);
+    }
     BeforeIteration.insert({KV.first, *KV.second});
   }
 
@@ -3434,6 +3482,7 @@ void NewGVN::iterateTouchedInstructions() {
     // TODO: As we hit a new block, we should push and pop equalities into a
     // table lookupOperandLeader can use, to catch things PredicateInfo
     // might miss, like edge-only equivalences.
+    unsigned LastInstrNum = 1;
     for (unsigned InstrNum : TouchedInstructions.set_bits()) {
 
       // This instruction was found to be dead. We don't bother looking
@@ -3442,6 +3491,19 @@ void NewGVN::iterateTouchedInstructions() {
         TouchedInstructions.reset(InstrNum);
         continue;
       }
+
+      // Reapply updates for non-touched instructions that come before the
+      // current instruction.
+      for (; LastInstrNum < InstrNum; ++LastInstrNum) {
+        Instruction *Inst =
+            dyn_cast<Instruction>(InstrFromDFSNum(LastInstrNum));
+        if (Inst) {
+          CongruenceClass *CC = ValueToClass.lookup(Inst);
+          updateIR(Inst, CC);
+        }
+      }
+      // Skip the current instruction.
+      ++LastInstrNum;
 
       Value *V = InstrFromDFSNum(InstrNum);
       const BasicBlock *CurrBlock = getBlockForValue(V);
@@ -3478,6 +3540,7 @@ void NewGVN::iterateTouchedInstructions() {
       }
       updateProcessedCount(V);
     }
+    rollbackIR();
   }
   NumGVNMaxIterations = std::max(NumGVNMaxIterations.getValue(), Iterations);
 }
@@ -3883,6 +3946,47 @@ Value *NewGVN::findPHIOfOpsLeader(const Expression *E,
       return Member;
   }
   return nullptr;
+}
+
+void NewGVN::updateIR(Instruction *I, CongruenceClass *CC) {
+  if (I->getType()->isVoidTy())
+    return;
+  Value *Leader = CC->getStoredValue() ? CC->getStoredValue() : CC->getLeader();
+
+  if (!Leader || Leader == I)
+    return;
+
+  if (alwaysAvailable(Leader) || DT->dominates(cast<Instruction>(Leader), I)) {
+    // Snapshot uses before udpating.
+    for (Use &U : I->uses())
+      Snapshot[I].insert(&U);
+    auto *ILeader = dyn_cast<Instruction>(Leader);
+    // If it's in SnapshotMD, it is already the most complete.
+    if (ILeader && ILeader->hasMetadata() && !SnapshotMD.count(ILeader)) {
+      SmallVector<std::pair<unsigned, MDNode *>, 4> Metadata;
+      ILeader->getAllMetadata(Metadata);
+      SnapshotMD[ILeader] = Metadata;
+    }
+
+    patchAndReplaceAllUsesWith(I, Leader); 
+  }
+}
+
+void NewGVN::rollbackIR() {
+  // Rollback IR updates.
+  for (auto &KV : Snapshot) {
+    auto *I = KV.first;
+    RolledBack.insert(I);
+    auto Uses = KV.second;
+    for (Use *U : Uses)
+        U->set(I);
+  }
+  // Rollback intercepted flags.
+  for (auto &KV : SnapshotMD) {
+    auto *I = KV.first;
+    for (auto MDN : KV.second)
+      I->setMetadata(MDN.first, MDN.second);
+  }
 }
 
 bool NewGVN::eliminateInstructions(Function &F) {
