@@ -172,11 +172,10 @@ define i32 @test4(i32, ptr, ptr noalias, ptr noalias) {
 ; CHECK:       7:
 ; CHECK-NEXT:    br label [[TMP8]]
 ; CHECK:       8:
-; CHECK-NEXT:    [[DOT01:%.*]] = phi i32 [ 5, [[TMP6]] ], [ 7, [[TMP7]] ]
+; CHECK-NEXT:    [[PHIOFOPS2:%.*]] = phi i32 [ 7, [[TMP7]] ], [ 5, [[TMP6]] ]
+; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i32 [ 105, [[TMP7]] ], [ 75, [[TMP6]] ]
+; CHECK-NEXT:    [[TMP11:%.*]] = phi i32 [ 735, [[TMP7]] ], [ 375, [[TMP6]] ]
 ; CHECK-NEXT:    [[DOT0:%.*]] = phi ptr [ [[TMP2]], [[TMP6]] ], [ [[TMP3]], [[TMP7]] ]
-; CHECK-NEXT:    [[TMP9:%.*]] = load i32, ptr [[DOT0]], align 4
-; CHECK-NEXT:    [[TMP10:%.*]] = mul nsw i32 [[TMP9]], 15
-; CHECK-NEXT:    [[TMP11:%.*]] = mul nsw i32 [[TMP10]], [[DOT01]]
 ; CHECK-NEXT:    ret i32 [[TMP11]]
 ;
   store i32 5, ptr %2, align 4
@@ -395,10 +394,10 @@ define void @test9(i1 %arg) {
 ; CHECK:       bb2:
 ; CHECK-NEXT:    br label [[BB6:%.*]]
 ; CHECK:       bb6:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ -13, [[BB2]] ], [ [[TMP11:%.*]], [[BB6]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ -12, [[BB2]] ], [ -11, [[BB6]] ]
 ; CHECK-NEXT:    [[TMP7:%.*]] = phi i32 [ 1, [[BB2]] ], [ [[TMP8:%.*]], [[BB6]] ]
 ; CHECK-NEXT:    [[TMP8]] = add nuw nsw i32 [[TMP7]], 1
-; CHECK-NEXT:    [[TMP11]] = add i32 -14, [[TMP8]]
+; CHECK-NEXT:    [[TMP9:%.*]] = add i32 -14, [[TMP7]]
 ; CHECK-NEXT:    br label [[BB6]]
 ;
 bb:
@@ -565,13 +564,13 @@ define void @test13() {
 ; CHECK-NEXT:    [[TMP:%.*]] = load i8, ptr null, align 1
 ; CHECK-NEXT:    br label [[BB3:%.*]]
 ; CHECK:       bb3:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i8 [ [[TMP]], [[BB1]] ], [ [[TMP10:%.*]], [[BB3]] ]
 ; CHECK-NEXT:    [[TMP4:%.*]] = phi ptr [ null, [[BB1]] ], [ [[TMP6:%.*]], [[BB3]] ]
 ; CHECK-NEXT:    [[TMP5:%.*]] = phi i32 [ undef, [[BB1]] ], [ [[TMP9:%.*]], [[BB3]] ]
 ; CHECK-NEXT:    [[TMP6]] = getelementptr i8, ptr [[TMP4]], i64 1
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = load i8, ptr [[TMP4]], align 1
 ; CHECK-NEXT:    [[TMP8:%.*]] = sext i8 [[PHIOFOPS]] to i32
 ; CHECK-NEXT:    [[TMP9]] = mul i32 [[TMP5]], [[TMP8]]
-; CHECK-NEXT:    [[TMP10]] = load i8, ptr [[TMP6]], align 1
+; CHECK-NEXT:    [[TMP10:%.*]] = load i8, ptr [[TMP6]], align 1
 ; CHECK-NEXT:    [[TMP11:%.*]] = icmp eq i8 [[TMP10]], 0
 ; CHECK-NEXT:    br i1 [[TMP11]], label [[BB12:%.*]], label [[BB3]]
 ; CHECK:       bb12:

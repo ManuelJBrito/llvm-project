@@ -76,6 +76,7 @@
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/MemorySSA.h"
+#include "llvm/Analysis/MemorySSAUpdater.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Argument.h"
@@ -512,6 +513,7 @@ class NewGVN {
   AliasAnalysis *AA = nullptr;
   MemorySSA *MSSA = nullptr;
   MemorySSAWalker *MSSAWalker = nullptr;
+  MemorySSAUpdater *MSSAU = nullptr;
   AssumptionCache *AC = nullptr;
   const DataLayout &DL;
   std::unique_ptr<PredicateInfo> PredInfo;
@@ -578,9 +580,6 @@ class NewGVN {
   mutable DenseMap<const Value *, SmallPtrSet<Value *, 2>> AdditionalUsers;
   DenseMap<const Expression *, SmallPtrSet<Instruction *, 2>>
       ExpressionToPhiOfOps;
-
-  // Map from temporary operation to MemoryAccess.
-  DenseMap<const Instruction *, MemoryUseOrDef *> TempToMemory;
 
   // Set of all temporary instructions we created.
   // Note: This will include instructions that were just created during value
@@ -1003,8 +1002,7 @@ static std::string getBlockName(const BasicBlock *B) {
 
 // Get a MemoryAccess for an instruction, fake or real.
 MemoryUseOrDef *NewGVN::getMemoryAccess(const Instruction *I) const {
-  auto *Result = MSSA->getMemoryAccess(I);
-  return Result ? Result : TempToMemory.lookup(I);
+  return MSSA->getMemoryAccess(I);
 }
 
 // Get a MemoryPhi for a basic block. These are all real.
@@ -2796,8 +2794,6 @@ Value *NewGVN::findLeaderForInst(Instruction *TransInst,
   InstrDFS.erase(TransInst);
   AllTempInstructions.erase(TransInst);
   TempToBlock.erase(TransInst);
-  if (MemAccess)
-    TempToMemory.erase(TransInst);
   if (!E)
     return nullptr;
   auto *FoundVal = findPHIOfOpsLeader(E, OrigInst, PredBB);
@@ -2829,21 +2825,22 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
   if (!isCycleFree(I))
     return nullptr;
 
-  // TODO: We don't do phi translation on memory accesses because it's
-  // complicated. For a load, we'd need to be able to simulate a new memoryuse,
-  // which we don't have a good way of doing ATM.
   auto *MemAccess = getMemoryAccess(I);
-  // If the memory operation is defined by a memory operation this block that
-  // isn't a MemoryPhi, transforming the pointer backwards through a scalar phi
-  // can't help, as it would still be killed by that memory operation.
-  if (MemAccess && !isa<MemoryPhi>(MemAccess->getDefiningAccess()) &&
-      MemAccess->getDefiningAccess()->getBlock() == I->getParent())
-    return nullptr;
-
+  MemoryPhi *MemPhiOp = nullptr;
+  if (MemAccess) {
+    MemPhiOp = dyn_cast<MemoryPhi>(MemAccess->getDefiningAccess());
+    // If the memory operation is defined by a memory operation in this block
+    // that isn't a MemoryPhi, transforming the pointer backwards through a
+    // scalar phi can't help, as it would still be killed by that memory
+    // operation.
+    if (!MemPhiOp &&
+        MemAccess->getDefiningAccess()->getBlock() == I->getParent())
+      return nullptr;
+  }
   // Convert op of phis to phi of ops
   SmallPtrSet<const Value *, 10> VisitedOps;
   SmallVector<Value *, 4> Ops(I->operand_values());
-  BasicBlock *SamePHIBlock = nullptr;
+  BasicBlock *SamePHIBlock = MemPhiOp ? MemPhiOp->getBlock() : nullptr;
   PHINode *OpPHI = nullptr;
   if (!DebugCounter::shouldExecute(PHIOfOpsCounter))
     return nullptr;
@@ -2871,15 +2868,14 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
       return nullptr;
   }
 
-  if (!OpPHI)
-    return nullptr;
-
   SmallVector<ValPair, 4> PHIOps;
   SmallPtrSet<Value *, 4> Deps;
-  auto *PHIBlock = getBlockForValue(OpPHI);
+  auto *PHIBlock = OpPHI ? getBlockForValue(OpPHI) : getBlockForValue(I);
+  assert(PHIBlock && "Should have found block for value");  
   RevisitOnReachabilityChange[PHIBlock].reset(InstrToDFSNum(I));
-  for (unsigned PredNum = 0; PredNum < OpPHI->getNumOperands(); ++PredNum) {
-    auto *PredBB = OpPHI->getIncomingBlock(PredNum);
+  if (pred_size(PHIBlock) < 2)
+    return nullptr;
+  for (auto *PredBB : predecessors(PHIBlock)) {
     Value *FoundVal = nullptr;
     SmallPtrSet<Value *, 4> CurrentDeps;
     // We could just skip unreachable edges entirely but it's tricky to do
@@ -2891,8 +2887,12 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
       // Emit the temporal instruction in the predecessor basic block where the
       // corresponding value is defined.
       ValueOp->insertBefore(PredBB->getTerminator()->getIterator());
-      if (MemAccess)
-        TempToMemory.insert({ValueOp, MemAccess});
+      if (MemAccess) {
+        auto *NewAccess =
+            MSSAU->createMemoryAccessInBB(ValueOp, /*Definition=*/nullptr,
+                                          PredBB, MemorySSA::BeforeTerminator);
+        MSSAU->insertUse(cast<MemoryUse>(NewAccess), /*RenameUses=*/false);
+      }
       bool SafeForPHIOfOps = true;
       VisitedOps.clear();
       for (auto &Op : ValueOp->operands()) {
@@ -2925,6 +2925,8 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
                                   : findLeaderForInst(ValueOp, Visited,
                                                       MemAccess, I, PredBB);
       isBackedgeEval = false;
+      if (MemAccess)
+        MSSAU->removeMemoryAccess(ValueOp, true);
       ValueOp->eraseFromParent();
       if (!FoundVal) {
         // We failed to find a leader for the current ValueOp, but this might
@@ -2971,7 +2973,7 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
   bool NewPHI = false;
   if (!ValuePHI) {
     ValuePHI =
-        PHINode::Create(I->getType(), OpPHI->getNumOperands(), "phiofops");
+        PHINode::Create(I->getType(), pred_size(PHIBlock), "phiofops");
     addPhiOfOps(ValuePHI, PHIBlock, I);
     NewPHI = true;
     NumGVNPHIOfOpsCreated++;
@@ -3096,7 +3098,6 @@ void NewGVN::cleanupTables() {
   AdditionalUsers.clear();
   ExpressionToPhiOfOps.clear();
   TempToBlock.clear();
-  TempToMemory.clear();
   PHINodeUses.clear();
   OpSafeForPHIOfOps.clear();
   ReachableBlocks.clear();
@@ -3227,7 +3228,8 @@ void NewGVN::valueNumberInstruction(Instruction *I) {
 
       // Make a phi of ops if necessary
       if (Symbolized && !isa<ConstantExpression>(Symbolized) &&
-          !isa<VariableExpression>(Symbolized) && PHINodeUses.count(I)) {
+          !isa<VariableExpression>(Symbolized) &&
+          !findPHIOfOpsLeader(Symbolized, I, I->getParent())) {
         auto *PHIE = makePossiblePHIOfOps(I, Visited);
         // If we created a phi of ops, use it.
         // If we couldn't create one, make sure we don't leave one lying around
@@ -3595,6 +3597,8 @@ bool NewGVN::runGVN() {
   bool Changed = false;
   NumFuncArgs = F.arg_size();
   MSSAWalker = MSSA->getWalker();
+  MemorySSAUpdater Updater(MSSA);
+  MSSAU = &Updater;
   SingletonDeadExpression = new (ExpressionAllocator) DeadExpression();
 
   // Count number of instructions for sizing of hash tables, and come

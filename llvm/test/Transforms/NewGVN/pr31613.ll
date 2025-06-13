@@ -77,8 +77,8 @@ define void @e(i32 %a0, i32 %a1, ptr %p2) {
 ; CHECK-NEXT:    store i32 [[A0:%.*]], ptr [[F]], align 4, !g [[META0:![0-9]+]]
 ; CHECK-NEXT:    br label [[H:%.*]]
 ; CHECK:       h:
+; CHECK-NEXT:    [[I:%.*]] = phi i32 [ [[A0]], [[TMP0:%.*]] ], [ [[A1:%.*]], [[S:%.*]] ]
 ; CHECK-NEXT:    call void @c.d.p(i64 8, ptr undef)
-; CHECK-NEXT:    [[I:%.*]] = load i32, ptr [[F]], align 4
 ; CHECK-NEXT:    [[J:%.*]] = load i32, ptr null, align 4
 ; CHECK-NEXT:    [[K:%.*]] = icmp eq i32 [[I]], [[J]]
 ; CHECK-NEXT:    br i1 [[K]], label [[L:%.*]], label [[Q:%.*]]
@@ -88,10 +88,10 @@ define void @e(i32 %a0, i32 %a1, ptr %p2) {
 ; CHECK-NEXT:    br label [[R]]
 ; CHECK:       r:
 ; CHECK-NEXT:    switch i32 undef, label [[N:%.*]] [
-; CHECK-NEXT:      i32 0, label [[S:%.*]]
+; CHECK-NEXT:      i32 0, label [[S]]
 ; CHECK-NEXT:    ]
 ; CHECK:       s:
-; CHECK-NEXT:    store i32 [[A1:%.*]], ptr [[F]], align 4, !g [[META0]]
+; CHECK-NEXT:    store i32 [[A1]], ptr [[F]], align 4, !g [[META0]]
 ; CHECK-NEXT:    br label [[H]]
 ; CHECK:       n:
 ; CHECK-NEXT:    ret void

@@ -18,7 +18,7 @@ define void @tinkywinky() {
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq i32 [[TMP1]], [[TMP2]]
 ; CHECK-NEXT:    br i1 [[CMP]], label [[COND_TRUE6:%.*]], label [[COND_FALSE:%.*]]
 ; CHECK:       cond.true6:
-; CHECK-NEXT:    [[CMP7:%.*]] = icmp slt i32 [[TMP1]], 0
+; CHECK-NEXT:    [[CMP7:%.*]] = icmp slt i32 [[TMP2]], 0
 ; CHECK-NEXT:    br i1 [[CMP7]], label [[COND_FALSE]], label [[COND_FALSE]]
 ; CHECK:       cond.false:
 ; CHECK-NEXT:    ret void
