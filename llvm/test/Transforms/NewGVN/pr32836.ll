@@ -18,8 +18,6 @@ define void @tinkywinky(i1 %patatino) {
 ; CHECK-NEXT:    [[BF_CLEAR:%.*]] = and i32 [[BF_LOAD1]], -536870912
 ; CHECK-NEXT:    [[BF_SET:%.*]] = or i32 [[BF_CLEAR]], [[BF_VALUE]]
 ; CHECK-NEXT:    store i32 [[BF_SET]], ptr @b, align 4
-; CHECK-NEXT:    br label [[LOR_END:%.*]]
-; CHECK:       lor.end:
 ; CHECK-NEXT:    br label [[L]]
 ;
   store i32 8, ptr null

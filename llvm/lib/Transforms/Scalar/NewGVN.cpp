@@ -70,6 +70,7 @@
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AssumptionCache.h"
+#include "llvm/Analysis/DomTreeUpdater.h"
 #include "llvm/Analysis/CFGPrinter.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/GlobalsModRef.h"
@@ -105,6 +106,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar/GVNExpression.h"
 #include "llvm/Transforms/Utils/AssumeBundleBuilder.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/PredicateInfo.h"
 #include "llvm/Transforms/Utils/VNCoercion.h"
@@ -3600,6 +3602,18 @@ bool NewGVN::runGVN() {
   MemorySSAUpdater Updater(MSSA);
   MSSAU = &Updater;
   SingletonDeadExpression = new (ExpressionAllocator) DeadExpression();
+
+  DomTreeUpdater DTU(DT, DomTreeUpdater::UpdateStrategy::Lazy);
+  // Merge unconditional branches.
+  for (BasicBlock &BB : make_early_inc_range(F)) {
+    bool RemovedBlock =
+        MergeBlockIntoPredecessor(&BB, &DTU, nullptr, MSSAU, nullptr);
+    if (RemovedBlock)
+      ++NumGVNBlocksDeleted;
+
+    Changed |= RemovedBlock;
+  }
+  DTU.flush();
 
   // Count number of instructions for sizing of hash tables, and come
   // up with a global dfs numbering for instructions.

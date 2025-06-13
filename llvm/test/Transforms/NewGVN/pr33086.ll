@@ -4,15 +4,14 @@
 
 
 define void @tinkywinky(i1 %arg) {
-; CHECK-LABEL: define void @tinkywinky(i1 %arg) {
+; CHECK-LABEL: define void @tinkywinky(
+; CHECK-SAME: i1 [[ARG:%.*]]) {
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    br i1 %arg, label [[FOR_COND18:%.*]], label [[FOR_COND_PREHEADER:%.*]]
+; CHECK-NEXT:    br i1 [[ARG]], label [[FOR_COND18:%.*]], label [[FOR_COND_PREHEADER:%.*]]
 ; CHECK:       for.cond.preheader:
 ; CHECK-NEXT:    br label [[FOR_COND2THREAD_PRE_SPLIT:%.*]]
 ; CHECK:       for.cond2thread-pre-split:
-; CHECK-NEXT:    [[CONV24:%.*]] = phi i32 [ 0, [[FOR_COND_PREHEADER]] ], [ [[CONV:%.*]], [[FOR_INC_SPLIT:%.*]] ]
-; CHECK-NEXT:    br label [[FOR_INC_SPLIT]]
-; CHECK:       for.inc.split:
+; CHECK-NEXT:    [[CONV24:%.*]] = phi i32 [ 0, [[FOR_COND_PREHEADER]] ], [ [[CONV:%.*]], [[FOR_COND2THREAD_PRE_SPLIT]] ]
 ; CHECK-NEXT:    [[ADD:%.*]] = shl nsw i32 [[CONV24]], 16
 ; CHECK-NEXT:    [[SEXT23:%.*]] = add i32 [[ADD]], 65536
 ; CHECK-NEXT:    [[CONV]] = ashr exact i32 [[SEXT23]], 16

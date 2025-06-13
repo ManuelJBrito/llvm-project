@@ -37,8 +37,6 @@ define void @test2(i1 %c) {
 ; CHECK:       loop.header:
 ; CHECK-NEXT:    [[P_0:%.*]] = phi i32 [ 0, [[ENTRY:%.*]] ], [ [[INC:%.*]], [[LOOP_LATCH:%.*]] ]
 ; CHECK-NEXT:    [[P_1:%.*]] = phi i32 [ 1, [[ENTRY]] ], [ [[P_2:%.*]], [[LOOP_LATCH]] ]
-; CHECK-NEXT:    br label [[LOOP_BB_1:%.*]]
-; CHECK:       loop.bb.1:
 ; CHECK-NEXT:    [[INC]] = add nsw i32 [[P_0]], 1
 ; CHECK-NEXT:    [[C_1:%.*]] = icmp slt i32 [[P_0]], 0
 ; CHECK-NEXT:    [[C_1_FREEZE:%.*]] = freeze i1 [[C_1]]
@@ -46,7 +44,7 @@ define void @test2(i1 %c) {
 ; CHECK:       loop.bb.2:
 ; CHECK-NEXT:    br label [[LOOP_LATCH]]
 ; CHECK:       loop.latch:
-; CHECK-NEXT:    [[P_2]] = phi i32 [ 0, [[LOOP_BB_2]] ], [ [[P_1]], [[LOOP_BB_1]] ]
+; CHECK-NEXT:    [[P_2]] = phi i32 [ 0, [[LOOP_BB_2]] ], [ [[P_1]], [[LOOP_HEADER]] ]
 ; CHECK-NEXT:    [[C_2:%.*]] = icmp eq i32 [[P_2]], 123
 ; CHECK-NEXT:    br i1 [[C_2]], label [[EXIT:%.*]], label [[LOOP_HEADER]]
 ; CHECK:       exit:

@@ -18,14 +18,12 @@ define hidden void @barrier() align 2 {
 ; CHECK:       first:
 ; CHECK-NEXT:    [[PHI_ONE:%.*]] = phi i64 [ [[SEL]], [[ENTRY:%.*]] ], [ 0, [[FIRST]] ], [ 0, [[THIRD:%.*]] ]
 ; CHECK-NEXT:    [[CMP_PHI1_SUB:%.*]] = icmp eq i64 [[PHI_ONE]], [[SUB]]
-; CHECK-NEXT:    br i1 [[CMP_PHI1_SUB]], label [[SECOND:%.*]], label [[FIRST]]
+; CHECK-NEXT:    br i1 [[CMP_PHI1_SUB]], label [[THIRD]], label [[FIRST]]
 ; CHECK:       second:
 ; CHECK-NEXT:    [[PHI_TWO:%.*]] = phi i64 [ [[SUB]], [[THIRD]] ], [ [[SUB]], [[FIRST]] ]
-; CHECK-NEXT:    br label [[THIRD]]
-; CHECK:       third:
 ; CHECK-NEXT:    [[INC:%.*]] = add i64 [[PHI_TWO]], 1
 ; CHECK-NEXT:    [[CMP_INC_SUB:%.*]] = icmp eq i64 [[INC]], [[SUB]]
-; CHECK-NEXT:    br i1 [[CMP_INC_SUB]], label [[SECOND]], label [[FIRST]]
+; CHECK-NEXT:    br i1 [[CMP_INC_SUB]], label [[THIRD]], label [[FIRST]]
 ;
 entry:
   %callg = tail call i64 @g()
@@ -74,8 +72,6 @@ define hidden void @barrier2() align 2 {
 ; CHECK:       second.preheader:
 ; CHECK-NEXT:    br label [[INNERLOOP:%.*]]
 ; CHECK:       innerloop:
-; CHECK-NEXT:    br label [[CLEANUP:%.*]]
-; CHECK:       cleanup:
 ; CHECK-NEXT:    br i1 false, label [[INNERLOOP]], label [[SECOND_EXIT:%.*]]
 ;
 entry:
