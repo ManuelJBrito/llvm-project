@@ -99,8 +99,10 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK-NEXT:    br i1 [[TMP37]], label [[TMP38:%.*]], label [[TMP39]]
 ; CHECK:       38:
 ; CHECK-NEXT:    tail call void @Fatal(ptr @.str.7, i32 0)
+; CHECK-NEXT:    [[DOTPRE7:%.*]] = load i32, ptr [[TMP23]], align 16, !tbaa [[TBAA10]]
 ; CHECK-NEXT:    br label [[TMP39]]
 ; CHECK:       39:
+; CHECK-NEXT:    [[TMP48:%.*]] = phi i32 [ [[TMP24]], [[DOT_CRIT_EDGE]] ], [ [[TMP24]], [[TMP35]] ], [ [[DOTPRE7]], [[TMP38]] ]
 ; CHECK-NEXT:    [[DOT152:%.*]] = phi i32 [ [[DOT05160]], [[DOT_CRIT_EDGE]] ], [ [[TMP36]], [[TMP38]] ], [ [[TMP36]], [[TMP35]] ]
 ; CHECK-NEXT:    [[DOT150:%.*]] = phi i32 [ [[DOT04961]], [[DOT_CRIT_EDGE]] ], [ 0, [[TMP38]] ], [ 0, [[TMP35]] ]
 ; CHECK-NEXT:    [[TMP40:%.*]] = add i64 [[DOT046_LCSSA]], 4294967295
@@ -114,7 +116,6 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK-NEXT:    [[TMP46:%.*]] = load i64, ptr [[TMP45]], align 8, !tbaa [[TBAA13:![0-9]+]]
 ; CHECK-NEXT:    [[TMP47:%.*]] = or i64 [[TMP46]], [[DOT046_]]
 ; CHECK-NEXT:    store i64 [[TMP47]], ptr [[TMP45]], align 8, !tbaa [[TBAA13]]
-; CHECK-NEXT:    [[TMP48:%.*]] = load i32, ptr [[TMP23]], align 16, !tbaa [[TBAA10]]
 ; CHECK-NEXT:    [[TMP49:%.*]] = zext i32 [[TMP48]] to i64
 ; CHECK-NEXT:    [[TMP50:%.*]] = shl i64 [[TMP49]], [[TMP43]]
 ; CHECK-NEXT:    [[TMP51:%.*]] = getelementptr inbounds [2 x i64], ptr @aqMainMask, i64 0, i64 [[TMP44]]
@@ -127,13 +128,13 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK-NEXT:    store i32 [[DOT152]], ptr [[TMP55]], align 4, !tbaa [[TBAA16:![0-9]+]]
 ; CHECK-NEXT:    [[TMP56:%.*]] = add nsw i32 [[DOT150]], [[DOT048_LCSSA]]
 ; CHECK-NEXT:    br label [[TMP57]]
-; CHECK:       57:
+; CHECK:       56:
 ; CHECK-NEXT:    [[DOT253]] = phi i32 [ [[DOT05160]], [[TMP27]] ], [ [[DOT152]], [[TMP39]] ]
 ; CHECK-NEXT:    [[DOT2]] = phi i32 [ [[DOT04961]], [[TMP27]] ], [ [[TMP56]], [[TMP39]] ]
 ; CHECK-NEXT:    [[INDVARS_IV_NEXT]] = add nuw nsw i64 [[INDVARS_IV]], 1
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp ne i64 [[INDVARS_IV_NEXT]], 26
 ; CHECK-NEXT:    br i1 [[EXITCOND]], label [[DOTPREHEADER]], label [[TMP58:%.*]]
-; CHECK:       58:
+; CHECK:       57:
 ; CHECK-NEXT:    ret void
 ;
   tail call void @llvm.memset.p0.i64(ptr align 16 @alPhrase, i8 0, i64 416, i1 false)

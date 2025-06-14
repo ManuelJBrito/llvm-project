@@ -70,6 +70,7 @@ define hidden void @barrier2() align 2 {
 ; CHECK-NEXT:    [[FIRSTCMP:%.*]] = icmp eq i64 [[FIRSTPHI]], [[SUB]]
 ; CHECK-NEXT:    br i1 [[FIRSTCMP]], label [[SECOND_PREHEADER:%.*]], label [[FIRST_EXIT]]
 ; CHECK:       second.preheader:
+; CHECK-NEXT:    [[INC_PRE:%.*]] = add i64 [[REM]], 1
 ; CHECK-NEXT:    br label [[INNERLOOP:%.*]]
 ; CHECK:       innerloop:
 ; CHECK-NEXT:    br i1 false, label [[INNERLOOP]], label [[SECOND_EXIT:%.*]]

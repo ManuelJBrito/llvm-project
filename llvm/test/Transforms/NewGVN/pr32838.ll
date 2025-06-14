@@ -114,8 +114,6 @@ define void @fn3(i1 %arg, i1 %arg2) {
 ; CHECK:       for.cond1:
 ; CHECK-NEXT:    br label [[L2:%.*]]
 ; CHECK:       l2:
-; CHECK-NEXT:    [[G_4:%.*]] = phi ptr [ @b, [[FOR_END14]] ], [ @a, [[FOR_COND1]] ]
-; CHECK-NEXT:    [[F_2:%.*]] = phi ptr [ [[F_0]], [[FOR_END14]] ], [ @a, [[FOR_COND1]] ]
 ; CHECK-NEXT:    br label [[FOR_INC:%.*]]
 ; CHECK:       for.inc:
 ; CHECK-NEXT:    br i1 false, label [[FOR_COND_LOOPEXIT:%.*]], label [[FOR_INC]]
