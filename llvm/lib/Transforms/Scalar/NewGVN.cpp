@@ -1579,11 +1579,12 @@ NewGVN::performSymbolicLoadCoercion(Type *LoadType, Value *LoadPtr,
   }
 
   if (auto *II = dyn_cast<IntrinsicInst>(DepInst)) {
-    auto *LifetimePtr = II->getOperand(1);
-    if (II->getIntrinsicID() == Intrinsic::lifetime_start &&
-        (LoadPtr == lookupOperandLeader(LifetimePtr) ||
-         AA->isMustAlias(LoadPtr, LifetimePtr)))
-      return createConstantExpression(UndefValue::get(LoadType));
+    if (II->getIntrinsicID() == Intrinsic::lifetime_start) {
+      auto *LifetimePtr = II->getOperand(1);
+      if (LoadPtr == lookupOperandLeader(LifetimePtr) ||
+          AA->isMustAlias(LoadPtr, LifetimePtr))
+        return createConstantExpression(UndefValue::get(LoadType));
+    }
   }
 
   // All of the below are only true if the loaded pointer is produced
@@ -1656,6 +1657,8 @@ NewGVN::ExprResult NewGVN::PIEvalHelper(IntrinsicInst *I,
                                         const PredicateBase *PI,
                                         CmpInst::Predicate Predicate,
                                         Value *CmpOp0, Value *CmpOp1) const {
+  if (CmpOp0->getType() != I->getType())
+    return ExprResult::none();
   Value *FirstOp = lookupOperandLeader(CmpOp0);
   Value *SecondOp = lookupOperandLeader(CmpOp1);
   Value *AdditionallyUsedValue = CmpOp0;
@@ -4183,6 +4186,8 @@ Value *NewGVN::findPREOpLeader(Value *PREOp, const BasicBlock *BB) {
 void NewGVN::updateIR(Instruction *I, CongruenceClass *CC) {
   if (I->getType()->isVoidTy())
     return;
+  if (CC == TOPClass)
+    return;
   Value *Leader = CC->getStoredValue() ? CC->getStoredValue() : CC->getLeader();
 
   if (!Leader || Leader == I)
@@ -4199,7 +4204,7 @@ void NewGVN::updateIR(Instruction *I, CongruenceClass *CC) {
       ILeader->getAllMetadata(Metadata);
       SnapshotMD[ILeader] = Metadata;
     }
-
+    
     patchAndReplaceAllUsesWith(I, Leader);
   }
 }
