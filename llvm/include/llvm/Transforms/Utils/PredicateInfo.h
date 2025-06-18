@@ -55,6 +55,7 @@
 #include "llvm/ADT/ilist.h"
 #include "llvm/ADT/ilist_node.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/ValueHandle.h"
 
@@ -92,6 +93,8 @@ public:
   // The condition associated with this predicate.
   Value *Condition;
 
+  PredicateType getPredicateType() const { return Type;}
+
   PredicateBase(const PredicateBase &) = delete;
   PredicateBase &operator=(const PredicateBase &) = delete;
   PredicateBase() = delete;
@@ -99,6 +102,18 @@ public:
   static bool classof(const PredicateBase *PB) {
     return PB->Type == PT_Assume || PB->Type == PT_Branch ||
            PB->Type == PT_Switch;
+  }
+  virtual void printInternal(raw_ostream &OS, bool PrintPredType) const {
+    if (PrintPredType)
+      OS << "predtype = " << getPredicateType() << ", ";
+    OS << "original = " << *OriginalOp << ", ";
+    OS << "condition = " << *Condition << ", ";
+  }
+
+  void print(raw_ostream &OS) const {
+    OS << "{ ";
+    printInternal(OS, true);
+    OS << "}";
   }
 
   /// Fetch condition in the form of PredicateConstraint, if possible.
@@ -108,6 +123,11 @@ protected:
   PredicateBase(PredicateType PT, Value *Op, Value *Condition)
       : Type(PT), OriginalOp(Op), Condition(Condition) {}
 };
+
+inline raw_ostream &operator<<(raw_ostream &OS, const PredicateBase &PB) {
+  PB.print(OS);
+  return OS;
+}
 
 // Provides predicate information for assumes.  Since assumes are always true,
 // we simply provide the assume instruction, so you can tell your relative
@@ -121,6 +141,13 @@ public:
   static bool classof(const PredicateBase *PB) {
     return PB->Type == PT_Assume;
   }
+  void printInternal(raw_ostream &OS, bool PrintPredType) const override {
+    if (PrintPredType)
+      OS << "PredicateTypeAssume, ";
+    this->PredicateBase::printInternal(OS, false);
+    OS << "valid @ ";
+    AssumeInst->print(OS);
+  }
 };
 
 // Mixin class for edge predicates.  The FROM block is the block where the
@@ -133,6 +160,13 @@ public:
   PredicateWithEdge() = delete;
   static bool classof(const PredicateBase *PB) {
     return PB->Type == PT_Branch || PB->Type == PT_Switch;
+  }
+
+  void printInternal(raw_ostream &OS, bool PrintPredType) const override {
+    if (PrintPredType)
+      OS << "PredicateTypeEdge, ";
+    this->PredicateBase::printInternal(OS, false);
+    OS << "valid @ [" << From->getName() << ", " << To->getName() << "]";
   }
 
 protected:
@@ -154,6 +188,13 @@ public:
   static bool classof(const PredicateBase *PB) {
     return PB->Type == PT_Branch;
   }
+
+  void printInternal(raw_ostream &OS, bool PrintPredType) const override {
+    if (PrintPredType)
+      OS << "PredicateBranch, ";
+    this->PredicateWithEdge::printInternal(OS, false);
+    OS << ", TakenEdge " << TrueEdge; 
+  }
 };
 
 class PredicateSwitch : public PredicateWithEdge {
@@ -169,6 +210,12 @@ public:
   PredicateSwitch() = delete;
   static bool classof(const PredicateBase *PB) {
     return PB->Type == PT_Switch;
+  }
+
+  void printInternal(raw_ostream &OS, bool PrintPredType) const override {
+    if (PrintPredType)
+      OS << "PredicateSwith, ";
+    this->PredicateWithEdge::printInternal(OS, false);
   }
 };
 
