@@ -8,15 +8,17 @@ target triple = "i386-apple-darwin7"
 define ptr @test(ptr %P, ptr %Q, i32 %x, i32 %y) nounwind readonly {
 ; CHECK-LABEL: define ptr @test(
 ; CHECK-SAME: ptr [[P:%.*]], ptr [[Q:%.*]], i32 [[X:%.*]], i32 [[Y:%.*]]) #[[ATTR0:[0-9]+]] {
-; CHECK-NEXT:  [[ENTRY:.*]]:
+; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    [[TMP0:%.*]] = tail call i32 @strlen(ptr [[P]]), !prof [[PROF0:![0-9]+]]
 ; CHECK-NEXT:    [[TMP1:%.*]] = icmp eq i32 [[TMP0]], 0
-; CHECK-NEXT:    br i1 [[TMP1]], label %[[BB:.*]], label %[[BB1:.*]]
+; CHECK-NEXT:    br i1 [[TMP1]], label %[[BB:.*]], label %[[ENTRY_BB1_CRIT_EDGE:.*]]
+; CHECK:       [[ENTRY_BB1_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB1:.*]]
 ; CHECK:       [[BB]]:
 ; CHECK-NEXT:    [[TMP2:%.*]] = sdiv i32 [[X]], [[Y]]
 ; CHECK-NEXT:    br label %[[BB1]]
 ; CHECK:       [[BB1]]:
-; CHECK-NEXT:    [[X_ADDR_0:%.*]] = phi i32 [ [[TMP2]], %[[BB]] ], [ [[X]], %[[ENTRY]] ]
+; CHECK-NEXT:    [[X_ADDR_0:%.*]] = phi i32 [ [[TMP2]], %[[BB]] ], [ [[X]], %[[ENTRY_BB1_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[TMP3:%.*]] = tail call ptr @strchr(ptr [[Q]], i32 97)
 ; CHECK-NEXT:    [[TMP4:%.*]] = add i32 [[X_ADDR_0]], [[TMP0]]
 ; CHECK-NEXT:    [[TMP5:%.*]] = getelementptr i8, ptr [[TMP3]], i32 [[X_ADDR_0]]

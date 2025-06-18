@@ -27,9 +27,19 @@ define i32 @_Z1ii(i32 %p) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq i32 [[P:%.*]], 42
 ; CHECK-NEXT:    call void @llvm.assume(i1 [[CMP]])
-; CHECK-NEXT:    br i1 true, label [[BB2:%.*]], label [[BB2]]
+; CHECK-NEXT:    br i1 true, label [[ENTRY_BB2_CRIT_EDGE:%.*]], label [[ENTRY_BB2_CRIT_EDGE1:%.*]]
+; CHECK:       entry.bb2_crit_edge1:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB2:%.*]]
+; CHECK:       entry.bb2_crit_edge:
+; CHECK-NEXT:    br label [[BB2]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    br i1 true, label [[BB2]], label [[BB2]]
+; CHECK-NEXT:    br i1 true, label [[BB2_BB2_CRIT_EDGE:%.*]], label [[BB2_BB2_CRIT_EDGE2:%.*]]
+; CHECK:       bb2.bb2_crit_edge2:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB2]]
+; CHECK:       bb2.bb2_crit_edge:
+; CHECK-NEXT:    br label [[BB2]]
 ; CHECK:       0:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    ret i32 [[P]]
@@ -51,10 +61,18 @@ define i32 @_Z1ij(i32 %p) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq i32 [[P:%.*]], 42
 ; CHECK-NEXT:    call void @llvm.assume(i1 [[CMP]])
-; CHECK-NEXT:    br i1 true, label [[BB2:%.*]], label [[BB2]]
+; CHECK-NEXT:    br i1 true, label [[ENTRY_BB2_CRIT_EDGE:%.*]], label [[ENTRY_BB2_CRIT_EDGE1:%.*]]
+; CHECK:       entry.bb2_crit_edge1:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB3:%.*]]
+; CHECK:       entry.bb2_crit_edge:
+; CHECK-NEXT:    br label [[BB3]]
 ; CHECK:       bb2:
 ; CHECK-NEXT:    call void @llvm.assume(i1 true)
-; CHECK-NEXT:    br i1 true, label [[TMP0:%.*]], label [[BB2]]
+; CHECK-NEXT:    br i1 true, label [[TMP0:%.*]], label [[BB2:%.*]]
+; CHECK:       bb2.bb2_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB3]]
 ; CHECK:       0:
 ; CHECK-NEXT:    ret i32 42
 ;
@@ -108,7 +126,9 @@ define i32 @_Z1il(i32 %val, i1 %k) {
 ; CHECK-NEXT:    tail call void @llvm.assume(i1 [[K:%.*]])
 ; CHECK-NEXT:    tail call void @llvm.assume(i1 true)
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq i32 [[VAL:%.*]], 50
-; CHECK-NEXT:    br i1 [[CMP]], label [[NEXT]], label [[MEH:%.*]]
+; CHECK-NEXT:    br i1 [[CMP]], label [[NEXT_NEXT_CRIT_EDGE:%.*]], label [[MEH:%.*]]
+; CHECK:       next.next_crit_edge:
+; CHECK-NEXT:    br label [[NEXT]]
 ; CHECK:       meh:
 ; CHECK-NEXT:    ret i32 0
 ;
@@ -130,10 +150,12 @@ meh:
 define i1 @_z1im(i32 %val, i1 %k, i1 %j) {
 ; CHECK-LABEL: @_z1im(
 ; CHECK-NEXT:    br i1 [[J:%.*]], label [[NEXT:%.*]], label [[MEH:%.*]]
+; CHECK:       .meh_crit_edge:
+; CHECK-NEXT:    br label [[MEH1:%.*]]
 ; CHECK:       next:
 ; CHECK-NEXT:    tail call void @llvm.assume(i1 [[K:%.*]])
 ; CHECK-NEXT:    tail call void @llvm.assume(i1 true)
-; CHECK-NEXT:    br label [[MEH]]
+; CHECK-NEXT:    br label [[MEH1]]
 ; CHECK:       meh:
 ; CHECK-NEXT:    ret i1 [[K]]
 ;

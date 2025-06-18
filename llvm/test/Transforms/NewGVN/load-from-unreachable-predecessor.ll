@@ -12,7 +12,10 @@ define i32 @f(ptr %f) {
 ; CHECK-NEXT:    br label [[BB2:%.*]]
 ; CHECK:       bb1:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label [[BB1:%.*]], label [[BB2]]
+; CHECK-NEXT:    br i1 false, label [[BB1:%.*]], label [[BB1_BB2_CRIT_EDGE:%.*]]
+; CHECK:       bb1.bb2_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB2]]
 ; CHECK:       bb2:
 ; CHECK-NEXT:    ret i32 [[STOREMERGE]]
 ;

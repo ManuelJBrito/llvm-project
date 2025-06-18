@@ -422,10 +422,12 @@ define void @testGEP0() {
 ; CHECK-NEXT:    [[TMP1:%.*]] = load i8, ptr @unknownPtr, align 4
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp eq i8 [[TMP1]], 0
 ; CHECK-NEXT:    br i1 [[TMP2]], label [[_Z1GR1A_EXIT:%.*]], label [[TMP3:%.*]]
+; CHECK:       ._Z1gR1A.exit_crit_edge:
+; CHECK-NEXT:    br label [[_Z1GR1A_EXIT1:%.*]]
 ; CHECK:       3:
 ; CHECK-NEXT:    [[TMP4:%.*]] = load ptr, ptr getelementptr inbounds ([3 x ptr], ptr @_ZTV1A, i64 0, i64 2), align 8
 ; CHECK-NEXT:    call void [[TMP4]](ptr nonnull [[A]])
-; CHECK-NEXT:    br label [[_Z1GR1A_EXIT]]
+; CHECK-NEXT:    br label [[_Z1GR1A_EXIT1]]
 ; CHECK:       _Z1gR1A.exit:
 ; CHECK-NEXT:    ret void
 ;
@@ -519,21 +521,27 @@ define void @handling_loops() {
 ; CHECK-NEXT:    [[TMP1:%.*]] = load i8, ptr @unknownPtr, align 4
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp sgt i8 [[TMP1]], 0
 ; CHECK-NEXT:    br i1 [[TMP2]], label [[DOTLR_PH_I:%.*]], label [[_Z2G2R1A_EXIT:%.*]]
+; CHECK:       ._Z2g2R1A.exit_crit_edge:
+; CHECK-NEXT:    br label [[_Z2G2R1A_EXIT1:%.*]]
 ; CHECK:       .lr.ph.i:
 ; CHECK-NEXT:    [[TMP3:%.*]] = icmp sgt i8 [[TMP1]], 1
-; CHECK-NEXT:    br i1 [[TMP3]], label [[DOT_CRIT_EDGE_PREHEADER:%.*]], label [[_Z2G2R1A_EXIT]]
+; CHECK-NEXT:    br i1 [[TMP3]], label [[DOT_CRIT_EDGE_PREHEADER:%.*]], label [[DOTLR_PH_I__Z2G2R1A_EXIT_CRIT_EDGE:%.*]]
+; CHECK:       .lr.ph.i._Z2g2R1A.exit_crit_edge:
+; CHECK-NEXT:    br label [[_Z2G2R1A_EXIT1]]
 ; CHECK:       ._crit_edge.preheader:
 ; CHECK-NEXT:    [[TMP5:%.*]] = load ptr, ptr getelementptr inbounds ([3 x ptr], ptr @_ZTV1A, i64 0, i64 2), align 8
 ; CHECK-NEXT:    br label [[DOT_CRIT_EDGE:%.*]]
 ; CHECK:       ._crit_edge:
-; CHECK-NEXT:    [[TMP4:%.*]] = phi i8 [ [[TMP6:%.*]], [[DOT_CRIT_EDGE]] ], [ 1, [[DOT_CRIT_EDGE_PREHEADER]] ]
+; CHECK-NEXT:    [[TMP4:%.*]] = phi i8 [ [[TMP6:%.*]], [[DOT_CRIT_EDGE___CRIT_EDGE_CRIT_EDGE:%.*]] ], [ 1, [[DOT_CRIT_EDGE_PREHEADER]] ]
 ; CHECK-NEXT:    call void [[TMP5]](ptr nonnull [[A]])
 ; CHECK-NEXT:    [[TMP6]] = add nuw nsw i8 [[TMP4]], 1
 ; CHECK-NEXT:    [[TMP7:%.*]] = load i8, ptr @unknownPtr, align 4
 ; CHECK-NEXT:    [[TMP8:%.*]] = icmp slt i8 [[TMP6]], [[TMP7]]
-; CHECK-NEXT:    br i1 [[TMP8]], label [[DOT_CRIT_EDGE]], label [[_Z2G2R1A_EXIT_LOOPEXIT:%.*]]
+; CHECK-NEXT:    br i1 [[TMP8]], label [[DOT_CRIT_EDGE___CRIT_EDGE_CRIT_EDGE]], label [[_Z2G2R1A_EXIT_LOOPEXIT:%.*]]
+; CHECK:       ._crit_edge.._crit_edge_crit_edge:
+; CHECK-NEXT:    br label [[DOT_CRIT_EDGE]]
 ; CHECK:       _Z2g2R1A.exit.loopexit:
-; CHECK-NEXT:    br label [[_Z2G2R1A_EXIT]]
+; CHECK-NEXT:    br label [[_Z2G2R1A_EXIT1]]
 ; CHECK:       _Z2g2R1A.exit:
 ; CHECK-NEXT:    ret void
 ;

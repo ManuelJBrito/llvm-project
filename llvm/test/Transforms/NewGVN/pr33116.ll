@@ -6,15 +6,26 @@
 define void @b(i1 %arg) {
 ; CHECK-LABEL: @b(
 ; CHECK-NEXT:    br i1 false, label [[C:%.*]], label [[WHILE_D:%.*]]
+; CHECK:       .while.d_crit_edge:
+; CHECK-NEXT:    br label [[WHILE_D1:%.*]]
+; CHECK:       .c_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[C1:%.*]]
 ; CHECK:       while.d:
 ; CHECK-NEXT:    br label [[F:%.*]]
 ; CHECK:       f:
-; CHECK-NEXT:    br i1 %arg, label [[IF_E:%.*]], label [[C]]
+; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[F_IF_E_CRIT_EDGE:%.*]], label [[F_C_CRIT_EDGE:%.*]]
+; CHECK:       f.c_crit_edge:
+; CHECK-NEXT:    br label [[C1]]
+; CHECK:       f.if.e_crit_edge:
+; CHECK-NEXT:    br label [[IF_E:%.*]]
 ; CHECK:       c:
-; CHECK-NEXT:    br i1 %arg, label [[IF_G:%.*]], label [[IF_E]]
+; CHECK-NEXT:    br i1 [[ARG]], label [[IF_G:%.*]], label [[C_IF_E_CRIT_EDGE:%.*]]
+; CHECK:       c.if.e_crit_edge:
+; CHECK-NEXT:    br label [[IF_E]]
 ; CHECK:       if.g:
 ; CHECK-NEXT:    store i32 undef, ptr @a, align 4
-; CHECK-NEXT:    br label [[WHILE_D]]
+; CHECK-NEXT:    br label [[WHILE_D1]]
 ; CHECK:       if.e:
 ; CHECK-NEXT:    br label [[F]]
 ;

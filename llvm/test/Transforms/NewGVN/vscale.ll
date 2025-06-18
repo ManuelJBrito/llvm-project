@@ -223,9 +223,11 @@ define ptr @load_from_alloc_replaced_with_undef() {
 ; CHECK-NEXT:    [[LOAD:%.*]] = load i32, ptr [[GEP]], align 4
 ; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i32 [[LOAD]], 0
 ; CHECK-NEXT:    br i1 [[TOBOOL]], label [[IF_END:%.*]], label [[IF_THEN:%.*]]
+; CHECK:       entry.if.end_crit_edge:
+; CHECK-NEXT:    br label [[IF_END1:%.*]]
 ; CHECK:       if.then:
 ; CHECK-NEXT:    store <vscale x 4 x i32> zeroinitializer, ptr [[A]], align 16
-; CHECK-NEXT:    br label [[IF_END]]
+; CHECK-NEXT:    br label [[IF_END1]]
 ; CHECK:       if.end:
 ; CHECK-NEXT:    ret ptr [[A]]
 ;
@@ -251,8 +253,10 @@ define i32 @redundant_load_elimination_1(ptr %p) {
 ; CHECK-NEXT:    [[LOAD1:%.*]] = load i32, ptr [[GEP]], align 4
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq i32 [[LOAD1]], 0
 ; CHECK-NEXT:    br i1 [[CMP]], label [[IF_THEN:%.*]], label [[IF_END:%.*]]
+; CHECK:       entry.if.end_crit_edge:
+; CHECK-NEXT:    br label [[IF_END1:%.*]]
 ; CHECK:       if.then:
-; CHECK-NEXT:    br label [[IF_END]]
+; CHECK-NEXT:    br label [[IF_END1]]
 ; CHECK:       if.end:
 ; CHECK-NEXT:    ret i32 [[LOAD1]]
 ;

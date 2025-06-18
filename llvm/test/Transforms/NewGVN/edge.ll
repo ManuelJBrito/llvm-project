@@ -7,8 +7,10 @@ define i32 @f1(i32 %x) {
 ; CHECK-NEXT:  bb0:
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq i32 [[X]], 0
 ; CHECK-NEXT:    br i1 [[CMP]], label [[BB2:%.*]], label [[BB1:%.*]]
+; CHECK:       bb0.bb2_crit_edge:
+; CHECK-NEXT:    br label [[BB3:%.*]]
 ; CHECK:       bb1:
-; CHECK-NEXT:    br label [[BB2]]
+; CHECK-NEXT:    br label [[BB3]]
 ; CHECK:       bb2:
 ; CHECK-NEXT:    ret i32 [[X]]
 ;
@@ -29,8 +31,10 @@ define i32 @f2(i32 %x) {
 ; CHECK-NEXT:  bb0:
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp ne i32 [[X]], 0
 ; CHECK-NEXT:    br i1 [[CMP]], label [[BB1:%.*]], label [[BB2:%.*]]
+; CHECK:       bb0.bb2_crit_edge:
+; CHECK-NEXT:    br label [[BB3:%.*]]
 ; CHECK:       bb1:
-; CHECK-NEXT:    br label [[BB2]]
+; CHECK-NEXT:    br label [[BB3]]
 ; CHECK:       bb2:
 ; CHECK-NEXT:    ret i32 [[X]]
 ;
@@ -52,8 +56,10 @@ define i32 @f3(i32 %x) {
 ; CHECK-NEXT:    switch i32 [[X]], label [[BB1:%.*]] [
 ; CHECK-NEXT:      i32 0, label [[BB2:%.*]]
 ; CHECK-NEXT:    ]
+; CHECK:       bb0.bb2_crit_edge:
+; CHECK-NEXT:    br label [[BB3:%.*]]
 ; CHECK:       bb1:
-; CHECK-NEXT:    br label [[BB2]]
+; CHECK-NEXT:    br label [[BB3]]
 ; CHECK:       bb2:
 ; CHECK-NEXT:    ret i32 [[X]]
 ;
@@ -74,8 +80,10 @@ define void @f4(ptr %x)  {
 ; CHECK-NEXT:  bb0:
 ; CHECK-NEXT:    [[Y:%.*]] = icmp eq ptr null, [[X]]
 ; CHECK-NEXT:    br i1 [[Y]], label [[BB2:%.*]], label [[BB1:%.*]]
+; CHECK:       bb0.bb2_crit_edge:
+; CHECK-NEXT:    br label [[BB3:%.*]]
 ; CHECK:       bb1:
-; CHECK-NEXT:    br label [[BB2]]
+; CHECK-NEXT:    br label [[BB3]]
 ; CHECK:       bb2:
 ; CHECK-NEXT:    call void @g(i1 [[Y]])
 ; CHECK-NEXT:    ret void
@@ -97,11 +105,13 @@ define double @fcmp_oeq_not_zero(double %x, double %y) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[CMP:%.*]] = fcmp oeq double [[Y]], 2.000000e+00
 ; CHECK-NEXT:    br i1 [[CMP]], label [[IF:%.*]], label [[RETURN:%.*]]
+; CHECK:       entry.return_crit_edge:
+; CHECK-NEXT:    br label [[RETURN1:%.*]]
 ; CHECK:       if:
 ; CHECK-NEXT:    [[DIV:%.*]] = fdiv double [[X]], 2.000000e+00
-; CHECK-NEXT:    br label [[RETURN]]
+; CHECK-NEXT:    br label [[RETURN1]]
 ; CHECK:       return:
-; CHECK-NEXT:    [[RETVAL:%.*]] = phi double [ [[DIV]], [[IF]] ], [ [[X]], [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[RETVAL:%.*]] = phi double [ [[DIV]], [[IF]] ], [ [[X]], [[RETURN]] ]
 ; CHECK-NEXT:    ret double [[RETVAL]]
 ;
 entry:
@@ -124,11 +134,13 @@ define double @fcmp_une_not_zero(double %x, double %y) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[CMP:%.*]] = fcmp une double [[Y]], 2.000000e+00
 ; CHECK-NEXT:    br i1 [[CMP]], label [[RETURN:%.*]], label [[ELSE:%.*]]
+; CHECK:       entry.return_crit_edge:
+; CHECK-NEXT:    br label [[RETURN1:%.*]]
 ; CHECK:       else:
 ; CHECK-NEXT:    [[DIV:%.*]] = fdiv double [[X]], 2.000000e+00
-; CHECK-NEXT:    br label [[RETURN]]
+; CHECK-NEXT:    br label [[RETURN1]]
 ; CHECK:       return:
-; CHECK-NEXT:    [[RETVAL:%.*]] = phi double [ [[DIV]], [[ELSE]] ], [ [[X]], [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[RETVAL:%.*]] = phi double [ [[DIV]], [[ELSE]] ], [ [[X]], [[RETURN]] ]
 ; CHECK-NEXT:    ret double [[RETVAL]]
 ;
 entry:
@@ -154,11 +166,13 @@ define double @fcmp_oeq_zero(double %x, double %y) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[CMP:%.*]] = fcmp oeq double [[Y]], 0.000000e+00
 ; CHECK-NEXT:    br i1 [[CMP]], label [[IF:%.*]], label [[RETURN:%.*]]
+; CHECK:       entry.return_crit_edge:
+; CHECK-NEXT:    br label [[RETURN1:%.*]]
 ; CHECK:       if:
 ; CHECK-NEXT:    [[DIV:%.*]] = fdiv double [[X]], [[Y]]
-; CHECK-NEXT:    br label [[RETURN]]
+; CHECK-NEXT:    br label [[RETURN1]]
 ; CHECK:       return:
-; CHECK-NEXT:    [[RETVAL:%.*]] = phi double [ [[DIV]], [[IF]] ], [ [[X]], [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[RETVAL:%.*]] = phi double [ [[DIV]], [[IF]] ], [ [[X]], [[RETURN]] ]
 ; CHECK-NEXT:    ret double [[RETVAL]]
 ;
 entry:
@@ -181,11 +195,13 @@ define double @fcmp_une_zero(double %x, double %y) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[CMP:%.*]] = fcmp une double [[Y]], -0.000000e+00
 ; CHECK-NEXT:    br i1 [[CMP]], label [[RETURN:%.*]], label [[ELSE:%.*]]
+; CHECK:       entry.return_crit_edge:
+; CHECK-NEXT:    br label [[RETURN1:%.*]]
 ; CHECK:       else:
 ; CHECK-NEXT:    [[DIV:%.*]] = fdiv double [[X]], [[Y]]
-; CHECK-NEXT:    br label [[RETURN]]
+; CHECK-NEXT:    br label [[RETURN1]]
 ; CHECK:       return:
-; CHECK-NEXT:    [[RETVAL:%.*]] = phi double [ [[DIV]], [[ELSE]] ], [ [[X]], [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[RETVAL:%.*]] = phi double [ [[DIV]], [[ELSE]] ], [ [[X]], [[RETURN]] ]
 ; CHECK-NEXT:    ret double [[RETVAL]]
 ;
 entry:
@@ -212,11 +228,13 @@ define double @fcmp_oeq_maybe_zero(double %x, double %y, double %z1, double %z2)
 ; CHECK-NEXT:    [[Z:%.*]] = fadd double [[Z1]], [[Z2]]
 ; CHECK-NEXT:    [[CMP:%.*]] = fcmp oeq double [[Y]], [[Z]]
 ; CHECK-NEXT:    br i1 [[CMP]], label [[IF:%.*]], label [[RETURN:%.*]]
+; CHECK:       entry.return_crit_edge:
+; CHECK-NEXT:    br label [[RETURN1:%.*]]
 ; CHECK:       if:
 ; CHECK-NEXT:    [[DIV:%.*]] = fdiv double [[X]], [[Z]]
-; CHECK-NEXT:    br label [[RETURN]]
+; CHECK-NEXT:    br label [[RETURN1]]
 ; CHECK:       return:
-; CHECK-NEXT:    [[RETVAL:%.*]] = phi double [ [[DIV]], [[IF]] ], [ [[X]], [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[RETVAL:%.*]] = phi double [ [[DIV]], [[IF]] ], [ [[X]], [[RETURN]] ]
 ; CHECK-NEXT:    ret double [[RETVAL]]
 ;
 entry:
@@ -241,11 +259,13 @@ define double @fcmp_une_maybe_zero(double %x, double %y, double %z1, double %z2)
 ; CHECK-NEXT:    [[Z:%.*]] = fadd double [[Z1]], [[Z2]]
 ; CHECK-NEXT:    [[CMP:%.*]] = fcmp une double [[Y]], [[Z]]
 ; CHECK-NEXT:    br i1 [[CMP]], label [[RETURN:%.*]], label [[ELSE:%.*]]
+; CHECK:       entry.return_crit_edge:
+; CHECK-NEXT:    br label [[RETURN1:%.*]]
 ; CHECK:       else:
 ; CHECK-NEXT:    [[DIV:%.*]] = fdiv double [[X]], [[Z]]
-; CHECK-NEXT:    br label [[RETURN]]
+; CHECK-NEXT:    br label [[RETURN1]]
 ; CHECK:       return:
-; CHECK-NEXT:    [[RETVAL:%.*]] = phi double [ [[DIV]], [[ELSE]] ], [ [[X]], [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[RETVAL:%.*]] = phi double [ [[DIV]], [[ELSE]] ], [ [[X]], [[RETURN]] ]
 ; CHECK-NEXT:    ret double [[RETVAL]]
 ;
 entry:

@@ -9,16 +9,18 @@ define i32 @load_of_ptr_select_can_be_replaced_by_value_select(ptr %ptr, ptr %en
 ; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_VAL]] = select i1 [[CMP_1]], i32 [[L_1]], i32 [[L_2]]
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -53,16 +55,18 @@ define i32 @different_phis_1(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ null, %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ null, %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_VAL]] = select i1 [[CMP_1]], i32 [[L_1]], i32 [[L_2]]
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -97,16 +101,18 @@ define i32 @different_phi_2(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[START_PTR]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[START_PTR]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_VAL]] = select i1 [[CMP_1]], i32 [[L_1]], i32 [[L_2]]
 ; CHECK-NEXT:    [[MIN_SELECT:%.*]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -140,16 +146,18 @@ define i32 @different_phis_3(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[START_PTR:%.*]] = getelementptr inbounds i32, ptr [[PTR]], i64 1
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ 19, %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ 19, %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_VAL]] = select i1 [[CMP_1]], i32 [[L_1]], i32 [[L_2]]
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -183,15 +191,17 @@ define i32 @different_phis_4(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ 10, %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ 10, %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -228,16 +238,18 @@ define i32 @load_before_loop_in_different_block(ptr %ptr, ptr %end, i1 %c) {
 ; CHECK:       [[PH]]:
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[PH]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[PH]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[PH]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[PH]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[PH]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[PH]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_VAL]] = select i1 [[CMP_1]], i32 [[L_1]], i32 [[L_2]]
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -280,9 +292,9 @@ define i32 @selects_use_different_compares(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[CMP_2:%.*]] = icmp ult i32 [[L_1]], 10
@@ -290,7 +302,9 @@ define i32 @selects_use_different_compares(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -327,16 +341,18 @@ define i32 @value_select_different_value_1(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_VAL]] = select i1 [[CMP_1]], i32 [[L_1]], i32 10
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -372,15 +388,17 @@ define i32 @value_select_different_value_2(ptr %ptr, ptr %end, ptr %ptr.2) {
 ; CHECK-NEXT:    [[L_1_PRE:%.*]] = load i32, ptr [[PTR_2]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1_PRE]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_VAL]] = select i1 [[CMP_1]], i32 [[L_1_PRE]], i32 [[L_2]]
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -416,16 +434,18 @@ define i32 @pointer_select_clobbered_1(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    store i32 99, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_VAL]] = select i1 [[CMP_1]], i32 [[L_1]], i32 [[L_2]]
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -461,9 +481,9 @@ define i32 @pointer_select_clobbered_in_loop(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    store i32 99, ptr [[PTR]], align 4
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
@@ -471,7 +491,9 @@ define i32 @pointer_select_clobbered_in_loop(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -507,9 +529,9 @@ define i32 @pointer_select_clobbered_in_loop_2(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    store i32 99, ptr [[PTR]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
@@ -517,7 +539,9 @@ define i32 @pointer_select_clobbered_in_loop_2(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -553,9 +577,9 @@ define i32 @pointer_select_clobbered_in_loop_3(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    store i32 99, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
@@ -563,7 +587,9 @@ define i32 @pointer_select_clobbered_in_loop_3(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -599,9 +625,9 @@ define i32 @pointer_select_clobbered_in_loop_4(ptr %ptr, ptr %end, ptr %ptr.2) {
 ; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    store i32 99, ptr [[PTR_2]], align 4
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
@@ -609,7 +635,9 @@ define i32 @pointer_select_clobbered_in_loop_4(ptr %ptr, ptr %end, ptr %ptr.2) {
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -648,16 +676,18 @@ define i32 @pointer_select_clobbered_by_call_before_loop(ptr %ptr, ptr %end, ptr
 ; CHECK-NEXT:    call void @may_write()
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_VAL]] = select i1 [[CMP_1]], i32 [[L_1]], i32 [[L_2]]
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -693,9 +723,9 @@ define i32 @pointer_select_clobbered_by_call_in_loop(ptr %ptr, ptr %end, ptr %pt
 ; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    call void @may_write()
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
@@ -703,7 +733,9 @@ define i32 @pointer_select_clobbered_by_call_in_loop(ptr %ptr, ptr %end, ptr %pt
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -739,16 +771,18 @@ define i32 @pointer_select_clobbered_by_call_after_loop(ptr %ptr, ptr %end, ptr 
 ; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_VAL]] = select i1 [[CMP_1]], i32 [[L_1]], i32 [[L_2]]
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    call void @may_write()
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
@@ -785,16 +819,18 @@ define i32 @pointer_select_clobbered_after_loop(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_VAL]] = select i1 [[CMP_1]], i32 [[L_1]], i32 [[L_2]]
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    store i32 99, ptr [[PTR]], align 4
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
@@ -834,16 +870,18 @@ define i32 @pointer_select_may_throw_before_loop(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    call void @may_throw()
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_VAL]] = select i1 [[CMP_1]], i32 [[L_1]], i32 [[L_2]]
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -879,9 +917,9 @@ define i32 @pointer_select_may_throw_in_loop(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    call void @may_throw()
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
@@ -889,7 +927,9 @@ define i32 @pointer_select_may_throw_in_loop(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    ret i32 [[RES]]
@@ -925,16 +965,18 @@ define i32 @pointer_select_may_throw_after_loop(ptr %ptr, ptr %end) {
 ; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ [[L_2_PRE]], %[[ENTRY]] ], [ [[MIN_VAL:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_VAL]] = select i1 [[CMP_1]], i32 [[L_1]], i32 [[L_2]]
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_1]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp eq ptr [[PTR_IV_NEXT]], [[END]]
-; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[EC]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    call void @may_throw()
 ; CHECK-NEXT:    [[RES:%.*]] = load i32, ptr [[MIN_SELECT]], align 4

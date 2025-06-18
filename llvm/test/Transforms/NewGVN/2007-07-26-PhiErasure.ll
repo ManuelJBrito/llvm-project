@@ -15,10 +15,15 @@ define i32 @reload(ptr %first, i32 %global, ptr %dumpfile) {
 ; CHECK-NEXT:    br label [[BB2928:%.*]]
 ; CHECK:       bb2928:
 ; CHECK-NEXT:    br i1 false, label [[COND_NEXT2943:%.*]], label [[COND_TRUE2935:%.*]]
+; CHECK:       bb2928.cond_next2943_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[COND_NEXT2944:%.*]]
 ; CHECK:       cond_true2935:
-; CHECK-NEXT:    br label [[COND_NEXT2943]]
+; CHECK-NEXT:    br label [[COND_NEXT2944]]
 ; CHECK:       cond_next2943:
-; CHECK-NEXT:    br i1 false, label [[BB2982_PREHEADER:%.*]], label [[BB2928]]
+; CHECK-NEXT:    br i1 false, label [[BB2982_PREHEADER:%.*]], label [[COND_NEXT2943_BB2928_CRIT_EDGE:%.*]]
+; CHECK:       cond_next2943.bb2928_crit_edge:
+; CHECK-NEXT:    br label [[BB2928]]
 ; CHECK:       bb2982.preheader:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    ret i32 poison

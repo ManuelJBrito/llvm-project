@@ -7,11 +7,13 @@ define i32 @foo(i1 %cond, ptr %q, ptr %p) {
 ; CHECK-NEXT:    [[V0:%.*]] = call i32 @llvm.convergent(i32 0)
 ; CHECK-NEXT:    store i32 [[V0]], ptr [[Q:%.*]], align 4
 ; CHECK-NEXT:    br i1 [[COND:%.*]], label [[PRE:%.*]], label [[MERGE:%.*]]
+; CHECK:       entry.merge_crit_edge:
+; CHECK-NEXT:    br label [[MERGE1:%.*]]
 ; CHECK:       pre:
 ; CHECK-NEXT:    [[T0:%.*]] = load i32, ptr [[P:%.*]], align 4
-; CHECK-NEXT:    br label [[MERGE]]
+; CHECK-NEXT:    br label [[MERGE1]]
 ; CHECK:       merge:
-; CHECK-NEXT:    [[M0:%.*]] = phi i32 [ [[T0]], [[PRE]] ], [ 0, [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[M0:%.*]] = phi i32 [ [[T0]], [[PRE]] ], [ 0, [[MERGE]] ]
 ; CHECK-NEXT:    [[R0:%.*]] = call i32 @llvm.convergent(i32 [[M0]])
 ; CHECK-NEXT:    ret i32 [[R0]]
 ;

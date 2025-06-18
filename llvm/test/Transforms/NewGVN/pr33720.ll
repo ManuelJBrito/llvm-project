@@ -8,32 +8,55 @@
 define void @patatino(i1 %arg) {
 ; CHECK-LABEL: @patatino(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    br i1 %arg, label [[IF_END24:%.*]], label [[FOR_COND16:%.*]]
+; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[ENTRY_IF_END24_CRIT_EDGE:%.*]], label [[ENTRY:%.*]]
+; CHECK:       entry.for.cond16_crit_edge:
+; CHECK-NEXT:    br label [[FOR_COND17:%.*]]
+; CHECK:       entry.if.end24_crit_edge:
+; CHECK-NEXT:    br label [[IF_END24:%.*]]
 ; CHECK:       for.cond2thread-pre-split:
 ; CHECK-NEXT:    br i1 false, label [[FOR_BODY:%.*]], label [[FOR_COND8_PREHEADER:%.*]]
+; CHECK:       for.cond2thread-pre-split.for.body_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[FOR_BODY1:%.*]]
 ; CHECK:       for.cond8.preheader:
-; CHECK-NEXT:    br i1 %arg, label [[L1:%.*]], label [[FOR_COND11THREAD_PRE_SPLIT_LR_PH:%.*]]
+; CHECK-NEXT:    br i1 [[ARG]], label [[FOR_COND8_PREHEADER_L1_CRIT_EDGE:%.*]], label [[FOR_COND11THREAD_PRE_SPLIT_LR_PH:%.*]]
+; CHECK:       for.cond8.preheader.l1_crit_edge:
+; CHECK-NEXT:    br label [[L1:%.*]]
 ; CHECK:       for.cond11thread-pre-split.lr.ph:
 ; CHECK-NEXT:    br label [[L1]]
 ; CHECK:       for.body:
 ; CHECK-NEXT:    store i64 7, ptr @f, align 4
 ; CHECK-NEXT:    br i1 true, label [[FOR_COND2THREAD_PRE_SPLIT:%.*]], label [[LOR_RHS:%.*]]
+; CHECK:       for.body.for.cond2thread-pre-split_crit_edge:
+; CHECK-NEXT:    br label [[FOR_COND2THREAD_PRE_SPLIT1:%.*]]
 ; CHECK:       lor.rhs:
 ; CHECK-NEXT:    store i64 1, ptr @b, align 8
-; CHECK-NEXT:    br label [[FOR_COND2THREAD_PRE_SPLIT]]
+; CHECK-NEXT:    br label [[FOR_COND2THREAD_PRE_SPLIT1]]
 ; CHECK:       l1:
-; CHECK-NEXT:    [[K_2:%.*]] = phi i64 [ undef, [[L1_PREHEADER:%.*]] ], [ 15, [[FOR_COND8_PREHEADER]] ], [ 5, [[FOR_COND11THREAD_PRE_SPLIT_LR_PH]] ]
+; CHECK-NEXT:    [[K_2:%.*]] = phi i64 [ undef, [[L1_PREHEADER:%.*]] ], [ 15, [[FOR_COND8_PREHEADER_L1_CRIT_EDGE]] ], [ 5, [[FOR_COND11THREAD_PRE_SPLIT_LR_PH]] ]
 ; CHECK-NEXT:    store i64 7, ptr [[J_3:%.*]], align 4
-; CHECK-NEXT:    br label [[FOR_BODY]]
+; CHECK-NEXT:    br label [[FOR_BODY1]]
 ; CHECK:       for.cond16:
-; CHECK-NEXT:    [[J_0:%.*]] = phi ptr [ @f, [[ENTRY:%.*]] ], [ poison, [[FOR_COND20:%.*]] ], [ @e, [[FOR_COND16]] ]
-; CHECK-NEXT:    br i1 %arg, label [[FOR_COND20]], label [[FOR_COND16]]
+; CHECK-NEXT:    [[J_0:%.*]] = phi ptr [ @f, [[ENTRY]] ], [ poison, [[FOR_COND20:%.*]] ], [ @e, [[FOR_COND16:%.*]] ]
+; CHECK-NEXT:    br i1 [[ARG]], label [[FOR_COND16_FOR_COND20_CRIT_EDGE:%.*]], label [[FOR_COND16]]
+; CHECK:       for.cond16.for.cond16_crit_edge:
+; CHECK-NEXT:    br label [[FOR_COND17]]
+; CHECK:       for.cond16.for.cond20_crit_edge:
+; CHECK-NEXT:    br label [[FOR_COND21:%.*]]
 ; CHECK:       for.cond20:
-; CHECK-NEXT:    [[J_2:%.*]] = phi ptr [ [[J_0]], [[FOR_COND16]] ], [ poison, [[IF_END24]] ]
-; CHECK-NEXT:    br i1 true, label [[IF_END24]], label [[FOR_COND16]]
+; CHECK-NEXT:    [[J_2:%.*]] = phi ptr [ [[J_0]], [[FOR_COND16_FOR_COND20_CRIT_EDGE]] ], [ poison, [[IF_END24_FOR_COND20_CRIT_EDGE:%.*]] ]
+; CHECK-NEXT:    br i1 true, label [[FOR_COND20_IF_END24_CRIT_EDGE:%.*]], label [[FOR_COND20]]
+; CHECK:       for.cond20.for.cond16_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[FOR_COND17]]
+; CHECK:       for.cond20.if.end24_crit_edge:
+; CHECK-NEXT:    br label [[IF_END24]]
 ; CHECK:       if.end24:
-; CHECK-NEXT:    [[J_3]] = phi ptr [ [[J_2]], [[FOR_COND20]] ], [ undef, [[ENTRY]] ]
-; CHECK-NEXT:    br i1 false, label [[FOR_COND20]], label [[L1_PREHEADER]]
+; CHECK-NEXT:    [[J_3]] = phi ptr [ [[J_2]], [[FOR_COND20_IF_END24_CRIT_EDGE]] ], [ undef, [[ENTRY_IF_END24_CRIT_EDGE]] ]
+; CHECK-NEXT:    br i1 false, label [[IF_END24_FOR_COND20_CRIT_EDGE]], label [[L1_PREHEADER]]
+; CHECK:       if.end24.for.cond20_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[FOR_COND21]]
 ; CHECK:       l1.preheader:
 ; CHECK-NEXT:    br label [[L1]]
 ;

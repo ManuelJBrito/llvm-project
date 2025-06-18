@@ -19,7 +19,10 @@ define i8 @func_1(i32 %x, i32 %y) nounwind  {
 ; CHECK-NEXT:    br label [[AFTERFOR:%.*]]
 ; CHECK:       forbody:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label [[AFTERFOR]], label [[FORBODY:%.*]]
+; CHECK-NEXT:    br i1 false, label [[FORBODY_AFTERFOR_CRIT_EDGE:%.*]], label [[FORBODY:%.*]]
+; CHECK:       forbody.afterfor_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[AFTERFOR]]
 ; CHECK:       afterfor:
 ; CHECK-NEXT:    ret i8 [[TMP3]]
 ;

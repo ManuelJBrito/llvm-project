@@ -9,12 +9,18 @@ define i32 @smpUMHEXBipredIntegerPelBlockMotionSearch(ptr %cur_pic, i16 signext 
 ; CHECK-NEXT:  cond_next143:
 ; CHECK-NEXT:    store i16 0, ptr @img_width, align 2
 ; CHECK-NEXT:    br i1 false, label [[COND_NEXT449:%.*]], label [[COND_FALSE434:%.*]]
+; CHECK:       cond_next143.cond_next449_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[COND_NEXT450:%.*]]
 ; CHECK:       cond_false434:
-; CHECK-NEXT:    br label [[COND_NEXT449]]
+; CHECK-NEXT:    br label [[COND_NEXT450]]
 ; CHECK:       cond_next449:
 ; CHECK-NEXT:    br i1 false, label [[COND_NEXT698:%.*]], label [[COND_FALSE470:%.*]]
+; CHECK:       cond_next449.cond_next698_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[COND_NEXT699:%.*]]
 ; CHECK:       cond_false470:
-; CHECK-NEXT:    br label [[COND_NEXT698]]
+; CHECK-NEXT:    br label [[COND_NEXT699]]
 ; CHECK:       cond_next698:
 ; CHECK-NEXT:    ret i32 0
 ;

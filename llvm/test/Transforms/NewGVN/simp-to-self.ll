@@ -12,7 +12,9 @@ define void @fn1(i1 %bc) {
 ; CHECK-NEXT:    [[BF_SET:%.*]] = or i32 1, [[BF_CLEAR]]
 ; CHECK-NEXT:    br label [[FOR_COND:%.*]]
 ; CHECK:       for.cond:
-; CHECK-NEXT:    br i1 [[BC]], label [[FOR_COND]], label [[EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[BC]], label [[FOR_COND_FOR_COND_CRIT_EDGE:%.*]], label [[EXIT:%.*]]
+; CHECK:       for.cond.for.cond_crit_edge:
+; CHECK-NEXT:    br label [[FOR_COND]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    store i32 [[BF_SET]], ptr @a, align 4
 ; CHECK-NEXT:    ret void

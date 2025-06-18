@@ -16,6 +16,8 @@ define %MNR_struct @f000316011717_2(ptr %pDS, ptr %pCG) #2 {
 ; CHECK-NEXT:    [[EXTARGET:%.*]] = load i64, ptr [[ABSADDR]], align 8, !tbaa [[TBAA4:![0-9]+]]
 ; CHECK-NEXT:    [[TEMPLATE:%.*]] = icmp eq i64 [[EXTARGET]], 8593987412
 ; CHECK-NEXT:    br i1 [[TEMPLATE]], label %"BB3.000316011731#1", label [[BB2_000316011731_5:%.*]]
+; CHECK:       Entry.BB2.000316011731.5_crit_edge:
+; CHECK-NEXT:    br label [[BB2_000316011731_6:%.*]]
 ; CHECK:       "BB3.000316011731#1":
 ; CHECK-NEXT:    [[PBASE8:%.*]] = getelementptr [32 x ptr], ptr [[PDS]], i64 0, i64 29
 ; CHECK-NEXT:    [[BASE9:%.*]] = load ptr, ptr [[PBASE8]], align 8, !tbaa [[TBAA14]]
@@ -25,7 +27,9 @@ define %MNR_struct @f000316011717_2(ptr %pDS, ptr %pCG) #2 {
 ; CHECK-NEXT:    [[PWTE:%.*]] = getelementptr [32 x i16], ptr [[PWT]], i64 0, i64 8593987412
 ; CHECK-NEXT:    [[SHIFTS:%.*]] = load i16, ptr [[PWTE]], align 2, !tbaa [[TBAA18:![0-9]+]], !invariant.load [[META20:![0-9]+]]
 ; CHECK-NEXT:    [[SLOWJ:%.*]] = icmp eq i16 [[SHIFTS]], 0
-; CHECK-NEXT:    br i1 [[SLOWJ]], label [[BB2_000316011731_5]], label %"BB3.000316011731#1.1"
+; CHECK-NEXT:    br i1 [[SLOWJ]], label %"BB3.000316011731#1.BB2.000316011731.5_crit_edge", label %"BB3.000316011731#1.1"
+; CHECK:       "BB3.000316011731#1.BB2.000316011731.5_crit_edge":
+; CHECK-NEXT:    br label [[BB2_000316011731_6]]
 ; CHECK:       BB2.000316011731.5:
 ; CHECK-NEXT:    [[EXTARGET1:%.*]] = and i64 [[EXTARGET]], 137438953471
 ; CHECK-NEXT:    switch i64 [[EXTARGET1]], label [[EXIT:%.*]] [
@@ -39,7 +43,7 @@ define %MNR_struct @f000316011717_2(ptr %pDS, ptr %pCG) #2 {
 ; CHECK-NEXT:    [[REG:%.*]] = load i64, ptr [[PREG2]], align 16, !tbaa [[TBAA12:![0-9]+]]
 ; CHECK-NEXT:    [[BASE2:%.*]] = load ptr, ptr [[PBASE8]], align 8, !tbaa [[TBAA14]]
 ; CHECK-NEXT:    [[ABSADDR2:%.*]] = getelementptr i64, ptr [[BASE2]], i64 [[REG]]
-; CHECK-NEXT:    [[RMEM2:%.*]] = load i64, ptr [[ABSADDR2]], align 8, !tbaa [[TBAA1:![0-9]+]]
+; CHECK-NEXT:    [[RMEM2:%.*]] = load i64, ptr [[ABSADDR2]], align 8, !tbaa [[TBAA4]]
 ; CHECK-NEXT:    [[PREG7:%.*]] = getelementptr [64 x i64], ptr [[PCG]], i64 0, i64 9
 ; CHECK-NEXT:    store i64 [[RMEM2]], ptr [[PREG7]], align 8, !tbaa [[TBAA8:![0-9]+]]
 ; CHECK-NEXT:    [[ADD2C279:%.*]] = add i64 [[RMEM2]], [[VAL]]

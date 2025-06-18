@@ -18,8 +18,10 @@ define void @reorder_ref_pic_list(i1 %arg, i1 %arg2, i1 %arg3) local_unnamed_add
 ; CHECK-NEXT:    br label [[FOR_BODY8_I:%.*]]
 ; CHECK:       for.body8.i:
 ; CHECK-NEXT:    br i1 [[ARG2:%.*]], label [[FOR_INC24_I:%.*]], label [[IF_THEN17_I:%.*]]
+; CHECK:       for.body8.i.for.inc24.i_crit_edge:
+; CHECK-NEXT:    br label [[FOR_INC24_I1:%.*]]
 ; CHECK:       if.then17.i:
-; CHECK-NEXT:    br label [[FOR_INC24_I]]
+; CHECK-NEXT:    br label [[FOR_INC24_I1]]
 ; CHECK:       for.inc24.i:
 ; CHECK-NEXT:    br label [[FOR_BODY8_I]]
 ; CHECK:       if.else58:

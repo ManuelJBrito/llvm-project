@@ -12,22 +12,24 @@ define i16 @test_PR31651(ptr %ub.16) {
 ; CHECK-SAME: ptr [[UB_16:%.*]]) {
 ; CHECK-NEXT:    br label %[[LOOP_1_HEADER:.*]]
 ; CHECK:       [[LOOP_1_HEADER]]:
-; CHECK-NEXT:    [[_TMP18:%.*]] = phi i16 [ -1, [[TMP0:%.*]] ], [ [[IV_1:%.*]], %[[LOOP_1_LATCH:.*]] ]
-; CHECK-NEXT:    [[IV_1]] = phi i16 [ 0, [[TMP0]] ], [ [[IV_1_NEXT:%.*]], %[[LOOP_1_LATCH]] ]
+; CHECK-NEXT:    [[_TMP18:%.*]] = phi i16 [ -1, [[TMP0:%.*]] ], [ [[IV_1:%.*]], %[[LOOP_1_LATCH_LOOP_1_HEADER_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[IV_1]] = phi i16 [ 0, [[TMP0]] ], [ [[IV_1_NEXT:%.*]], %[[LOOP_1_LATCH_LOOP_1_HEADER_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp eq i16 [[IV_1]], 0
-; CHECK-NEXT:    br i1 [[CMP_1]], label %[[CONT_1:.*]], label %[[THEN_1:.*]]
+; CHECK-NEXT:    br i1 [[CMP_1]], label %[[LOOP_1_HEADER_CONT_1_CRIT_EDGE:.*]], label %[[THEN_1:.*]]
+; CHECK:       [[LOOP_1_HEADER_CONT_1_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[CONT_1:.*]]
 ; CHECK:       [[THEN_1]]:
 ; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr [4 x i16], ptr [[UB_16]], i16 1, i16 [[_TMP18]]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i16, ptr [[GEP_1]], align 2
 ; CHECK-NEXT:    br label %[[CONT_1]]
 ; CHECK:       [[CONT_1]]:
-; CHECK-NEXT:    [[IV_1_SINK:%.*]] = phi i16 [ [[IV_1]], %[[THEN_1]] ], [ 0, %[[LOOP_1_HEADER]] ]
+; CHECK-NEXT:    [[IV_1_SINK:%.*]] = phi i16 [ [[IV_1]], %[[THEN_1]] ], [ 0, %[[LOOP_1_HEADER_CONT_1_CRIT_EDGE]] ]
 ; CHECK-NEXT:    br i1 [[CMP_1]], label %[[THEN_2:.*]], label %[[ELSE_2:.*]]
 ; CHECK:       [[THEN_2]]:
 ; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr [4 x i16], ptr [[UB_16]], i16 1, i16 0
 ; CHECK-NEXT:    [[L_2:%.*]] = load i16, ptr [[GEP_3]], align 2
 ; CHECK-NEXT:    call void @use(i16 [[L_2]])
-; CHECK-NEXT:    br label %[[LOOP_1_LATCH]]
+; CHECK-NEXT:    br label %[[LOOP_1_LATCH:.*]]
 ; CHECK:       [[ELSE_2]]:
 ; CHECK-NEXT:    [[GEP_4:%.*]] = getelementptr [4 x i16], ptr [[UB_16]], i16 1, i16 [[IV_1]]
 ; CHECK-NEXT:    [[L_3:%.*]] = load i16, ptr [[GEP_4]], align 2
@@ -36,16 +38,22 @@ define i16 @test_PR31651(ptr %ub.16) {
 ; CHECK:       [[LOOP_1_LATCH]]:
 ; CHECK-NEXT:    [[IV_1_NEXT]] = add i16 [[IV_1]], 1
 ; CHECK-NEXT:    [[CMP_3:%.*]] = icmp slt i16 [[IV_1_NEXT]], 2
-; CHECK-NEXT:    br i1 [[CMP_3]], label %[[LOOP_1_HEADER]], label %[[LOOP_2:.*]]
+; CHECK-NEXT:    br i1 [[CMP_3]], label %[[LOOP_1_LATCH_LOOP_1_HEADER_CRIT_EDGE]], label %[[LOOP_1_LATCH_LOOP_2_CRIT_EDGE:.*]]
+; CHECK:       [[LOOP_1_LATCH_LOOP_2_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP_2:.*]]
+; CHECK:       [[LOOP_1_LATCH_LOOP_1_HEADER_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP_1_HEADER]]
 ; CHECK:       [[LOOP_2]]:
-; CHECK-NEXT:    [[IV_2:%.*]] = phi i16 [ 0, %[[LOOP_1_LATCH]] ], [ [[IV_2_NEXT:%.*]], %[[LOOP_2]] ]
-; CHECK-NEXT:    [[SUM:%.*]] = phi i16 [ 0, %[[LOOP_1_LATCH]] ], [ [[SUM_NEXT:%.*]], %[[LOOP_2]] ]
+; CHECK-NEXT:    [[IV_2:%.*]] = phi i16 [ 0, %[[LOOP_1_LATCH_LOOP_2_CRIT_EDGE]] ], [ [[IV_2_NEXT:%.*]], %[[LOOP_2_LOOP_2_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[SUM:%.*]] = phi i16 [ 0, %[[LOOP_1_LATCH_LOOP_2_CRIT_EDGE]] ], [ [[SUM_NEXT:%.*]], %[[LOOP_2_LOOP_2_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[GEP_5:%.*]] = getelementptr [4 x i16], ptr [[UB_16]], i16 1, i16 [[IV_2]]
 ; CHECK-NEXT:    [[L_4:%.*]] = load i16, ptr [[GEP_5]], align 2
 ; CHECK-NEXT:    [[SUM_NEXT]] = add i16 [[SUM]], [[L_4]]
 ; CHECK-NEXT:    [[IV_2_NEXT]] = add i16 [[IV_2]], 1
 ; CHECK-NEXT:    [[CMP_4:%.*]] = icmp slt i16 [[IV_2_NEXT]], 2
-; CHECK-NEXT:    br i1 [[CMP_4]], label %[[LOOP_2]], label %[[EXIT:.*]]
+; CHECK-NEXT:    br i1 [[CMP_4]], label %[[LOOP_2_LOOP_2_CRIT_EDGE]], label %[[EXIT:.*]]
+; CHECK:       [[LOOP_2_LOOP_2_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP_2]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    ret i16 [[SUM_NEXT]]
 ;

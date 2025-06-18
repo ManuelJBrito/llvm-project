@@ -7,10 +7,12 @@ define void @tinkywinky(i1 %patatino) {
 ; CHECK-LABEL: @tinkywinky(
 ; CHECK-NEXT:    store i32 8, ptr null, align 4
 ; CHECK-NEXT:    br i1 [[PATATINO:%.*]], label [[IF_END:%.*]], label [[IF_THEN:%.*]]
+; CHECK:       .if.end_crit_edge:
+; CHECK-NEXT:    br label [[IF_END1:%.*]]
 ; CHECK:       if.then:
 ; CHECK-NEXT:    br label [[L:%.*]]
 ; CHECK:       L:
-; CHECK-NEXT:    br label [[IF_END]]
+; CHECK-NEXT:    br label [[IF_END1]]
 ; CHECK:       if.end:
 ; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr null, align 4
 ; CHECK-NEXT:    [[BF_LOAD1:%.*]] = load i32, ptr @b, align 4

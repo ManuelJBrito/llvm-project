@@ -6,7 +6,9 @@ define i64 @test(ptr noalias %p, ptr noalias %q) {
 ; CHECK-SAME: ptr noalias [[P:%.*]], ptr noalias [[Q:%.*]]) {
 ; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    store ptr [[Q]], ptr [[P]], align 8
-; CHECK-NEXT:    br i1 false, label %[[IF:.*]], label %[[MERGE:.*]]
+; CHECK-NEXT:    br i1 false, label %[[IF:.*]], label %[[ENTRY_MERGE_CRIT_EDGE:.*]]
+; CHECK:       [[ENTRY_MERGE_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[MERGE:.*]]
 ; CHECK:       [[IF]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[MERGE]]

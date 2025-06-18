@@ -7,15 +7,22 @@ source_filename = "bugpoint-output-e4c7d0f.bc"
 define void @hoge(i1 %arg) local_unnamed_addr #0 {
 ; CHECK-LABEL: @hoge(
 ; CHECK-NEXT:  bb:
-; CHECK-NEXT:    br i1 %arg, label [[BB6:%.*]], label [[BB1:%.*]]
+; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[BB_BB6_CRIT_EDGE:%.*]], label [[BB1:%.*]]
+; CHECK:       bb.bb6_crit_edge:
+; CHECK-NEXT:    br label [[BB6:%.*]]
 ; CHECK:       bb1:
 ; CHECK-NEXT:    br label [[BB6]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    br i1 true, label [[BB3:%.*]], label [[BB6]]
+; CHECK-NEXT:    br i1 true, label [[BB3:%.*]], label [[BB2_BB6_CRIT_EDGE:%.*]]
+; CHECK:       bb2.bb6_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB6]]
 ; CHECK:       bb3:
 ; CHECK-NEXT:    br label [[BB4:%.*]]
 ; CHECK:       bb4:
-; CHECK-NEXT:    br i1 %arg, label [[BB2:%.*]], label [[BB6]]
+; CHECK-NEXT:    br i1 [[ARG]], label [[BB2:%.*]], label [[BB4_BB6_CRIT_EDGE:%.*]]
+; CHECK:       bb4.bb6_crit_edge:
+; CHECK-NEXT:    br label [[BB6]]
 ; CHECK:       bb6:
 ; CHECK-NEXT:    br label [[BB4]]
 ;

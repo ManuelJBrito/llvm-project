@@ -16,10 +16,12 @@ define i32 @test2(i32 %arg, i1 %b) {
 ; CHECK-LABEL: @test2(
 ; CHECK-NEXT:    br label [[BB:%.*]]
 ; CHECK:       bb:
-; CHECK-NEXT:    [[A:%.*]] = phi i32 [ 1, [[TMP0:%.*]] ], [ 2, [[BB]] ]
+; CHECK-NEXT:    [[A:%.*]] = phi i32 [ 1, [[TMP0:%.*]] ], [ 2, [[BB_BB_CRIT_EDGE:%.*]] ]
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq i32 [[ARG:%.*]], [[A]]
 ; CHECK-NEXT:    call void @llvm.assume(i1 [[CMP]])
-; CHECK-NEXT:    br i1 [[B:%.*]], label [[BB]], label [[END:%.*]]
+; CHECK-NEXT:    br i1 [[B:%.*]], label [[BB_BB_CRIT_EDGE]], label [[END:%.*]]
+; CHECK:       bb.bb_crit_edge:
+; CHECK-NEXT:    br label [[BB]]
 ; CHECK:       end:
 ; CHECK-NEXT:    ret i32 [[ARG]]
 ;

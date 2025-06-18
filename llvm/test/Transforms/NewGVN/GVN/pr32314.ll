@@ -13,9 +13,9 @@ define void @foo() {
 ; CHECK:       [[FOR_COND_CLEANUP:.*]]:
 ; CHECK-NEXT:    ret void
 ; CHECK:       [[FOR_BODY]]:
-; CHECK-NEXT:    [[TMP0:%.*]] = phi i64 [ 0, %[[ENTRY]] ], [ [[INDVARS_IV:%.*]], %[[FOR_BODY]] ]
-; CHECK-NEXT:    [[INDVARS_IV]] = phi i64 [ 1, %[[ENTRY]] ], [ [[INDVARS_IV_NEXT:%.*]], %[[FOR_BODY]] ]
-; CHECK-NEXT:    [[P_017:%.*]] = phi ptr [ undef, %[[ENTRY]] ], [ [[ARRAYIDX3:%.*]], %[[FOR_BODY]] ]
+; CHECK-NEXT:    [[TMP0:%.*]] = phi i64 [ 0, %[[ENTRY]] ], [ [[INDVARS_IV:%.*]], %[[FOR_BODY_FOR_BODY_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[INDVARS_IV]] = phi i64 [ 1, %[[ENTRY]] ], [ [[INDVARS_IV_NEXT:%.*]], %[[FOR_BODY_FOR_BODY_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[P_017:%.*]] = phi ptr [ undef, %[[ENTRY]] ], [ [[ARRAYIDX3:%.*]], %[[FOR_BODY_FOR_BODY_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [3 x i32], ptr [[A]], i64 0, i64 [[TMP0]]
 ; CHECK-NEXT:    store i32 50, ptr [[ARRAYIDX]], align 4
 ; CHECK-NEXT:    [[TMP1:%.*]] = shl i64 [[INDVARS_IV]], 1
@@ -25,7 +25,9 @@ define void @foo() {
 ; CHECK-NEXT:    store i32 60, ptr [[ARRAYIDX3]], align 4
 ; CHECK-NEXT:    [[INDVARS_IV_NEXT]] = add nuw nsw i64 [[INDVARS_IV]], 1
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp ne i64 [[INDVARS_IV_NEXT]], 3
-; CHECK-NEXT:    br i1 [[EXITCOND]], label %[[FOR_BODY]], label %[[FOR_COND_CLEANUP]]
+; CHECK-NEXT:    br i1 [[EXITCOND]], label %[[FOR_BODY_FOR_BODY_CRIT_EDGE]], label %[[FOR_COND_CLEANUP]]
+; CHECK:       [[FOR_BODY_FOR_BODY_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[FOR_BODY]]
 ;
 entry:
   %a = alloca [3 x i32], align 4

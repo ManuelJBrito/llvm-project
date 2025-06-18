@@ -7,18 +7,29 @@ define void @fn1(i64 noundef %arg, i1 %arg2) {
 ; CHECK-LABEL: @fn1(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    br i1 [[ARG2:%.*]], label [[IF_THEN:%.*]], label [[COND_TRUE:%.*]]
+; CHECK:       entry.cond.true_crit_edge:
+; CHECK-NEXT:    br label [[COND_TRUE1:%.*]]
 ; CHECK:       if.then:
 ; CHECK-NEXT:    br i1 false, label [[FIRSTPHIBLOCK:%.*]], label [[TEMP:%.*]]
+; CHECK:       if.then.firstphiblock_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[FIRSTPHIBLOCK1:%.*]]
 ; CHECK:       firstphiblock:
 ; CHECK-NEXT:    br i1 [[ARG2]], label [[FOR_COND17THREAD_PRE_SPLIT:%.*]], label [[SECONDPHIBLOCK:%.*]]
+; CHECK:       firstphiblock.secondphiblock_crit_edge:
+; CHECK-NEXT:    br label [[SECONDPHIBLOCK1:%.*]]
 ; CHECK:       secondphiblock:
-; CHECK-NEXT:    [[SECONDPHI:%.*]] = phi i64 [ [[THIRDPHI:%.*]], [[THIRDPHIBLOCK:%.*]] ], [ undef, [[FIRSTPHIBLOCK]] ]
-; CHECK-NEXT:    br i1 [[ARG2]], label [[FIRSTPHIBLOCK]], label [[THIRDPHIBLOCK]]
+; CHECK-NEXT:    [[SECONDPHI:%.*]] = phi i64 [ [[THIRDPHI:%.*]], [[THIRDPHIBLOCK:%.*]] ], [ undef, [[SECONDPHIBLOCK]] ]
+; CHECK-NEXT:    br i1 [[ARG2]], label [[SECONDPHIBLOCK_FIRSTPHIBLOCK_CRIT_EDGE:%.*]], label [[SECONDPHIBLOCK_THIRDPHIBLOCK_CRIT_EDGE:%.*]]
+; CHECK:       secondphiblock.thirdphiblock_crit_edge:
+; CHECK-NEXT:    br label [[THIRDPHIBLOCK]]
+; CHECK:       secondphiblock.firstphiblock_crit_edge:
+; CHECK-NEXT:    br label [[FIRSTPHIBLOCK1]]
 ; CHECK:       thirdphiblock:
-; CHECK-NEXT:    [[THIRDPHI]] = phi i64 [ [[SECONDPHI]], [[SECONDPHIBLOCK]] ], [ [[DIV:%.*]], [[COND_TRUE]] ]
-; CHECK-NEXT:    br label [[SECONDPHIBLOCK]]
+; CHECK-NEXT:    [[THIRDPHI]] = phi i64 [ [[SECONDPHI]], [[SECONDPHIBLOCK_THIRDPHIBLOCK_CRIT_EDGE]] ], [ [[DIV:%.*]], [[COND_TRUE1]] ]
+; CHECK-NEXT:    br label [[SECONDPHIBLOCK1]]
 ; CHECK:       for.cond17thread-pre-split:
-; CHECK-NEXT:    br label [[COND_TRUE]]
+; CHECK-NEXT:    br label [[COND_TRUE1]]
 ; CHECK:       cond.true:
 ; CHECK-NEXT:    [[DIV]] = sdiv i64 [[ARG:%.*]], 4
 ; CHECK-NEXT:    br label [[THIRDPHIBLOCK]]
@@ -51,21 +62,32 @@ define void @fn2(i64 noundef %arg, i1 %arg2) {
 ; CHECK-LABEL: @fn2(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    br i1 [[ARG2:%.*]], label [[IF_THEN:%.*]], label [[COND_TRUE:%.*]]
+; CHECK:       entry.cond.true_crit_edge:
+; CHECK-NEXT:    br label [[COND_TRUE1:%.*]]
 ; CHECK:       if.then:
 ; CHECK-NEXT:    br i1 false, label [[FIRSTPHIBLOCK:%.*]], label [[TEMP:%.*]]
+; CHECK:       if.then.firstphiblock_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[FIRSTPHIBLOCK1:%.*]]
 ; CHECK:       firstphiblock:
-; CHECK-NEXT:    [[FIRSTPHI:%.*]] = phi i64 [ poison, [[IF_THEN]] ], [ [[SECONDPHI:%.*]], [[SECONDPHIBLOCK:%.*]] ]
-; CHECK-NEXT:    br i1 [[ARG2]], label [[FOR_COND17THREAD_PRE_SPLIT:%.*]], label [[SECONDPHIBLOCK]]
+; CHECK-NEXT:    [[FIRSTPHI:%.*]] = phi i64 [ poison, [[FIRSTPHIBLOCK]] ], [ [[SECONDPHI:%.*]], [[SECONDPHIBLOCK_FIRSTPHIBLOCK_CRIT_EDGE:%.*]] ]
+; CHECK-NEXT:    br i1 [[ARG2]], label [[FOR_COND17THREAD_PRE_SPLIT:%.*]], label [[SECONDPHIBLOCK:%.*]]
+; CHECK:       firstphiblock.secondphiblock_crit_edge:
+; CHECK-NEXT:    br label [[SECONDPHIBLOCK1:%.*]]
 ; CHECK:       secondphiblock:
-; CHECK-NEXT:    [[SECONDPHI]] = phi i64 [ [[THIRDPHI:%.*]], [[THIRDPHIBLOCK:%.*]] ], [ [[FIRSTPHI]], [[FIRSTPHIBLOCK]] ]
-; CHECK-NEXT:    br i1 [[ARG2]], label [[FIRSTPHIBLOCK]], label [[THIRDPHIBLOCK]]
+; CHECK-NEXT:    [[SECONDPHI]] = phi i64 [ [[THIRDPHI:%.*]], [[THIRDPHIBLOCK:%.*]] ], [ [[FIRSTPHI]], [[SECONDPHIBLOCK]] ]
+; CHECK-NEXT:    br i1 [[ARG2]], label [[SECONDPHIBLOCK_FIRSTPHIBLOCK_CRIT_EDGE]], label [[SECONDPHIBLOCK_THIRDPHIBLOCK_CRIT_EDGE:%.*]]
+; CHECK:       secondphiblock.thirdphiblock_crit_edge:
+; CHECK-NEXT:    br label [[THIRDPHIBLOCK]]
+; CHECK:       secondphiblock.firstphiblock_crit_edge:
+; CHECK-NEXT:    br label [[FIRSTPHIBLOCK1]]
 ; CHECK:       thirdphiblock:
-; CHECK-NEXT:    [[THIRDPHI]] = phi i64 [ [[SECONDPHI]], [[SECONDPHIBLOCK]] ], [ [[DIV:%.*]], [[COND_TRUE]] ]
-; CHECK-NEXT:    br label [[SECONDPHIBLOCK]]
+; CHECK-NEXT:    [[THIRDPHI]] = phi i64 [ [[SECONDPHI]], [[SECONDPHIBLOCK_THIRDPHIBLOCK_CRIT_EDGE]] ], [ [[DIV:%.*]], [[COND_TRUE1]] ]
+; CHECK-NEXT:    br label [[SECONDPHIBLOCK1]]
 ; CHECK:       for.cond17thread-pre-split:
-; CHECK-NEXT:    br label [[COND_TRUE]]
+; CHECK-NEXT:    br label [[COND_TRUE1]]
 ; CHECK:       cond.true:
-; CHECK-NEXT:    [[FOURTHPHI:%.*]] = phi i64 [ [[ARG:%.*]], [[ENTRY:%.*]] ], [ [[FIRSTPHI]], [[FOR_COND17THREAD_PRE_SPLIT]] ]
+; CHECK-NEXT:    [[FOURTHPHI:%.*]] = phi i64 [ [[ARG:%.*]], [[COND_TRUE]] ], [ [[FIRSTPHI]], [[FOR_COND17THREAD_PRE_SPLIT]] ]
 ; CHECK-NEXT:    [[DIV]] = sdiv i64 [[FOURTHPHI]], 4
 ; CHECK-NEXT:    br label [[THIRDPHIBLOCK]]
 ; CHECK:       temp:
@@ -116,7 +138,9 @@ define void @fn3(i1 %arg, i1 %arg2) {
 ; CHECK:       l2:
 ; CHECK-NEXT:    br label [[FOR_INC:%.*]]
 ; CHECK:       for.inc:
-; CHECK-NEXT:    br i1 false, label [[FOR_COND_LOOPEXIT:%.*]], label [[FOR_INC]]
+; CHECK-NEXT:    br i1 false, label [[FOR_COND_LOOPEXIT:%.*]], label [[FOR_INC_FOR_INC_CRIT_EDGE:%.*]]
+; CHECK:       for.inc.for.inc_crit_edge:
+; CHECK-NEXT:    br label [[FOR_INC]]
 ; CHECK:       for.end14:
 ; CHECK-NEXT:    br label [[L2]]
 ;

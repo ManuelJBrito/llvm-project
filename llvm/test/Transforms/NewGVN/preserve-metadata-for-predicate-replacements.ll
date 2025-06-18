@@ -12,19 +12,29 @@ define i32 @test(ptr %p1, ptr %p2, i1 %c) {
 ; CHECK-NEXT:    [[LV:%.*]] = load i32, ptr [[P1:%.*]], align 8, !tbaa [[TBAA0:![0-9]+]]
 ; CHECK-NEXT:    [[CMP_1:%.*]] = icmp slt i32 [[LV]], 1
 ; CHECK-NEXT:    br i1 [[CMP_1]], label [[EXIT:%.*]], label [[IF_FALSE:%.*]]
+; CHECK:       entry.exit_crit_edge:
+; CHECK-NEXT:    br label [[EXIT1:%.*]]
 ; CHECK:       if.false:
-; CHECK-NEXT:    br i1 [[C:%.*]], label [[EXIT]], label [[FOR_CHECK:%.*]]
+; CHECK-NEXT:    br i1 [[C:%.*]], label [[IF_FALSE_EXIT_CRIT_EDGE:%.*]], label [[FOR_CHECK:%.*]]
+; CHECK:       if.false.exit_crit_edge:
+; CHECK-NEXT:    br label [[EXIT1]]
 ; CHECK:       for.check:
 ; CHECK-NEXT:    [[CMP_2:%.*]] = icmp sgt i32 [[LV]], 0
-; CHECK-NEXT:    br i1 [[CMP_2]], label [[FOR_PH:%.*]], label [[EXIT]]
+; CHECK-NEXT:    br i1 [[CMP_2]], label [[FOR_PH:%.*]], label [[FOR_CHECK_EXIT_CRIT_EDGE:%.*]]
+; CHECK:       for.check.exit_crit_edge:
+; CHECK-NEXT:    br label [[EXIT1]]
 ; CHECK:       for.ph:
 ; CHECK-NEXT:    br label [[FOR_BODY:%.*]]
 ; CHECK:       for.body:
-; CHECK-NEXT:    [[IV:%.*]] = phi i32 [ 0, [[FOR_PH]] ], [ [[IV_NEXT:%.*]], [[FOR_BODY]] ]
+; CHECK-NEXT:    [[IV:%.*]] = phi i32 [ 0, [[FOR_PH]] ], [ [[IV_NEXT:%.*]], [[FOR_BODY_FOR_BODY_CRIT_EDGE:%.*]] ]
 ; CHECK-NEXT:    call void @use(i32 [[IV]])
 ; CHECK-NEXT:    [[IV_NEXT]] = add nuw nsw i32 [[IV]], 1
 ; CHECK-NEXT:    [[CMP_3:%.*]] = icmp ne i32 [[IV_NEXT]], [[LV]]
-; CHECK-NEXT:    br i1 [[CMP_3]], label [[FOR_BODY]], label [[EXIT]]
+; CHECK-NEXT:    br i1 [[CMP_3]], label [[FOR_BODY_FOR_BODY_CRIT_EDGE]], label [[FOR_BODY_EXIT_CRIT_EDGE:%.*]]
+; CHECK:       for.body.exit_crit_edge:
+; CHECK-NEXT:    br label [[EXIT1]]
+; CHECK:       for.body.for.body_crit_edge:
+; CHECK-NEXT:    br label [[FOR_BODY]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret i32 [[LV]]
 ;

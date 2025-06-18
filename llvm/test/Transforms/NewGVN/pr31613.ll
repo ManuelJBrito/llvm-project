@@ -16,14 +16,19 @@ define void @foo(i1 %arg, i1 %arg2) {
 ; CHECK-NEXT:    br label [[BB4:%.*]]
 ; CHECK:       bb4:
 ; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[BB18]], label [[BB7:%.*]]
+; CHECK:       bb4.bb7_crit_edge:
+; CHECK-NEXT:    br label [[BB8:%.*]]
 ; CHECK:       bb7:
-; CHECK-NEXT:    br i1 [[ARG]], label [[BB2]], label [[BB11:%.*]]
+; CHECK-NEXT:    br i1 false, label [[BB7_BB2_CRIT_EDGE:%.*]], label [[BB11:%.*]]
+; CHECK:       bb7.bb2_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB2]]
 ; CHECK:       bb11:
 ; CHECK-NEXT:    br i1 [[ARG2:%.*]], label [[BB16:%.*]], label [[BB14:%.*]]
 ; CHECK:       bb14:
 ; CHECK-NEXT:    br label [[BB4]]
 ; CHECK:       bb16:
-; CHECK-NEXT:    br label [[BB7]]
+; CHECK-NEXT:    br label [[BB8]]
 ; CHECK:       bb18:
 ; CHECK-NEXT:    br label [[BB1]]
 ;

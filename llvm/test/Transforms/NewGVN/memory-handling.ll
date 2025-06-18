@@ -37,7 +37,7 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK-NEXT:    [[TMP3]] = getelementptr inbounds i8, ptr [[DOT1]], i64 1
 ; CHECK-NEXT:    [[TMP4:%.*]] = load i8, ptr [[DOT1]], align 1, !tbaa [[TBAA5:![0-9]+]]
 ; CHECK-NEXT:    [[TMP5:%.*]] = icmp eq i8 [[TMP4]], 0
-; CHECK-NEXT:    br i1 [[TMP5]], label [[DOTPREHEADER_PREHEADER:%.*]], label [[TMP6]]
+; CHECK-NEXT:    br i1 [[TMP5]], label [[DOTPREHEADER_PREHEADER:%.*]], label [[TMP58:%.*]]
 ; CHECK:       .preheader.preheader:
 ; CHECK-NEXT:    br label [[DOTPREHEADER:%.*]]
 ; CHECK:       6:
@@ -48,7 +48,9 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK-NEXT:    [[TMP11:%.*]] = load i16, ptr [[TMP10]], align 2, !tbaa [[TBAA8:![0-9]+]]
 ; CHECK-NEXT:    [[TMP12:%.*]] = and i16 [[TMP11]], 1024
 ; CHECK-NEXT:    [[TMP13:%.*]] = icmp eq i16 [[TMP12]], 0
-; CHECK-NEXT:    br i1 [[TMP13]], label [[TMP2]], label [[TMP14]]
+; CHECK-NEXT:    br i1 [[TMP13]], label [[TMP6]], label [[TMP14]]
+; CHECK:       ._crit_edge1:
+; CHECK-NEXT:    br label [[TMP2]]
 ; CHECK:       14:
 ; CHECK-NEXT:    [[TMP15:%.*]] = sext i8 [[TMP4]] to i32
 ; CHECK-NEXT:    [[TMP16:%.*]] = tail call i32 @tolower(i32 [[TMP15]]) #[[ATTR5:[0-9]+]]
@@ -71,40 +73,49 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK-NEXT:    br i1 [[TMP25]], label [[TMP27:%.*]], label [[TMP28:%.*]]
 ; CHECK:       27:
 ; CHECK-NEXT:    store i32 -1, ptr [[TMP26]], align 4, !tbaa [[TBAA1]]
-; CHECK-NEXT:    br label [[TMP57]]
+; CHECK-NEXT:    br label [[TMP59:%.*]]
 ; CHECK:       28:
 ; CHECK-NEXT:    store i32 0, ptr [[TMP26]], align 4, !tbaa [[TBAA1]]
 ; CHECK-NEXT:    [[TMP29:%.*]] = zext i32 [[TMP24]] to i64
 ; CHECK-NEXT:    br i1 false, label [[DOT_CRIT_EDGE:%.*]], label [[DOTLR_PH_PREHEADER:%.*]]
+; CHECK:       .._crit_edge_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[DOT_CRIT_EDGE1:%.*]]
 ; CHECK:       .lr.ph.preheader:
 ; CHECK-NEXT:    br label [[DOTLR_PH:%.*]]
 ; CHECK:       .lr.ph:
-; CHECK-NEXT:    [[DOT04658:%.*]] = phi i64 [ [[TMP31:%.*]], [[DOTLR_PH]] ], [ 1, [[DOTLR_PH_PREHEADER]] ]
-; CHECK-NEXT:    [[DOT04857:%.*]] = phi i32 [ [[TMP30:%.*]], [[DOTLR_PH]] ], [ 1, [[DOTLR_PH_PREHEADER]] ]
+; CHECK-NEXT:    [[DOT04658:%.*]] = phi i64 [ [[TMP31:%.*]], [[DOTLR_PH__LR_PH_CRIT_EDGE:%.*]] ], [ 1, [[DOTLR_PH_PREHEADER]] ]
+; CHECK-NEXT:    [[DOT04857:%.*]] = phi i32 [ [[TMP30:%.*]], [[DOTLR_PH__LR_PH_CRIT_EDGE]] ], [ 1, [[DOTLR_PH_PREHEADER]] ]
 ; CHECK-NEXT:    [[TMP30]] = add nuw nsw i32 [[DOT04857]], 1
 ; CHECK-NEXT:    [[TMP31]] = shl i64 [[DOT04658]], 1
 ; CHECK-NEXT:    [[TMP32:%.*]] = icmp ult i64 [[TMP29]], [[TMP31]]
-; CHECK-NEXT:    br i1 [[TMP32]], label [[DOT_CRIT_EDGE_LOOPEXIT:%.*]], label [[DOTLR_PH]]
+; CHECK-NEXT:    br i1 [[TMP32]], label [[DOT_CRIT_EDGE_LOOPEXIT:%.*]], label [[DOTLR_PH__LR_PH_CRIT_EDGE]]
+; CHECK:       .lr.ph..lr.ph_crit_edge:
+; CHECK-NEXT:    br label [[DOTLR_PH]]
 ; CHECK:       ._crit_edge.loopexit:
-; CHECK-NEXT:    br label [[DOT_CRIT_EDGE]]
+; CHECK-NEXT:    br label [[DOT_CRIT_EDGE1]]
 ; CHECK:       ._crit_edge:
-; CHECK-NEXT:    [[DOT048_LCSSA:%.*]] = phi i32 [ poison, [[TMP28]] ], [ [[TMP30]], [[DOT_CRIT_EDGE_LOOPEXIT]] ]
-; CHECK-NEXT:    [[DOT046_LCSSA:%.*]] = phi i64 [ poison, [[TMP28]] ], [ [[TMP31]], [[DOT_CRIT_EDGE_LOOPEXIT]] ]
+; CHECK-NEXT:    [[DOT048_LCSSA:%.*]] = phi i32 [ poison, [[DOT_CRIT_EDGE]] ], [ [[TMP30]], [[DOT_CRIT_EDGE_LOOPEXIT]] ]
+; CHECK-NEXT:    [[DOT046_LCSSA:%.*]] = phi i64 [ poison, [[DOT_CRIT_EDGE]] ], [ [[TMP31]], [[DOT_CRIT_EDGE_LOOPEXIT]] ]
 ; CHECK-NEXT:    [[TMP33:%.*]] = add nsw i32 [[DOT048_LCSSA]], [[DOT04961]]
 ; CHECK-NEXT:    [[TMP34:%.*]] = icmp ugt i32 [[TMP33]], 64
 ; CHECK-NEXT:    br i1 [[TMP34]], label [[TMP35:%.*]], label [[TMP39:%.*]]
+; CHECK:       ._crit_edge._crit_edge:
+; CHECK-NEXT:    br label [[TMP60:%.*]]
 ; CHECK:       35:
 ; CHECK-NEXT:    [[TMP36:%.*]] = add i32 [[DOT05160]], 1
 ; CHECK-NEXT:    [[TMP37:%.*]] = icmp ugt i32 [[TMP36]], 1
-; CHECK-NEXT:    br i1 [[TMP37]], label [[TMP38:%.*]], label [[TMP39]]
+; CHECK-NEXT:    br i1 [[TMP37]], label [[TMP38:%.*]], label [[DOT_CRIT_EDGE6:%.*]]
+; CHECK:       ._crit_edge2:
+; CHECK-NEXT:    br label [[TMP60]]
 ; CHECK:       38:
 ; CHECK-NEXT:    tail call void @Fatal(ptr @.str.7, i32 0)
-; CHECK-NEXT:    [[DOTPRE7:%.*]] = load i32, ptr [[TMP23]], align 16, !tbaa [[TBAA10]]
-; CHECK-NEXT:    br label [[TMP39]]
+; CHECK-NEXT:    [[DOTPRE13:%.*]] = load i32, ptr [[TMP23]], align 16, !tbaa [[TBAA10]]
+; CHECK-NEXT:    br label [[TMP60]]
 ; CHECK:       39:
-; CHECK-NEXT:    [[TMP48:%.*]] = phi i32 [ [[TMP24]], [[DOT_CRIT_EDGE]] ], [ [[TMP24]], [[TMP35]] ], [ [[DOTPRE7]], [[TMP38]] ]
-; CHECK-NEXT:    [[DOT152:%.*]] = phi i32 [ [[DOT05160]], [[DOT_CRIT_EDGE]] ], [ [[TMP36]], [[TMP38]] ], [ [[TMP36]], [[TMP35]] ]
-; CHECK-NEXT:    [[DOT150:%.*]] = phi i32 [ [[DOT04961]], [[DOT_CRIT_EDGE]] ], [ 0, [[TMP38]] ], [ 0, [[TMP35]] ]
+; CHECK-NEXT:    [[TMP48:%.*]] = phi i32 [ [[TMP24]], [[TMP39]] ], [ [[TMP24]], [[DOT_CRIT_EDGE6]] ], [ [[DOTPRE13]], [[TMP38]] ]
+; CHECK-NEXT:    [[DOT152:%.*]] = phi i32 [ [[DOT05160]], [[TMP39]] ], [ [[TMP36]], [[TMP38]] ], [ [[TMP36]], [[DOT_CRIT_EDGE6]] ]
+; CHECK-NEXT:    [[DOT150:%.*]] = phi i32 [ [[DOT04961]], [[TMP39]] ], [ 0, [[TMP38]] ], [ 0, [[DOT_CRIT_EDGE6]] ]
 ; CHECK-NEXT:    [[TMP40:%.*]] = add i64 [[DOT046_LCSSA]], 4294967295
 ; CHECK-NEXT:    [[TMP41:%.*]] = trunc i64 [[TMP40]] to i32
 ; CHECK-NEXT:    [[TMP42:%.*]] = getelementptr inbounds [26 x %struct.Letter], ptr @alPhrase, i64 0, i64 [[INDVARS_IV]], i32 2
@@ -127,13 +138,15 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK-NEXT:    [[TMP55:%.*]] = getelementptr inbounds [26 x %struct.Letter], ptr @alPhrase, i64 0, i64 [[INDVARS_IV]], i32 3
 ; CHECK-NEXT:    store i32 [[DOT152]], ptr [[TMP55]], align 4, !tbaa [[TBAA16:![0-9]+]]
 ; CHECK-NEXT:    [[TMP56:%.*]] = add nsw i32 [[DOT150]], [[DOT048_LCSSA]]
-; CHECK-NEXT:    br label [[TMP57]]
+; CHECK-NEXT:    br label [[TMP59]]
 ; CHECK:       56:
-; CHECK-NEXT:    [[DOT253]] = phi i32 [ [[DOT05160]], [[TMP27]] ], [ [[DOT152]], [[TMP39]] ]
-; CHECK-NEXT:    [[DOT2]] = phi i32 [ [[DOT04961]], [[TMP27]] ], [ [[TMP56]], [[TMP39]] ]
+; CHECK-NEXT:    [[DOT253]] = phi i32 [ [[DOT05160]], [[TMP27]] ], [ [[DOT152]], [[TMP60]] ]
+; CHECK-NEXT:    [[DOT2]] = phi i32 [ [[DOT04961]], [[TMP27]] ], [ [[TMP56]], [[TMP60]] ]
 ; CHECK-NEXT:    [[INDVARS_IV_NEXT]] = add nuw nsw i64 [[INDVARS_IV]], 1
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp ne i64 [[INDVARS_IV_NEXT]], 26
-; CHECK-NEXT:    br i1 [[EXITCOND]], label [[DOTPREHEADER]], label [[TMP58:%.*]]
+; CHECK-NEXT:    br i1 [[EXITCOND]], label [[TMP57]], label [[TMP61:%.*]]
+; CHECK:       ..preheader_crit_edge:
+; CHECK-NEXT:    br label [[DOTPREHEADER]]
 ; CHECK:       57:
 ; CHECK-NEXT:    ret void
 ;

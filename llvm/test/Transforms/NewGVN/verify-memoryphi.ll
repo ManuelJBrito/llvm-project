@@ -11,9 +11,11 @@ define void @tinkywinky() {
 ; CHECK-LABEL: define void @tinkywinky() {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    br i1 false, label [[BODY:%.*]], label [[END:%.*]]
+; CHECK:       entry.end_crit_edge:
+; CHECK-NEXT:    br label [[END1:%.*]]
 ; CHECK:       body:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br label [[END]]
+; CHECK-NEXT:    br label [[END1]]
 ; CHECK:       end:
 ; CHECK-NEXT:    ret void
 ;

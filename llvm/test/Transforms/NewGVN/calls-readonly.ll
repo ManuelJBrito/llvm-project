@@ -12,11 +12,13 @@ define ptr @test(ptr %P, ptr %Q, i32 %x, i32 %y) nounwind readonly {
 ; CHECK-NEXT:    [[TMP0:%.*]] = tail call i32 @strlen(ptr [[P]])
 ; CHECK-NEXT:    [[TMP1:%.*]] = icmp eq i32 [[TMP0]], 0
 ; CHECK-NEXT:    br i1 [[TMP1]], label [[BB:%.*]], label [[BB1:%.*]]
+; CHECK:       entry.bb1_crit_edge:
+; CHECK-NEXT:    br label [[BB2:%.*]]
 ; CHECK:       bb:
 ; CHECK-NEXT:    [[TMP2:%.*]] = sdiv i32 [[X]], [[Y]]
-; CHECK-NEXT:    br label [[BB1]]
+; CHECK-NEXT:    br label [[BB2]]
 ; CHECK:       bb1:
-; CHECK-NEXT:    [[X_ADDR_0:%.*]] = phi i32 [ [[TMP2]], [[BB]] ], [ [[X]], [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[X_ADDR_0:%.*]] = phi i32 [ [[TMP2]], [[BB]] ], [ [[X]], [[BB1]] ]
 ; CHECK-NEXT:    [[TMP3:%.*]] = tail call ptr @strchr(ptr [[Q]], i32 97)
 ; CHECK-NEXT:    [[TMP4:%.*]] = add i32 [[X_ADDR_0]], [[TMP0]]
 ; CHECK-NEXT:    [[TMP5:%.*]] = getelementptr i8, ptr [[TMP3]], i32 [[X_ADDR_0]]

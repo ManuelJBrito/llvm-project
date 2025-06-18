@@ -14,12 +14,14 @@ define void @test1(i32 %N, ptr nocapture %G) nounwind ssp {
 ; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    [[TMP0:%.*]] = add i32 [[N]], -1
 ; CHECK-NEXT:    [[TMP1:%.*]] = icmp sgt i32 [[TMP0]], 0
-; CHECK-NEXT:    br i1 [[TMP1]], label %[[BB_NPH:.*]], label %[[RETURN:.*]]
+; CHECK-NEXT:    br i1 [[TMP1]], label %[[BB_NPH:.*]], label %[[ENTRY_RETURN_CRIT_EDGE:.*]]
+; CHECK:       [[ENTRY_RETURN_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[RETURN:.*]]
 ; CHECK:       [[BB_NPH]]:
 ; CHECK-NEXT:    [[TMP:%.*]] = zext i32 [[TMP0]] to i64
 ; CHECK-NEXT:    br label %[[BB:.*]]
 ; CHECK:       [[BB]]:
-; CHECK-NEXT:    [[INDVAR:%.*]] = phi i64 [ 0, %[[BB_NPH]] ], [ [[TMP6:%.*]], %[[BB]] ]
+; CHECK-NEXT:    [[INDVAR:%.*]] = phi i64 [ 0, %[[BB_NPH]] ], [ [[TMP6:%.*]], %[[BB_BB_CRIT_EDGE:.*]] ]
 ; CHECK-NEXT:    [[TMP6]] = add i64 [[INDVAR]], 1
 ; CHECK-NEXT:    [[SCEVGEP:%.*]] = getelementptr double, ptr [[G]], i64 [[TMP6]]
 ; CHECK-NEXT:    [[SCEVGEP7:%.*]] = getelementptr double, ptr [[G]], i64 [[INDVAR]]
@@ -28,7 +30,11 @@ define void @test1(i32 %N, ptr nocapture %G) nounwind ssp {
 ; CHECK-NEXT:    [[TMP4:%.*]] = fadd double [[TMP2]], [[TMP3]]
 ; CHECK-NEXT:    store double [[TMP4]], ptr [[SCEVGEP7]], align 8
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp eq i64 [[TMP6]], [[TMP]]
-; CHECK-NEXT:    br i1 [[EXITCOND]], label %[[RETURN]], label %[[BB]]
+; CHECK-NEXT:    br i1 [[EXITCOND]], label %[[BB_RETURN_CRIT_EDGE:.*]], label %[[BB_BB_CRIT_EDGE]]
+; CHECK:       [[BB_BB_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB]]
+; CHECK:       [[BB_RETURN_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[RETURN]]
 ; CHECK:       [[RETURN]]:
 ; CHECK-NEXT:    ret void
 ;

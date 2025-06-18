@@ -5,7 +5,8 @@
 @a = external global i32, align 4
 @patatino = external unnamed_addr constant [2 x i8], align 1
 define void @tinkywinky(i1 %arg) {
-; CHECK-LABEL: define void @tinkywinky(i1 %arg) {
+; CHECK-LABEL: define void @tinkywinky(
+; CHECK-SAME: i1 [[ARG:%.*]]) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[D:%.*]] = alloca i32, align 4
 ; CHECK-NEXT:    store i32 0, ptr null, align 4
@@ -14,6 +15,8 @@ define void @tinkywinky(i1 %arg) {
 ; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr null, align 4
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp slt i32 [[TMP0]], 1
 ; CHECK-NEXT:    br i1 [[CMP]], label [[FOR_BODY:%.*]], label [[WHILE_COND:%.*]]
+; CHECK:       for.cond.while.cond_crit_edge:
+; CHECK-NEXT:    br label [[WHILE_COND1:%.*]]
 ; CHECK:       for.body:
 ; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr @a, align 4
 ; CHECK-NEXT:    store i32 [[TMP1]], ptr [[D]], align 4
@@ -27,10 +30,10 @@ define void @tinkywinky(i1 %arg) {
 ; CHECK:       if.end:
 ; CHECK-NEXT:    br label [[FOR_COND]]
 ; CHECK:       while.cond:
-; CHECK-NEXT:    br i1 %arg, label [[WHILE_BODY:%.*]], label [[WHILE_END:%.*]]
+; CHECK-NEXT:    br i1 [[ARG]], label [[WHILE_BODY:%.*]], label [[WHILE_END:%.*]]
 ; CHECK:       while.body:
 ; CHECK-NEXT:    call void (ptr, ...) @printf(ptr @patatino)
-; CHECK-NEXT:    br label [[WHILE_COND]]
+; CHECK-NEXT:    br label [[WHILE_COND1]]
 ; CHECK:       while.end:
 ; CHECK-NEXT:    [[TMP2:%.*]] = load i32, ptr @a, align 4
 ; CHECK-NEXT:    store i32 [[TMP2]], ptr undef, align 4

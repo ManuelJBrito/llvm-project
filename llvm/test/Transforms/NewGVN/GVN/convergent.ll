@@ -6,11 +6,13 @@ define i32 @foo(i1 %cond) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[V0:%.*]] = call i32 @llvm.convergent()
 ; CHECK-NEXT:    br i1 [[COND:%.*]], label [[BODY:%.*]], label [[END:%.*]]
+; CHECK:       entry.end_crit_edge:
+; CHECK-NEXT:    br label [[END1:%.*]]
 ; CHECK:       body:
 ; CHECK-NEXT:    [[V1:%.*]] = call i32 @llvm.convergent()
-; CHECK-NEXT:    br label [[END]]
+; CHECK-NEXT:    br label [[END1]]
 ; CHECK:       end:
-; CHECK-NEXT:    [[RET:%.*]] = phi i32 [ [[V0]], [[ENTRY:%.*]] ], [ [[V1]], [[BODY]] ]
+; CHECK-NEXT:    [[RET:%.*]] = phi i32 [ [[V0]], [[END]] ], [ [[V1]], [[BODY]] ]
 ; CHECK-NEXT:    ret i32 [[RET]]
 ;
 entry:

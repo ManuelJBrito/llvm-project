@@ -13,12 +13,16 @@ define void @main(i1 %cond) {
 ; CHECK-PRE:       [[WHILE_COND_LOOPEXIT_LOOPEXIT:.*]]:
 ; CHECK-PRE-NEXT:    ret void
 ; CHECK-PRE:       [[WHILE_BODY3]]:
-; CHECK-PRE-NEXT:    br i1 true, label %[[IF_END:.*]], label %[[IF_THEN:.*]]
+; CHECK-PRE-NEXT:    br i1 true, label %[[WHILE_BODY3_IF_END_CRIT_EDGE:.*]], label %[[IF_THEN:.*]]
+; CHECK-PRE:       [[WHILE_BODY3_IF_END_CRIT_EDGE]]:
+; CHECK-PRE-NEXT:    br label %[[IF_END:.*]]
 ; CHECK-PRE:       [[IF_THEN]]:
 ; CHECK-PRE-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-PRE-NEXT:    br label %[[IF_END]]
 ; CHECK-PRE:       [[IF_END]]:
-; CHECK-PRE-NEXT:    br i1 [[COND]], label %[[WHILE_COND_LOOPEXIT_LOOPEXIT]], label %[[WHILE_BODY3]]
+; CHECK-PRE-NEXT:    br i1 [[COND]], label %[[WHILE_COND_LOOPEXIT_LOOPEXIT]], label %[[IF_END_WHILE_BODY3_CRIT_EDGE:.*]]
+; CHECK-PRE:       [[IF_END_WHILE_BODY3_CRIT_EDGE]]:
+; CHECK-PRE-NEXT:    br label %[[WHILE_BODY3]]
 ;
 ; CHECK-SCCP-LABEL: define void @main(
 ; CHECK-SCCP-SAME: i1 [[COND:%.*]]) {
@@ -28,9 +32,13 @@ define void @main(i1 %cond) {
 ; CHECK-SCCP:       [[WHILE_COND_LOOPEXIT_LOOPEXIT:.*]]:
 ; CHECK-SCCP-NEXT:    ret void
 ; CHECK-SCCP:       [[WHILE_BODY3]]:
+; CHECK-SCCP-NEXT:    br label %[[WHILE_BODY3_IF_END_CRIT_EDGE:.*]]
+; CHECK-SCCP:       [[WHILE_BODY3_IF_END_CRIT_EDGE]]:
 ; CHECK-SCCP-NEXT:    br label %[[IF_END:.*]]
 ; CHECK-SCCP:       [[IF_END]]:
-; CHECK-SCCP-NEXT:    br i1 [[COND]], label %[[WHILE_COND_LOOPEXIT_LOOPEXIT]], label %[[WHILE_BODY3]]
+; CHECK-SCCP-NEXT:    br i1 [[COND]], label %[[WHILE_COND_LOOPEXIT_LOOPEXIT]], label %[[IF_END_WHILE_BODY3_CRIT_EDGE:.*]]
+; CHECK-SCCP:       [[IF_END_WHILE_BODY3_CRIT_EDGE]]:
+; CHECK-SCCP-NEXT:    br label %[[WHILE_BODY3]]
 ;
 entry:
   store i32 0, ptr @b

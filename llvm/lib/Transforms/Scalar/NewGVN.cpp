@@ -3753,18 +3753,6 @@ bool NewGVN::runGVN() {
   ICF = &ImplicitCFT;
   SingletonDeadExpression = new (ExpressionAllocator) DeadExpression();
 
-  DomTreeUpdater DTU(DT, DomTreeUpdater::UpdateStrategy::Lazy);
-  // Merge unconditional branches.
-  for (BasicBlock &BB : make_early_inc_range(F)) {
-    bool RemovedBlock =
-        MergeBlockIntoPredecessor(&BB, &DTU, nullptr, MSSAU, nullptr);
-    if (RemovedBlock)
-      ++NumGVNBlocksDeleted;
-
-    Changed |= RemovedBlock;
-  }
-  DTU.flush();
-
   // Count number of instructions for sizing of hash tables, and come
   // up with a global dfs numbering for instructions.
   unsigned ICount = 1;
@@ -4648,6 +4636,7 @@ bool NewGVN::shouldSwapOperandsForIntrinsic(const Value *A, const Value *B,
 }
 
 PreservedAnalyses NewGVNPass::run(Function &F, AnalysisManager<Function> &AM) {
+  bool Changed = false;
   // Apparently the order in which we get these results matter for
   // the old GVN (see Chandler's comment in GVN.cpp). I'll keep
   // the same order here, just in case.
@@ -4656,9 +4645,26 @@ PreservedAnalyses NewGVNPass::run(Function &F, AnalysisManager<Function> &AM) {
   auto &TLI = AM.getResult<TargetLibraryAnalysis>(F);
   auto &AA = AM.getResult<AAManager>(F);
   auto &MSSA = AM.getResult<MemorySSAAnalysis>(F).getMSSA();
-  bool Changed =
-      NewGVN(F, &DT, &AC, &TLI, &AA, &MSSA, F.getDataLayout())
-          .runGVN();
+
+  DomTreeUpdater DTU(DT, DomTreeUpdater::UpdateStrategy::Lazy);
+  MemorySSAUpdater Updater(&MSSA);
+
+  // Merge unconditional branches.
+  for (BasicBlock &BB : make_early_inc_range(F)) {
+    bool RemovedBlock =
+        MergeBlockIntoPredecessor(&BB, &DTU, nullptr, &Updater, nullptr);
+    if (RemovedBlock)
+      ++NumGVNBlocksDeleted;
+
+    Changed |= RemovedBlock;
+  }
+  DTU.flush();
+
+  // Split critical edges.
+  Changed |= SplitAllCriticalEdges(
+      F, CriticalEdgeSplittingOptions(&DT, nullptr, &Updater));
+
+  Changed = NewGVN(F, &DT, &AC, &TLI, &AA, &MSSA, F.getDataLayout()).runGVN();
   if (!Changed)
     return PreservedAnalyses::all();
   PreservedAnalyses PA;

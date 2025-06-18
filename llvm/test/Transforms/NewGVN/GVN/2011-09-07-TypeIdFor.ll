@@ -23,7 +23,9 @@ define void @_Z3foov() uwtable personality ptr @__gxx_personality_v0 {
 ; CHECK-SAME: ) #[[ATTR1:[0-9]+]] personality ptr @__gxx_personality_v0 {
 ; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    invoke void @_Z4barv()
-; CHECK-NEXT:            to label %[[RETURN:.*]] unwind label %[[LPAD:.*]]
+; CHECK-NEXT:            to label %[[ENTRY_RETURN_CRIT_EDGE:.*]] unwind label %[[LPAD:.*]]
+; CHECK:       [[ENTRY_RETURN_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[RETURN:.*]]
 ; CHECK:       [[LPAD]]:
 ; CHECK-NEXT:    [[TMP0:%.*]] = landingpad { ptr, i32 }
 ; CHECK-NEXT:            catch ptr @_ZTIi

@@ -38,22 +38,28 @@ define i32 @main() local_unnamed_addr #0 {
 ; CHECK-NEXT:    [[TMP2:%.*]] = phi i32 [ [[TMP0]], [[FOR_COND1_PREHEADER_I]] ], [ 0, [[LOR_END_I]] ]
 ; CHECK-NEXT:    [[TOBOOL_I:%.*]] = icmp ne i32 [[TMP2]], 0
 ; CHECK-NEXT:    [[OR_COND_I:%.*]] = and i1 [[TMP1]], [[TOBOOL_I]]
-; CHECK-NEXT:    br i1 [[OR_COND_I]], label [[LOR_END_I]], label [[LOR_RHS_I:%.*]]
+; CHECK-NEXT:    br i1 [[OR_COND_I]], label [[FOR_BODY3_I_LOR_END_I_CRIT_EDGE:%.*]], label [[LOR_RHS_I:%.*]]
+; CHECK:       for.body3.i.lor.end.i_crit_edge:
+; CHECK-NEXT:    br label [[LOR_END_I1:%.*]]
 ; CHECK:       lor.rhs.i:
 ; CHECK-NEXT:    [[LNOT_I:%.*]] = xor i1 [[TOBOOL_I]], true
 ; CHECK-NEXT:    [[LNOT_EXT_I:%.*]] = zext i1 [[LNOT_I]] to i32
 ; CHECK-NEXT:    [[TMP3:%.*]] = load i32, ptr @e, align 4, !tbaa [[TBAA3]]
 ; CHECK-NEXT:    [[XOR_I:%.*]] = xor i32 [[TMP3]], [[LNOT_EXT_I]]
 ; CHECK-NEXT:    store i32 [[XOR_I]], ptr @e, align 4, !tbaa [[TBAA3]]
-; CHECK-NEXT:    br label [[LOR_END_I]]
+; CHECK-NEXT:    br label [[LOR_END_I1]]
 ; CHECK:       lor.end.i:
 ; CHECK-NEXT:    [[INC_I]] = add nuw nsw i32 [[INC12_I]], 1
 ; CHECK-NEXT:    [[EXITCOND_I:%.*]] = icmp eq i32 [[INC_I]], 2
-; CHECK-NEXT:    br i1 [[EXITCOND_I]], label [[FOR_INC7_I]], label [[FOR_BODY3_I]]
+; CHECK-NEXT:    br i1 [[EXITCOND_I]], label [[FOR_INC7_I1:%.*]], label [[LOR_END_I]]
+; CHECK:       lor.end.i.for.body3.i_crit_edge:
+; CHECK-NEXT:    br label [[FOR_BODY3_I]]
 ; CHECK:       for.inc7.i:
 ; CHECK-NEXT:    [[INC8_I]] = add nsw i32 [[INC816_I]], 1
 ; CHECK-NEXT:    [[CMP_I:%.*]] = icmp slt i32 [[INC816_I]], 0
-; CHECK-NEXT:    br i1 [[CMP_I]], label [[FOR_COND1_PREHEADER_I]], label [[FOR_COND_FOR_END9_CRIT_EDGE_I:%.*]]
+; CHECK-NEXT:    br i1 [[CMP_I]], label [[FOR_INC7_I]], label [[FOR_COND_FOR_END9_CRIT_EDGE_I:%.*]]
+; CHECK:       for.inc7.i.for.cond1.preheader.i_crit_edge:
+; CHECK-NEXT:    br label [[FOR_COND1_PREHEADER_I]]
 ; CHECK:       for.cond.for.end9_crit_edge.i:
 ; CHECK-NEXT:    store i32 0, ptr @g, align 4, !tbaa [[TBAA3]]
 ; CHECK-NEXT:    store i32 2, ptr @h, align 4, !tbaa [[TBAA3]]
@@ -66,10 +72,12 @@ define i32 @main() local_unnamed_addr #0 {
 ; CHECK-NEXT:    [[TMP6:%.*]] = load i32, ptr @e, align 4, !tbaa [[TBAA3]]
 ; CHECK-NEXT:    [[CMP10_I:%.*]] = icmp slt i32 [[TMP6]], -1
 ; CHECK-NEXT:    br i1 [[CMP10_I]], label [[IF_THEN_I:%.*]], label [[FN1_EXIT:%.*]]
+; CHECK:       for.end9.i.fn1.exit_crit_edge:
+; CHECK-NEXT:    br label [[FN1_EXIT1:%.*]]
 ; CHECK:       if.then.i:
 ; CHECK-NEXT:    [[TMP7:%.*]] = load i32, ptr @f, align 4, !tbaa [[TBAA3]]
 ; CHECK-NEXT:    store i32 [[TMP7]], ptr [[TMP5]], align 4, !tbaa [[TBAA3]]
-; CHECK-NEXT:    br label [[FN1_EXIT]]
+; CHECK-NEXT:    br label [[FN1_EXIT1]]
 ; CHECK:       fn1.exit:
 ; CHECK-NEXT:    [[TMP8:%.*]] = load i32, ptr @a, align 4, !tbaa [[TBAA3]]
 ; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i32 [[TMP8]], 0

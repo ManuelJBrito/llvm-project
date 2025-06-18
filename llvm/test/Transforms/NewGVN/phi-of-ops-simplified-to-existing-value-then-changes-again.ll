@@ -14,17 +14,21 @@ define void @pr36501(i1 %c) {
 ; CHECK:       bb1:
 ; CHECK-NEXT:    [[PHI_1:%.*]] = phi i32 [ -2022207984, [[BB:%.*]] ], [ 0, [[BB7:%.*]] ]
 ; CHECK-NEXT:    br i1 [[C:%.*]], label [[BB3:%.*]], label [[BB2:%.*]]
+; CHECK:       bb1.bb3_crit_edge:
+; CHECK-NEXT:    br label [[BB4:%.*]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    br label [[BB3]]
+; CHECK-NEXT:    br label [[BB4]]
 ; CHECK:       bb3:
-; CHECK-NEXT:    [[PHI_2:%.*]] = phi i32 [ -1, [[BB2]] ], [ [[PHI_1]], [[BB1]] ]
+; CHECK-NEXT:    [[PHI_2:%.*]] = phi i32 [ -1, [[BB2]] ], [ [[PHI_1]], [[BB3]] ]
 ; CHECK-NEXT:    [[TMP5:%.*]] = icmp eq i32 [[PHI_2]], 0
-; CHECK-NEXT:    br i1 [[TMP5]], label [[BB6:%.*]], label [[BB7]]
+; CHECK-NEXT:    br i1 [[TMP5]], label [[BB6:%.*]], label [[BB3_BB7_CRIT_EDGE:%.*]]
+; CHECK:       bb3.bb7_crit_edge:
+; CHECK-NEXT:    br label [[BB7]]
 ; CHECK:       bb6:
 ; CHECK-NEXT:    br label [[BB7]]
 ; CHECK:       bb7:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ [[TMP5]], [[BB3]] ], [ true, [[BB6]] ]
-; CHECK-NEXT:    [[PHI_3:%.*]] = phi i32 [ [[PHI_2]], [[BB3]] ], [ 0, [[BB6]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ false, [[BB3_BB7_CRIT_EDGE]] ], [ true, [[BB6]] ]
+; CHECK-NEXT:    [[PHI_3:%.*]] = phi i32 [ [[PHI_2]], [[BB3_BB7_CRIT_EDGE]] ], [ 0, [[BB6]] ]
 ; CHECK-NEXT:    call void @use(i1 [[PHIOFOPS]])
 ; CHECK-NEXT:    br label [[BB1]]
 ;
@@ -65,19 +69,23 @@ define void @pr42422(i1 %c.1, i1 %c.2) {
 ; CHECK-NEXT:    br i1 [[TMP3]], label [[BB4:%.*]], label [[BB24:%.*]]
 ; CHECK:       bb4:
 ; CHECK-NEXT:    br i1 [[C_1:%.*]], label [[BB5:%.*]], label [[BB6:%.*]]
+; CHECK:       bb4.bb6_crit_edge:
+; CHECK-NEXT:    br label [[BB9:%.*]]
 ; CHECK:       bb5:
 ; CHECK-NEXT:    br label [[BB19:%.*]]
 ; CHECK:       bb6:
 ; CHECK-NEXT:    br i1 [[C_2:%.*]], label [[BB7:%.*]], label [[BB8:%.*]]
+; CHECK:       bb6.bb8_crit_edge:
+; CHECK-NEXT:    br label [[BB10:%.*]]
 ; CHECK:       bb7:
 ; CHECK-NEXT:    br label [[BB16:%.*]]
 ; CHECK:       bb8:
-; CHECK-NEXT:    [[TMP9:%.*]] = phi i64 [ [[TMP12:%.*]], [[BB11:%.*]] ], [ 0, [[BB6]] ]
+; CHECK-NEXT:    [[TMP9:%.*]] = phi i64 [ [[TMP12:%.*]], [[BB11:%.*]] ], [ 0, [[BB8]] ]
 ; CHECK-NEXT:    [[TMP10:%.*]] = icmp sle i64 [[TMP9]], 1
 ; CHECK-NEXT:    br i1 [[TMP10]], label [[BB11]], label [[BB13:%.*]]
 ; CHECK:       bb11:
 ; CHECK-NEXT:    [[TMP12]] = add nsw i64 [[TMP9]], 1
-; CHECK-NEXT:    br label [[BB8]]
+; CHECK-NEXT:    br label [[BB10]]
 ; CHECK:       bb13:
 ; CHECK-NEXT:    br i1 true, label [[BB14:%.*]], label [[BB15:%.*]]
 ; CHECK:       bb14:
@@ -87,25 +95,33 @@ define void @pr42422(i1 %c.1, i1 %c.2) {
 ; CHECK-NEXT:    br label [[BB16]]
 ; CHECK:       bb16:
 ; CHECK-NEXT:    [[TMP17:%.*]] = phi i32 [ poison, [[BB15]] ], [ 1, [[BB14]] ], [ 9, [[BB7]] ]
-; CHECK-NEXT:    switch i32 [[TMP17]], label [[BB19]] [
-; CHECK-NEXT:      i32 0, label [[BB6]]
+; CHECK-NEXT:    switch i32 [[TMP17]], label [[BB16_BB19_CRIT_EDGE:%.*]] [
+; CHECK-NEXT:      i32 0, label [[BB16_BB6_CRIT_EDGE:%.*]]
 ; CHECK-NEXT:      i32 9, label [[BB18:%.*]]
 ; CHECK-NEXT:    ]
+; CHECK:       bb16.bb6_crit_edge:
+; CHECK-NEXT:    br label [[BB9]]
+; CHECK:       bb16.bb19_crit_edge:
+; CHECK-NEXT:    br label [[BB19]]
 ; CHECK:       bb18:
 ; CHECK-NEXT:    br label [[BB19]]
 ; CHECK:       bb19:
-; CHECK-NEXT:    [[TMP20:%.*]] = phi i32 [ 0, [[BB18]] ], [ [[TMP17]], [[BB16]] ], [ 1, [[BB5]] ]
+; CHECK-NEXT:    [[TMP20:%.*]] = phi i32 [ 0, [[BB18]] ], [ [[TMP17]], [[BB16_BB19_CRIT_EDGE]] ], [ 1, [[BB5]] ]
 ; CHECK-NEXT:    [[TMP21:%.*]] = icmp eq i32 [[TMP20]], 0
 ; CHECK-NEXT:    br i1 [[TMP21]], label [[BB22]], label [[BB25:%.*]]
+; CHECK:       bb19.bb25_crit_edge:
+; CHECK-NEXT:    br label [[BB26:%.*]]
 ; CHECK:       bb22:
 ; CHECK-NEXT:    [[TMP23]] = add nsw i32 [[TMP]], 1
 ; CHECK-NEXT:    br label [[BB2]]
 ; CHECK:       bb24:
-; CHECK-NEXT:    br label [[BB25]]
+; CHECK-NEXT:    br label [[BB26]]
 ; CHECK:       bb25:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ true, [[BB24]] ], [ [[TMP21]], [[BB19]] ]
-; CHECK-NEXT:    [[TMP26:%.*]] = phi i32 [ [[TMP20]], [[BB19]] ], [ 0, [[BB24]] ]
-; CHECK-NEXT:    br i1 [[PHIOFOPS]], label [[BB1]], label [[BB28:%.*]]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ true, [[BB24]] ], [ false, [[BB25]] ]
+; CHECK-NEXT:    [[TMP26:%.*]] = phi i32 [ [[TMP20]], [[BB25]] ], [ 0, [[BB24]] ]
+; CHECK-NEXT:    br i1 [[PHIOFOPS]], label [[BB25_BB1_CRIT_EDGE:%.*]], label [[BB28:%.*]]
+; CHECK:       bb25.bb1_crit_edge:
+; CHECK-NEXT:    br label [[BB1]]
 ; CHECK:       bb28:
 ; CHECK-NEXT:    ret void
 ;
@@ -186,24 +202,30 @@ define void @PR42557(i32 %tmp6, i1 %c.1, i1 %c.2) {
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    br label [[BB1:%.*]]
 ; CHECK:       bb1:
-; CHECK-NEXT:    [[TMP:%.*]] = phi i32 [ 0, [[BB:%.*]] ], [ [[TMP6:%.*]], [[BB1]] ]
-; CHECK-NEXT:    br i1 [[C_1:%.*]], label [[BB2:%.*]], label [[BB1]]
+; CHECK-NEXT:    [[TMP:%.*]] = phi i32 [ 0, [[BB:%.*]] ], [ [[TMP6:%.*]], [[BB1_BB1_CRIT_EDGE:%.*]] ]
+; CHECK-NEXT:    br i1 [[C_1:%.*]], label [[BB2:%.*]], label [[BB1_BB1_CRIT_EDGE]]
+; CHECK:       bb1.bb1_crit_edge:
+; CHECK-NEXT:    br label [[BB1]]
 ; CHECK:       bb2:
 ; CHECK-NEXT:    br i1 [[C_2:%.*]], label [[BB16:%.*]], label [[BB11:%.*]]
+; CHECK:       bb2.bb11_crit_edge:
+; CHECK-NEXT:    br label [[BB12:%.*]]
 ; CHECK:       bb16:
 ; CHECK-NEXT:    [[TMP17:%.*]] = add i32 [[TMP]], 1
-; CHECK-NEXT:    br label [[BB11]]
+; CHECK-NEXT:    br label [[BB12]]
 ; CHECK:       bb11:
-; CHECK-NEXT:    [[TMP12:%.*]] = phi i32 [ [[TMP17]], [[BB16]] ], [ 0, [[BB2]] ]
+; CHECK-NEXT:    [[TMP12:%.*]] = phi i32 [ [[TMP17]], [[BB16]] ], [ 0, [[BB11]] ]
 ; CHECK-NEXT:    [[TMP13:%.*]] = icmp eq i32 [[TMP12]], 0
 ; CHECK-NEXT:    call void @use(i1 [[TMP13]])
 ; CHECK-NEXT:    [[TMP15:%.*]] = icmp ne i32 [[TMP]], 0
 ; CHECK-NEXT:    br i1 [[TMP15]], label [[BB18:%.*]], label [[BB19:%.*]]
+; CHECK:       bb11.bb19_crit_edge:
+; CHECK-NEXT:    br label [[BB20:%.*]]
 ; CHECK:       bb18:
-; CHECK-NEXT:    br label [[BB19]]
+; CHECK-NEXT:    br label [[BB20]]
 ; CHECK:       bb19:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ [[TMP13]], [[BB11]] ], [ false, [[BB18]] ]
-; CHECK-NEXT:    [[TMP20:%.*]] = phi i32 [ [[TMP12]], [[BB11]] ], [ 1, [[BB18]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ [[TMP13]], [[BB19]] ], [ false, [[BB18]] ]
+; CHECK-NEXT:    [[TMP20:%.*]] = phi i32 [ [[TMP12]], [[BB19]] ], [ 1, [[BB18]] ]
 ; CHECK-NEXT:    call void @use(i1 [[PHIOFOPS]])
 ; CHECK-NEXT:    ret void
 ;

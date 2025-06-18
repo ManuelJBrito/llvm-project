@@ -15,11 +15,14 @@ define ptr @lbackref(ptr %m, ptr %start, ptr %stop, i32 %startst, i32 %stopst, i
 ; CHECK-NEXT:    br label %[[BB63:.*]]
 ; CHECK:       [[BB:.*]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    switch i32 0, label %[[BB62:.*]] [
+; CHECK-NEXT:    switch i32 0, label %[[BB_BB62_CRIT_EDGE:.*]] [
 ; CHECK-NEXT:      i32 268435456, label %[[BB2:.*]]
 ; CHECK-NEXT:      i32 805306368, label %[[BB9:.*]]
 ; CHECK-NEXT:      i32 -1610612736, label %[[BB51:.*]]
 ; CHECK-NEXT:    ]
+; CHECK:       [[BB_BB62_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[BB62:.*]]
 ; CHECK:       [[BB2]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[BB62]]
@@ -41,11 +44,14 @@ define ptr @lbackref(ptr %m, ptr %start, ptr %stop, i32 %startst, i32 %stopst, i
 ; CHECK-NEXT:    ret ptr null
 ; CHECK:       [[BB69]]:
 ; CHECK-NEXT:    switch i32 0, label %[[BB108_LOOPEXIT2_LOOPEXIT_LOOPEXIT:.*]] [
-; CHECK-NEXT:      i32 1342177280, label %[[BB63]]
+; CHECK-NEXT:      i32 1342177280, label %[[BB69_BB63_CRIT_EDGE:.*]]
 ; CHECK-NEXT:      i32 1476395008, label %[[BB84:.*]]
 ; CHECK-NEXT:      i32 1879048192, label %[[BB104:.*]]
 ; CHECK-NEXT:      i32 2013265920, label %[[BB93:.*]]
 ; CHECK-NEXT:    ]
+; CHECK:       [[BB69_BB63_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[BB63]]
 ; CHECK:       [[BB84]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[BB63]]

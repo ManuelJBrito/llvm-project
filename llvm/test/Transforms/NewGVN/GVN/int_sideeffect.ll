@@ -44,13 +44,15 @@ define float @licm(i64 %n, ptr nocapture readonly %p) #0 {
 ; CHECK-NEXT:    [[T3_PRE:%.*]] = load float, ptr [[P]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[I:%.*]] = phi i64 [ 0, %[[BB0]] ], [ [[T5:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[SUM:%.*]] = phi float [ 0.000000e+00, %[[BB0]] ], [ [[T4:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[I:%.*]] = phi i64 [ 0, %[[BB0]] ], [ [[T5:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[SUM:%.*]] = phi float [ 0.000000e+00, %[[BB0]] ], [ [[T4:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    call void @llvm.sideeffect()
 ; CHECK-NEXT:    [[T4]] = fadd float [[SUM]], [[T3_PRE]]
 ; CHECK-NEXT:    [[T5]] = add i64 [[I]], 1
 ; CHECK-NEXT:    [[T6:%.*]] = icmp ult i64 [[T5]], [[N]]
-; CHECK-NEXT:    br i1 [[T6]], label %[[LOOP]], label %[[BB2:.*]]
+; CHECK-NEXT:    br i1 [[T6]], label %[[LOOP_LOOP_CRIT_EDGE]], label %[[BB2:.*]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[BB2]]:
 ; CHECK-NEXT:    ret float [[T4]]
 ;

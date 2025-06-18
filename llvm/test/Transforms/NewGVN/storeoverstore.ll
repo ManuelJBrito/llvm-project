@@ -12,16 +12,20 @@ define i32 @foo(ptr, i32)  {
 ; CHECK-NEXT:    store i32 5, ptr [[TMP0:%.*]], align 4
 ; CHECK-NEXT:    [[TMP3:%.*]] = icmp ne i32 [[TMP1:%.*]], 0
 ; CHECK-NEXT:    br i1 [[TMP3]], label [[TMP4:%.*]], label [[TMP5:%.*]]
+; CHECK:       ._crit_edge:
+; CHECK-NEXT:    br label [[TMP9:%.*]]
 ; CHECK:       4:
-; CHECK-NEXT:    br label [[TMP5]]
+; CHECK-NEXT:    br label [[TMP9]]
 ; CHECK:       5:
-; CHECK-NEXT:    [[TMP7:%.*]] = phi i32 [ 10, [[TMP2:%.*]] ], [ 15, [[TMP4]] ]
-; CHECK-NEXT:    [[DOT0:%.*]] = phi i32 [ 10, [[TMP4]] ], [ 5, [[TMP2]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 10, [[TMP5]] ], [ 15, [[TMP4]] ]
+; CHECK-NEXT:    [[DOT0:%.*]] = phi i32 [ 10, [[TMP4]] ], [ 5, [[TMP5]] ]
 ; CHECK-NEXT:    br i1 [[TMP3]], label [[TMP6:%.*]], label [[TMP8:%.*]]
+; CHECK:       ._crit_edge1:
+; CHECK-NEXT:    br label [[TMP7:%.*]]
 ; CHECK:       6:
-; CHECK-NEXT:    br label [[TMP8]]
+; CHECK-NEXT:    br label [[TMP7]]
 ; CHECK:       7:
-; CHECK-NEXT:    [[DOT1:%.*]] = phi i32 [ [[TMP7]], [[TMP6]] ], [ [[DOT0]], [[TMP5]] ]
+; CHECK-NEXT:    [[DOT1:%.*]] = phi i32 [ [[PHIOFOPS]], [[TMP6]] ], [ [[DOT0]], [[TMP8]] ]
 ; CHECK-NEXT:    ret i32 [[DOT1]]
 ;
   store i32 5, ptr %0, align 4
@@ -64,10 +68,12 @@ define i32 @foo2(ptr, i32)  {
 ; CHECK-NEXT:    [[TMP8:%.*]] = phi i32 [ 10, [[TMP5]] ], [ 15, [[TMP4]] ]
 ; CHECK-NEXT:    [[DOT0:%.*]] = phi i32 [ 10, [[TMP4]] ], [ 5, [[TMP5]] ]
 ; CHECK-NEXT:    br i1 [[TMP3]], label [[TMP7:%.*]], label [[TMP9:%.*]]
+; CHECK:       ._crit_edge:
+; CHECK-NEXT:    br label [[TMP10:%.*]]
 ; CHECK:       7:
-; CHECK-NEXT:    br label [[TMP9]]
+; CHECK-NEXT:    br label [[TMP10]]
 ; CHECK:       8:
-; CHECK-NEXT:    [[DOT1:%.*]] = phi i32 [ [[TMP8]], [[TMP7]] ], [ [[DOT0]], [[TMP6]] ]
+; CHECK-NEXT:    [[DOT1:%.*]] = phi i32 [ [[TMP8]], [[TMP7]] ], [ [[DOT0]], [[TMP9]] ]
 ; CHECK-NEXT:    ret i32 [[DOT1]]
 ;
   store i32 5, ptr %0, align 4

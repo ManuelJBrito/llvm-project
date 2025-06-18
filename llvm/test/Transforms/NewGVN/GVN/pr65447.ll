@@ -18,9 +18,14 @@ define i64 @f2(ptr %arg) {
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[BB2D]]
 ; CHECK:       [[BB2D]]:
-; CHECK-NEXT:    br i1 false, label %[[BB2C]], label %[[BB1E:.*]]
+; CHECK-NEXT:    br i1 false, label %[[BB2D_BB2C_CRIT_EDGE:.*]], label %[[BB1E:.*]]
+; CHECK:       [[BB2D_BB2C_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[BB2C]]
 ; CHECK:       [[BB1E]]:
-; CHECK-NEXT:    br i1 false, label %[[BB2F:.*]], label %[[BB4:.*]]
+; CHECK-NEXT:    br i1 false, label %[[BB2F:.*]], label %[[BB1E_BB4_CRIT_EDGE:.*]]
+; CHECK:       [[BB1E_BB4_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB4:.*]]
 ; CHECK:       [[BB2F]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[BB2B]]
@@ -81,9 +86,14 @@ define i64 @f_null() {
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[BB2D]]
 ; CHECK:       [[BB2D]]:
-; CHECK-NEXT:    br i1 false, label %[[BB2C]], label %[[BB1E:.*]]
+; CHECK-NEXT:    br i1 false, label %[[BB2D_BB2C_CRIT_EDGE:.*]], label %[[BB1E:.*]]
+; CHECK:       [[BB2D_BB2C_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[BB2C]]
 ; CHECK:       [[BB1E]]:
-; CHECK-NEXT:    br i1 false, label %[[BB2F:.*]], label %[[BB4:.*]]
+; CHECK-NEXT:    br i1 false, label %[[BB2F:.*]], label %[[BB1E_BB4_CRIT_EDGE:.*]]
+; CHECK:       [[BB1E_BB4_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB4:.*]]
 ; CHECK:       [[BB2F]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[BB2B]]

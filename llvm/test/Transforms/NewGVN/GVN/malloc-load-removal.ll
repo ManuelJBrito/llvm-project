@@ -11,7 +11,9 @@ define noalias ptr @test1() nounwind uwtable ssp {
 ; CHECK-SAME: ) #[[ATTR1:[0-9]+]] {
 ; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    [[CALL:%.*]] = tail call ptr @malloc(i64 100) #[[ATTR2:[0-9]+]]
-; CHECK-NEXT:    br i1 undef, label %[[IF_END:.*]], label %[[IF_THEN:.*]]
+; CHECK-NEXT:    br i1 undef, label %[[ENTRY_IF_END_CRIT_EDGE:.*]], label %[[IF_THEN:.*]]
+; CHECK:       [[ENTRY_IF_END_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[IF_END:.*]]
 ; CHECK:       [[IF_THEN]]:
 ; CHECK-NEXT:    store i8 0, ptr [[CALL]], align 1
 ; CHECK-NEXT:    br label %[[IF_END]]
@@ -44,7 +46,9 @@ define noalias ptr @test2() nounwind uwtable ssp {
 ; CHECK-SAME: ) #[[ATTR1]] {
 ; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    [[CALL:%.*]] = tail call ptr @_Znwm(i64 100) #[[ATTR2]]
-; CHECK-NEXT:    br i1 undef, label %[[IF_END:.*]], label %[[IF_THEN:.*]]
+; CHECK-NEXT:    br i1 undef, label %[[ENTRY_IF_END_CRIT_EDGE:.*]], label %[[IF_THEN:.*]]
+; CHECK:       [[ENTRY_IF_END_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[IF_END:.*]]
 ; CHECK:       [[IF_THEN]]:
 ; CHECK-NEXT:    store i8 0, ptr [[CALL]], align 1
 ; CHECK-NEXT:    br label %[[IF_END]]
@@ -77,7 +81,9 @@ define noalias ptr @test3() nounwind uwtable ssp {
 ; CHECK-SAME: ) #[[ATTR1]] {
 ; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    [[CALL:%.*]] = tail call ptr @aligned_alloc(i64 256, i64 32) #[[ATTR2]]
-; CHECK-NEXT:    br i1 undef, label %[[IF_END:.*]], label %[[IF_THEN:.*]]
+; CHECK-NEXT:    br i1 undef, label %[[ENTRY_IF_END_CRIT_EDGE:.*]], label %[[IF_THEN:.*]]
+; CHECK:       [[ENTRY_IF_END_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[IF_END:.*]]
 ; CHECK:       [[IF_THEN]]:
 ; CHECK-NEXT:    store i8 0, ptr [[CALL]], align 1
 ; CHECK-NEXT:    br label %[[IF_END]]

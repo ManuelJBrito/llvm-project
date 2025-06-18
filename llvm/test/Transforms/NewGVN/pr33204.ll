@@ -20,19 +20,25 @@ define void @hoge(i32 %arg, i1 %arg2) {
 ; CHECK-NEXT:    [[TMP:%.*]] = phi i32 [ 0, [[BB1:%.*]] ], [ [[ARG:%.*]], [[BB:%.*]] ]
 ; CHECK-NEXT:    store i32 [[TMP]], ptr @global.1, align 4, !h [[META0:![0-9]+]]
 ; CHECK-NEXT:    br i1 [[ARG2:%.*]], label [[BB7:%.*]], label [[BB1]]
+; CHECK:       bb2.bb7_crit_edge:
+; CHECK-NEXT:    br label [[BB11:%.*]]
 ; CHECK:       bb3:
-; CHECK-NEXT:    [[TMP4:%.*]] = load i32, ptr @global, align 4, !h [[META0]]
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    unreachable
 ; CHECK:       bb7:
-; CHECK-NEXT:    br i1 [[ARG2]], label [[BB10:%.*]], label [[BB8:%.*]]
+; CHECK-NEXT:    br i1 true, label [[BB10:%.*]], label [[BB8:%.*]]
 ; CHECK:       bb8:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br i1 false, label [[BB9:%.*]], label [[BB3:%.*]]
+; CHECK:       bb8.bb3_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB4:%.*]]
 ; CHECK:       bb9:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br label [[BB3]]
+; CHECK-NEXT:    br label [[BB4]]
 ; CHECK:       bb10:
 ; CHECK-NEXT:    store i32 0, ptr @global, align 4, !h [[META0]]
-; CHECK-NEXT:    br label [[BB7]]
+; CHECK-NEXT:    br label [[BB11]]
 ;
 bb:
   br label %bb2

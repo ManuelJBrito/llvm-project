@@ -43,20 +43,24 @@ define void @f(i32 %x) noreturn nounwind uwtable ssp {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq i32 [[X]], 1
 ; CHECK-NEXT:    br i1 [[CMP]], label [[FOR_COND_PREHEADER:%.*]], label [[IF_THEN:%.*]]
+; CHECK:       entry.for.cond.preheader_crit_edge:
+; CHECK-NEXT:    br label [[FOR_COND_PREHEADER1:%.*]]
 ; CHECK:       if.then:
 ; CHECK-NEXT:    [[CMP1:%.*]] = icmp eq i32 [[X]], 2
 ; CHECK-NEXT:    [[COND:%.*]] = select i1 [[CMP1]], ptr @.str, ptr @.str1
 ; CHECK-NEXT:    [[CALL:%.*]] = tail call i32 @puts(ptr [[COND]]) #[[ATTR1:[0-9]+]]
-; CHECK-NEXT:    br label [[FOR_COND_PREHEADER]]
+; CHECK-NEXT:    br label [[FOR_COND_PREHEADER1]]
 ; CHECK:       for.cond.preheader:
-; CHECK-NEXT:    [[CMP3:%.*]] = icmp eq i32 [[X]], 2
+; CHECK-NEXT:    [[CMP3:%.*]] = phi i1 [ [[CMP1]], [[IF_THEN]] ], [ false, [[FOR_COND_PREHEADER]] ]
 ; CHECK-NEXT:    br label [[FOR_COND:%.*]]
 ; CHECK:       for.cond:
 ; CHECK-NEXT:    [[CALL2:%.*]] = tail call i32 @puts(ptr @.str2) #[[ATTR1]]
 ; CHECK-NEXT:    br i1 [[CMP3]], label [[FOR_COND_BACKEDGE:%.*]], label [[IF_END5:%.*]]
+; CHECK:       for.cond.for.cond.backedge_crit_edge:
+; CHECK-NEXT:    br label [[FOR_COND_BACKEDGE1:%.*]]
 ; CHECK:       if.end5:
 ; CHECK-NEXT:    [[CALL6:%.*]] = tail call i32 (ptr, ...) @printf(ptr @.str3, i32 [[X]]) #[[ATTR1]]
-; CHECK-NEXT:    br label [[FOR_COND_BACKEDGE]]
+; CHECK-NEXT:    br label [[FOR_COND_BACKEDGE1]]
 ; CHECK:       for.cond.backedge:
 ; CHECK-NEXT:    br label [[FOR_COND]]
 ;

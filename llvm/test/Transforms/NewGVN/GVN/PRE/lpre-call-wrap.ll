@@ -23,25 +23,33 @@ define void @_Z12testfunctionR1A(ptr %iter) {
 ; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr [[ITER]], align 4
 ; CHECK-NEXT:    [[TMP1:%.*]] = icmp eq i32 [[TMP0]], 0
-; CHECK-NEXT:    br i1 [[TMP1]], label %[[RETURN:.*]], label %[[BB_NPH:.*]]
+; CHECK-NEXT:    br i1 [[TMP1]], label %[[ENTRY_RETURN_CRIT_EDGE:.*]], label %[[BB_NPH:.*]]
+; CHECK:       [[ENTRY_RETURN_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[RETURN:.*]]
 ; CHECK:       [[BB_NPH]]:
 ; CHECK-NEXT:    [[TMP2:%.*]] = getelementptr [[STRUCT_A:%.*]], ptr [[ITER]], i32 0, i32 1
 ; CHECK-NEXT:    br label %[[BB:.*]]
 ; CHECK:       [[BB]]:
-; CHECK-NEXT:    [[DOTRLE:%.*]] = phi i32 [ [[TMP0]], %[[BB_NPH]] ], [ [[TMP6:%.*]], %[[BB3_BACKEDGE:.*]] ]
+; CHECK-NEXT:    [[DOTRLE:%.*]] = phi i32 [ [[TMP0]], %[[BB_NPH]] ], [ [[TMP6:%.*]], %[[BB3_BACKEDGE_BB_CRIT_EDGE:.*]] ]
 ; CHECK-NEXT:    [[TMP3:%.*]] = add i32 [[DOTRLE]], 1
 ; CHECK-NEXT:    store i32 [[TMP3]], ptr [[ITER]], align 4
 ; CHECK-NEXT:    [[TMP4:%.*]] = load i32, ptr [[TMP2]], align 4
 ; CHECK-NEXT:    [[TMP5:%.*]] = icmp eq i32 [[TMP3]], [[TMP4]]
-; CHECK-NEXT:    br i1 [[TMP5]], label %[[BB1:.*]], label %[[BB3_BACKEDGE]]
+; CHECK-NEXT:    br i1 [[TMP5]], label %[[BB1:.*]], label %[[BB_BB3_BACKEDGE_CRIT_EDGE:.*]]
+; CHECK:       [[BB_BB3_BACKEDGE_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB3_BACKEDGE:.*]]
 ; CHECK:       [[BB1]]:
 ; CHECK-NEXT:    tail call void @_Z1gv()
 ; CHECK-NEXT:    [[DOTPRE:%.*]] = load i32, ptr [[ITER]], align 4
 ; CHECK-NEXT:    br label %[[BB3_BACKEDGE]]
 ; CHECK:       [[BB3_BACKEDGE]]:
-; CHECK-NEXT:    [[TMP6]] = phi i32 [ [[TMP3]], %[[BB]] ], [ [[DOTPRE]], %[[BB1]] ]
+; CHECK-NEXT:    [[TMP6]] = phi i32 [ [[TMP3]], %[[BB_BB3_BACKEDGE_CRIT_EDGE]] ], [ [[DOTPRE]], %[[BB1]] ]
 ; CHECK-NEXT:    [[TMP7:%.*]] = icmp eq i32 [[TMP6]], 0
-; CHECK-NEXT:    br i1 [[TMP7]], label %[[RETURN]], label %[[BB]]
+; CHECK-NEXT:    br i1 [[TMP7]], label %[[BB3_BACKEDGE_RETURN_CRIT_EDGE:.*]], label %[[BB3_BACKEDGE_BB_CRIT_EDGE]]
+; CHECK:       [[BB3_BACKEDGE_BB_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB]]
+; CHECK:       [[BB3_BACKEDGE_RETURN_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[RETURN]]
 ; CHECK:       [[RETURN]]:
 ; CHECK-NEXT:    ret void
 ;

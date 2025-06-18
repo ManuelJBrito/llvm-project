@@ -76,7 +76,9 @@ define fastcc void @sqlite3Insert(ptr %pParse, ptr %pTabList, ptr %pList, ptr %p
 ; CHECK-LABEL: define fastcc void @sqlite3Insert(
 ; CHECK-SAME: ptr [[PPARSE:%.*]], ptr [[PTABLIST:%.*]], ptr [[PLIST:%.*]], ptr [[PSELECT:%.*]], ptr [[PCOLUMN:%.*]], i32 [[ONERROR:%.*]]) #[[ATTR0:[0-9]+]] {
 ; CHECK-NEXT:  [[ENTRY:.*:]]
-; CHECK-NEXT:    br i1 false, label %[[BB54:.*]], label %[[BB69_LOOPEXIT:.*]]
+; CHECK-NEXT:    br i1 false, label %[[BB54:.*]], label %[[ENTRY_BB69_LOOPEXIT_CRIT_EDGE:.*]]
+; CHECK:       [[ENTRY_BB69_LOOPEXIT_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB69_LOOPEXIT:.*]]
 ; CHECK:       [[BB54]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[BB69_LOOPEXIT]]
@@ -84,14 +86,18 @@ define fastcc void @sqlite3Insert(ptr %pParse, ptr %pTabList, ptr %pList, ptr %p
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[BB65:.*]]
 ; CHECK:       [[BB65]]:
-; CHECK-NEXT:    br i1 false, label %[[BB67:.*]], label %[[BB63_PREHEADER:.*]]
+; CHECK-NEXT:    br i1 false, label %[[BB67:.*]], label %[[BB65_BB63_PREHEADER_CRIT_EDGE:.*]]
+; CHECK:       [[BB65_BB63_PREHEADER_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB63_PREHEADER:.*]]
 ; CHECK:       [[BB67]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    unreachable
 ; CHECK:       [[BB69_LOOPEXIT]]:
 ; CHECK-NEXT:    br label %[[BB63_PREHEADER]]
 ; CHECK:       [[BB63_PREHEADER]]:
-; CHECK-NEXT:    br i1 false, label %[[BB59]], label %[[BB65]]
+; CHECK-NEXT:    br i1 false, label %[[BB59]], label %[[BB63_PREHEADER_BB65_CRIT_EDGE:.*]]
+; CHECK:       [[BB63_PREHEADER_BB65_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB65]]
 ;
 entry:
   br i1 false, label %bb54, label %bb69.loopexit

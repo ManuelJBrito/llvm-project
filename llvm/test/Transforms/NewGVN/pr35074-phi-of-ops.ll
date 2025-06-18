@@ -12,6 +12,8 @@ define void @crash1_pr35074(i32 %this, i1 %c) {
 ; CHECK:       for.body.lr.ph:
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp ugt i32 [[PHIOFOPS]], [[Y_0]]
 ; CHECK-NEXT:    br i1 [[CMP]], label [[FOR_END:%.*]], label [[FOR_BODY4_1:%.*]]
+; CHECK:       for.body.lr.ph.for.end_crit_edge:
+; CHECK-NEXT:    br label [[FOR_END1:%.*]]
 ; CHECK:       for.end:
 ; CHECK-NEXT:    ret void
 ; CHECK:       for.inc6:
@@ -20,7 +22,7 @@ define void @crash1_pr35074(i32 %this, i1 %c) {
 ; CHECK:       for.body4.1:
 ; CHECK-NEXT:    [[INC_1:%.*]] = add nuw nsw i32 [[Y_0]], 1
 ; CHECK-NEXT:    tail call void @_blah(i32 [[INC_1]])
-; CHECK-NEXT:    br label [[FOR_END]]
+; CHECK-NEXT:    br label [[FOR_END1]]
 ;
 entry:
   br label %for.cond

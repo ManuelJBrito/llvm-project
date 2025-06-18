@@ -9,14 +9,18 @@ define i8 @src(ptr %a, ptr %b, i1 %c) {
 ; CHECK-NEXT:    [[LB1:%.*]] = load i8, ptr [[B:%.*]], align 1
 ; CHECK-NEXT:    [[TOBOOL3_NOT_I:%.*]] = icmp eq i8 [[LB1]], 0
 ; CHECK-NEXT:    br i1 [[TOBOOL3_NOT_I]], label [[BB4:%.*]], label [[BB3:%.*]]
+; CHECK:       bb1.bb3_crit_edge:
+; CHECK-NEXT:    br label [[BB5:%.*]]
+; CHECK:       bb1.bb4_crit_edge:
+; CHECK-NEXT:    br label [[BB6:%.*]]
 ; CHECK:       bb2:
 ; CHECK-NEXT:    [[LB2:%.*]] = load i8, ptr [[B]], align 1
 ; CHECK-NEXT:    [[CMP_NOT_I:%.*]] = icmp ult i8 0, [[LB2]]
 ; CHECK-NEXT:    tail call void @llvm.assume(i1 [[CMP_NOT_I]])
-; CHECK-NEXT:    br label [[BB3]]
+; CHECK-NEXT:    br label [[BB5]]
 ; CHECK:       bb3:
 ; CHECK-NEXT:    [[LA:%.*]] = load i8, ptr [[A:%.*]], align 1
-; CHECK-NEXT:    br label [[BB4]]
+; CHECK-NEXT:    br label [[BB6]]
 ; CHECK:       bb4:
 ; CHECK-NEXT:    ret i8 0
 ;

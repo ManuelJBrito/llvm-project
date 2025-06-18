@@ -14,8 +14,11 @@ define i16 @hoge() {
 ; CHECK-NEXT:    ]
 ; CHECK:       bb1:
 ; CHECK-NEXT:    br i1 true, label [[BB3:%.*]], label [[BB4:%.*]]
+; CHECK:       bb1.bb4_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB5:%.*]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    br label [[BB4]]
+; CHECK-NEXT:    br label [[BB5]]
 ; CHECK:       bb3:
 ; CHECK-NEXT:    unreachable
 ; CHECK:       bb4:

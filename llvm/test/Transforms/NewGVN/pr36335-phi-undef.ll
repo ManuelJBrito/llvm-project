@@ -7,10 +7,12 @@ define void @main(i1 %c1, i1 %c2, i32 %x) {
 ; CHECK-LABEL: @main(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    br i1 [[C1:%.*]], label [[L:%.*]], label [[END:%.*]]
-; CHECK:       L:
+; CHECK:       entry.L_crit_edge:
 ; CHECK-NEXT:    [[XOR:%.*]] = xor i32 [[X:%.*]], -1
+; CHECK-NEXT:    br label [[L1:%.*]]
+; CHECK:       L:
 ; CHECK-NEXT:    call void @foo(i32 [[X]])
-; CHECK-NEXT:    br label [[L]]
+; CHECK-NEXT:    br label [[L1]]
 ; CHECK:       end:
 ; CHECK-NEXT:    ret void
 ;

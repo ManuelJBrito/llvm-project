@@ -12,12 +12,16 @@ define void @tinkywinky() {
 ; CHECK-NEXT:    [[TMP:%.*]] = load i32, ptr @a, align 4
 ; CHECK-NEXT:    [[TMP1:%.*]] = icmp sge i32 [[TMP]], 0
 ; CHECK-NEXT:    br i1 [[TMP1]], label [[BB2:%.*]], label [[BB7:%.*]]
+; CHECK:       bb.bb7_crit_edge:
+; CHECK-NEXT:    br label [[BB8:%.*]]
 ; CHECK:       bb2:
 ; CHECK-NEXT:    [[TMP4:%.*]] = icmp sgt i32 [[TMP]], 0
-; CHECK-NEXT:    br i1 [[TMP4]], label [[BB5:%.*]], label [[BB7]]
+; CHECK-NEXT:    br i1 [[TMP4]], label [[BB5:%.*]], label [[BB2_BB7_CRIT_EDGE:%.*]]
+; CHECK:       bb2.bb7_crit_edge:
+; CHECK-NEXT:    br label [[BB8]]
 ; CHECK:       bb5:
 ; CHECK-NEXT:    [[TMP6:%.*]] = call i32 (ptr, ...) @printf(ptr @patatino)
-; CHECK-NEXT:    br label [[BB7]]
+; CHECK-NEXT:    br label [[BB8]]
 ; CHECK:       bb7:
 ; CHECK-NEXT:    ret void
 ;

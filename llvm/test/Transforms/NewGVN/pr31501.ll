@@ -58,24 +58,32 @@ define weak_odr hidden ptr @quux(ptr %arg, ptr %arg1) local_unnamed_addr #0 alig
 ; CHECK-NEXT:    [[TMP6:%.*]] = load ptr, ptr [[TMP4]], align 8, !tbaa [[TBAA7:![0-9]+]]
 ; CHECK-NEXT:    [[TMP7:%.*]] = icmp eq ptr [[TMP3]], [[TMP6]]
 ; CHECK-NEXT:    br i1 [[TMP7]], label [[BB21:%.*]], label [[BB8:%.*]]
+; CHECK:       bb.bb21_crit_edge:
+; CHECK-NEXT:    br label [[BB22:%.*]]
 ; CHECK:       bb8:
 ; CHECK-NEXT:    br label [[BB11:%.*]]
 ; CHECK:       bb9:
 ; CHECK-NEXT:    [[TMP10:%.*]] = icmp eq ptr [[TMP18:%.*]], [[TMP6]]
-; CHECK-NEXT:    br i1 [[TMP10]], label [[BB19:%.*]], label [[BB11]]
+; CHECK-NEXT:    br i1 [[TMP10]], label [[BB9_BB19_CRIT_EDGE:%.*]], label [[BB9:%.*]]
+; CHECK:       bb9.bb11_crit_edge:
+; CHECK-NEXT:    br label [[BB11]]
+; CHECK:       bb9.bb19_crit_edge:
+; CHECK-NEXT:    br label [[BB19:%.*]]
 ; CHECK:       bb11:
-; CHECK-NEXT:    [[TMP12:%.*]] = phi ptr [ [[TMP17:%.*]], [[BB9:%.*]] ], [ undef, [[BB8]] ]
+; CHECK-NEXT:    [[TMP12:%.*]] = phi ptr [ [[TMP17:%.*]], [[BB9]] ], [ undef, [[BB8]] ]
 ; CHECK-NEXT:    [[TMP13:%.*]] = phi ptr [ [[TMP18]], [[BB9]] ], [ [[TMP3]], [[BB8]] ]
 ; CHECK-NEXT:    [[TMP15:%.*]] = load ptr, ptr [[TMP13]], align 8, !tbaa [[TBAA8:![0-9]+]]
 ; CHECK-NEXT:    [[TMP16:%.*]] = icmp eq ptr [[TMP15]], [[ARG1:%.*]]
 ; CHECK-NEXT:    [[TMP17]] = select i1 [[TMP16]], ptr [[TMP13]], ptr [[TMP12]]
 ; CHECK-NEXT:    [[TMP18]] = getelementptr inbounds [[STRUCT_FOO:%.*]], ptr [[TMP13]], i64 1
-; CHECK-NEXT:    br i1 [[TMP16]], label [[BB19]], label [[BB9]]
+; CHECK-NEXT:    br i1 [[TMP16]], label [[BB11_BB19_CRIT_EDGE:%.*]], label [[BB10:%.*]]
+; CHECK:       bb11.bb19_crit_edge:
+; CHECK-NEXT:    br label [[BB19]]
 ; CHECK:       bb19:
-; CHECK-NEXT:    [[TMP20:%.*]] = phi ptr [ null, [[BB9]] ], [ [[TMP17]], [[BB11]] ]
-; CHECK-NEXT:    br label [[BB21]]
+; CHECK-NEXT:    [[TMP20:%.*]] = phi ptr [ null, [[BB9_BB19_CRIT_EDGE]] ], [ [[TMP17]], [[BB11_BB19_CRIT_EDGE]] ]
+; CHECK-NEXT:    br label [[BB22]]
 ; CHECK:       bb21:
-; CHECK-NEXT:    [[TMP22:%.*]] = phi ptr [ null, [[BB:%.*]] ], [ [[TMP20]], [[BB19]] ]
+; CHECK-NEXT:    [[TMP22:%.*]] = phi ptr [ null, [[BB21]] ], [ [[TMP20]], [[BB19]] ]
 ; CHECK-NEXT:    ret ptr [[TMP22]]
 ;
 bb:

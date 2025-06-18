@@ -18,13 +18,28 @@ define ptr @LtRec(ptr %hdL, ptr %hdR) {
 ; CHECK-NEXT:    ret ptr null
 ; CHECK:       [[BB656:.*]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[BB684:.*]], label %[[BB656]]
+; CHECK-NEXT:    br i1 false, label %[[BB656_BB684_CRIT_EDGE:.*]], label %[[BB656_BB656_CRIT_EDGE:.*]]
+; CHECK:       [[BB656_BB656_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[BB656]]
+; CHECK:       [[BB656_BB684_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[BB684:.*]]
 ; CHECK:       [[BB684]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[BB924_PREHEADER:.*]], label %[[BB675_OUTER:.*]]
+; CHECK-NEXT:    br i1 false, label %[[BB924_PREHEADER:.*]], label %[[BB684_BB675_OUTER_CRIT_EDGE:.*]]
+; CHECK:       [[BB684_BB675_OUTER_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[BB675_OUTER:.*]]
 ; CHECK:       [[BB675_OUTER]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[BB684]], label %[[BB656]]
+; CHECK-NEXT:    br i1 false, label %[[BB675_OUTER_BB684_CRIT_EDGE:.*]], label %[[BB675_OUTER_BB656_CRIT_EDGE:.*]]
+; CHECK:       [[BB675_OUTER_BB656_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[BB656]]
+; CHECK:       [[BB675_OUTER_BB684_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[BB684]]
 ; CHECK:       [[BB675_PREHEADER]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[BB675_OUTER]]

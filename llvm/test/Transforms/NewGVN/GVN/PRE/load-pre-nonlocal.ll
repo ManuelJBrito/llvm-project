@@ -16,14 +16,16 @@ define i32 @volatile_load(i32 %n) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[CMP6:%.*]] = icmp sgt i32 [[N:%.*]], 0
 ; CHECK-NEXT:    br i1 [[CMP6]], label [[FOR_BODY_LR_PH:%.*]], label [[FOR_END:%.*]]
+; CHECK:       entry.for.end_crit_edge:
+; CHECK-NEXT:    br label [[FOR_END1:%.*]]
 ; CHECK:       for.body.lr.ph:
 ; CHECK-NEXT:    [[TMP0:%.*]] = load ptr, ptr @a2, align 8, !tbaa [[TBAA5:![0-9]+]]
 ; CHECK-NEXT:    [[TMP1:%.*]] = load ptr, ptr @a, align 8, !tbaa [[TBAA5]]
 ; CHECK-NEXT:    br label [[FOR_BODY:%.*]]
 ; CHECK:       for.body:
-; CHECK-NEXT:    [[INDVARS_IV:%.*]] = phi i64 [ 0, [[FOR_BODY_LR_PH]] ], [ [[INDVARS_IV_NEXT:%.*]], [[FOR_BODY]] ]
-; CHECK-NEXT:    [[S_09:%.*]] = phi i32 [ 0, [[FOR_BODY_LR_PH]] ], [ [[ADD:%.*]], [[FOR_BODY]] ]
-; CHECK-NEXT:    [[P_08:%.*]] = phi ptr [ [[TMP0]], [[FOR_BODY_LR_PH]] ], [ [[INCDEC_PTR:%.*]], [[FOR_BODY]] ]
+; CHECK-NEXT:    [[INDVARS_IV:%.*]] = phi i64 [ 0, [[FOR_BODY_LR_PH]] ], [ [[INDVARS_IV_NEXT:%.*]], [[FOR_BODY_FOR_BODY_CRIT_EDGE:%.*]] ]
+; CHECK-NEXT:    [[S_09:%.*]] = phi i32 [ 0, [[FOR_BODY_LR_PH]] ], [ [[ADD:%.*]], [[FOR_BODY_FOR_BODY_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[P_08:%.*]] = phi ptr [ [[TMP0]], [[FOR_BODY_LR_PH]] ], [ [[INCDEC_PTR:%.*]], [[FOR_BODY_FOR_BODY_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[TMP2:%.*]] = load i32, ptr [[P_08]], align 4, !tbaa [[TBAA9:![0-9]+]]
 ; CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i32, ptr [[TMP1]], i64 [[INDVARS_IV]]
 ; CHECK-NEXT:    store i32 [[TMP2]], ptr [[ARRAYIDX]], align 4, !tbaa [[TBAA9]]
@@ -33,11 +35,13 @@ define i32 @volatile_load(i32 %n) {
 ; CHECK-NEXT:    [[INCDEC_PTR]] = getelementptr inbounds i32, ptr [[P_08]], i64 1
 ; CHECK-NEXT:    [[LFTR_WIDEIV:%.*]] = trunc i64 [[INDVARS_IV_NEXT]] to i32
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp ne i32 [[LFTR_WIDEIV]], [[N]]
-; CHECK-NEXT:    br i1 [[EXITCOND]], label [[FOR_BODY]], label [[FOR_COND_FOR_END_CRIT_EDGE:%.*]]
+; CHECK-NEXT:    br i1 [[EXITCOND]], label [[FOR_BODY_FOR_BODY_CRIT_EDGE]], label [[FOR_COND_FOR_END_CRIT_EDGE:%.*]]
+; CHECK:       for.body.for.body_crit_edge:
+; CHECK-NEXT:    br label [[FOR_BODY]]
 ; CHECK:       for.cond.for.end_crit_edge:
-; CHECK-NEXT:    br label [[FOR_END]]
+; CHECK-NEXT:    br label [[FOR_END1]]
 ; CHECK:       for.end:
-; CHECK-NEXT:    [[S_0_LCSSA:%.*]] = phi i32 [ [[ADD]], [[FOR_COND_FOR_END_CRIT_EDGE]] ], [ 0, [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[S_0_LCSSA:%.*]] = phi i32 [ [[ADD]], [[FOR_COND_FOR_END_CRIT_EDGE]] ], [ 0, [[FOR_END]] ]
 ; CHECK-NEXT:    ret i32 [[S_0_LCSSA]]
 ;
 entry:

@@ -13,12 +13,14 @@ define void @testshl() local_unnamed_addr #0 {
 ; CHECK-NEXT:    [[SHL:%.*]] = shl i32 1, [[K_031]]
 ; CHECK-NEXT:    [[SHR:%.*]] = ashr exact i32 [[SHL]], 1
 ; CHECK-NEXT:    [[CMP229:%.*]] = icmp slt i32 [[SHL]], 64
-; CHECK-NEXT:    br i1 [[CMP229]], label [[FOR_BODY3_PREHEADER:%.*]], label [[FOR_INC8]]
+; CHECK-NEXT:    br i1 [[CMP229]], label [[FOR_BODY3_PREHEADER:%.*]], label [[FOR_BODY_FOR_INC8_CRIT_EDGE:%.*]]
+; CHECK:       for.body.for.inc8_crit_edge:
+; CHECK-NEXT:    br label [[FOR_INC9:%.*]]
 ; CHECK:       for.body3.preheader:
 ; CHECK-NEXT:    [[DIV:%.*]] = sdiv i32 [[SHR]], 2
 ; CHECK-NEXT:    br label [[FOR_BODY3:%.*]]
 ; CHECK:       for.body3:
-; CHECK-NEXT:    [[I_030:%.*]] = phi i32 [ [[INC:%.*]], [[FOR_BODY3]] ], [ [[DIV]], [[FOR_BODY3_PREHEADER]] ]
+; CHECK-NEXT:    [[I_030:%.*]] = phi i32 [ [[INC:%.*]], [[FOR_BODY3_FOR_BODY3_CRIT_EDGE:%.*]] ], [ [[DIV]], [[FOR_BODY3_PREHEADER]] ]
 ; CHECK-NEXT:    [[ADD:%.*]] = add nsw i32 [[I_030]], [[SHR]]
 ; CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [32 x i32], ptr @Data, i32 0, i32 [[ADD]]
 ; CHECK-NEXT:    [[ARRAYIDX4:%.*]] = getelementptr inbounds [32 x i32], ptr @Data, i32 0, i32 [[I_030]]
@@ -30,11 +32,17 @@ define void @testshl() local_unnamed_addr #0 {
 ; CHECK-NEXT:    store i32 [[ADD7]], ptr [[ARRAYIDX4]], align 4, !tbaa [[TBAA3]]
 ; CHECK-NEXT:    [[INC]] = add nsw i32 [[I_030]], 1
 ; CHECK-NEXT:    [[CMP2:%.*]] = icmp slt i32 [[I_030]], 15
-; CHECK-NEXT:    br i1 [[CMP2]], label [[FOR_BODY3]], label [[FOR_INC8]]
+; CHECK-NEXT:    br i1 [[CMP2]], label [[FOR_BODY3_FOR_BODY3_CRIT_EDGE]], label [[FOR_BODY3_FOR_INC8_CRIT_EDGE:%.*]]
+; CHECK:       for.body3.for.inc8_crit_edge:
+; CHECK-NEXT:    br label [[FOR_INC9]]
+; CHECK:       for.body3.for.body3_crit_edge:
+; CHECK-NEXT:    br label [[FOR_BODY3]]
 ; CHECK:       for.inc8:
 ; CHECK-NEXT:    [[INC9]] = add nuw nsw i32 [[K_031]], 1
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp eq i32 [[INC9]], 8
-; CHECK-NEXT:    br i1 [[EXITCOND]], label [[FOR_END10:%.*]], label [[FOR_BODY]]
+; CHECK-NEXT:    br i1 [[EXITCOND]], label [[FOR_END10:%.*]], label [[FOR_INC8]]
+; CHECK:       for.inc8.for.body_crit_edge:
+; CHECK-NEXT:    br label [[FOR_BODY]]
 ; CHECK:       for.end10:
 ; CHECK-NEXT:    ret void
 ;

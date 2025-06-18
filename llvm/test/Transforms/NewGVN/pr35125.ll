@@ -10,23 +10,29 @@ define i32 @main() #0 {
 ; CHECK-NEXT:    [[NEG:%.*]] = xor i32 [[TMP0]], -1
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp sgt i32 [[TMP0]], -1
 ; CHECK-NEXT:    br i1 [[CMP]], label [[IF_THEN:%.*]], label [[IF_END:%.*]]
+; CHECK:       entry.if.end_crit_edge:
+; CHECK-NEXT:    br label [[IF_END1:%.*]]
 ; CHECK:       if.then:
-; CHECK-NEXT:    br label [[IF_END]]
+; CHECK-NEXT:    br label [[IF_END1]]
 ; CHECK:       if.end:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[TMP0]], [[ENTRY:%.*]] ], [ [[NEG]], [[IF_THEN]] ]
-; CHECK-NEXT:    [[STOREMERGE:%.*]] = phi i32 [ [[TMP0]], [[IF_THEN]] ], [ [[NEG]], [[ENTRY]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[TMP0]], [[IF_END]] ], [ [[NEG]], [[IF_THEN]] ]
+; CHECK-NEXT:    [[STOREMERGE:%.*]] = phi i32 [ [[TMP0]], [[IF_THEN]] ], [ [[NEG]], [[IF_END]] ]
 ; CHECK-NEXT:    [[CMP2:%.*]] = icmp ult i32 [[STOREMERGE]], [[PHIOFOPS]]
 ; CHECK-NEXT:    br i1 [[CMP2]], label [[IF_THEN3:%.*]], label [[IF_END6:%.*]]
+; CHECK:       if.end.if.end6_crit_edge:
+; CHECK-NEXT:    br label [[IF_END7:%.*]]
 ; CHECK:       if.then3:
 ; CHECK-NEXT:    br i1 false, label [[LOR_RHS:%.*]], label [[LOR_END:%.*]]
+; CHECK:       if.then3.lor.end_crit_edge:
+; CHECK-NEXT:    br label [[LOR_END1:%.*]]
 ; CHECK:       lor.rhs:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br label [[LOR_END]]
+; CHECK-NEXT:    br label [[LOR_END1]]
 ; CHECK:       lor.end:
 ; CHECK-NEXT:    store i32 1, ptr @a, align 4
-; CHECK-NEXT:    br label [[IF_END6]]
+; CHECK-NEXT:    br label [[IF_END7]]
 ; CHECK:       if.end6:
-; CHECK-NEXT:    [[TMP2:%.*]] = phi i32 [ [[TMP0]], [[IF_END]] ], [ 1, [[LOR_END]] ]
+; CHECK-NEXT:    [[TMP2:%.*]] = phi i32 [ [[TMP0]], [[IF_END6]] ], [ 1, [[LOR_END1]] ]
 ; CHECK-NEXT:    [[CALL:%.*]] = call i32 (ptr, ...) @printf(ptr @.str, i32 [[TMP2]])
 ; CHECK-NEXT:    ret i32 0
 ;

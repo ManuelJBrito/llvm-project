@@ -160,7 +160,9 @@ define i32 @vnum_test3(ptr %data) #0 {
 ; CHECK-NEXT:    [[TMP9:%.*]] = getelementptr inbounds i32, ptr [[DATA]], i64 5
 ; CHECK-NEXT:    store i32 0, ptr [[TMP9]], align 4
 ; CHECK-NEXT:    [[TMP10:%.*]] = icmp slt i32 [[I_0]], 30
-; CHECK-NEXT:    br i1 [[TMP10]], label [[BB11:%.*]], label [[BB21]]
+; CHECK-NEXT:    br i1 [[TMP10]], label [[BB11:%.*]], label [[BB6_BB14_CRIT_EDGE:%.*]]
+; CHECK:       bb6.bb14_crit_edge:
+; CHECK-NEXT:    br label [[BB21]]
 ; CHECK:       bb11:
 ; CHECK-NEXT:    br label [[BB21]]
 ; CHECK:       bb14:
@@ -241,10 +243,16 @@ define i8 @irreducible_memoryphi(ptr noalias %arg, ptr noalias %arg2, i1 %arg3) 
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    store i8 0, ptr [[ARG:%.*]], align 1
 ; CHECK-NEXT:    br i1 [[ARG3:%.*]], label [[BB2:%.*]], label [[BB1:%.*]]
+; CHECK:       bb.bb1_crit_edge:
+; CHECK-NEXT:    br label [[BB4:%.*]]
+; CHECK:       bb.bb2_crit_edge:
+; CHECK-NEXT:    br label [[BB5:%.*]]
 ; CHECK:       bb1:
-; CHECK-NEXT:    br label [[BB2]]
+; CHECK-NEXT:    br label [[BB5]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    br i1 [[ARG3]], label [[BB1]], label [[BB3:%.*]]
+; CHECK-NEXT:    br i1 [[ARG3]], label [[BB2_BB1_CRIT_EDGE:%.*]], label [[BB3:%.*]]
+; CHECK:       bb2.bb1_crit_edge:
+; CHECK-NEXT:    br label [[BB4]]
 ; CHECK:       bb3:
 ; CHECK-NEXT:    ret i8 0
 ;
@@ -275,10 +283,16 @@ define i32 @irreducible_phi(i32 %arg, i1 %arg2) {
 ; CHECK-LABEL: @irreducible_phi(
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    br i1 [[ARG2:%.*]], label [[BB2:%.*]], label [[BB1:%.*]]
+; CHECK:       bb.bb1_crit_edge:
+; CHECK-NEXT:    br label [[BB4:%.*]]
+; CHECK:       bb.bb2_crit_edge:
+; CHECK-NEXT:    br label [[BB5:%.*]]
 ; CHECK:       bb1:
-; CHECK-NEXT:    br label [[BB2]]
+; CHECK-NEXT:    br label [[BB5]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    br i1 [[ARG2]], label [[BB1]], label [[BB3:%.*]]
+; CHECK-NEXT:    br i1 [[ARG2]], label [[BB2_BB1_CRIT_EDGE:%.*]], label [[BB3:%.*]]
+; CHECK:       bb2.bb1_crit_edge:
+; CHECK-NEXT:    br label [[BB4]]
 ; CHECK:       bb3:
 ; CHECK-NEXT:    ret i32 0
 ;

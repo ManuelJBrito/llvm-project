@@ -7,10 +7,12 @@ define i32 @mp_unsgn_cmp(i32 %n, ptr nocapture readonly %in1, ptr nocapture read
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[CMP11:%.*]] = icmp sgt i32 [[N:%.*]], -1
 ; CHECK-NEXT:    br i1 [[CMP11]], label [[FOR_INC_PREHEADER:%.*]], label [[IF_ELSE:%.*]]
+; CHECK:       entry.if.else_crit_edge:
+; CHECK-NEXT:    br label [[IF_ELSE1:%.*]]
 ; CHECK:       for.inc.preheader:
 ; CHECK-NEXT:    br label [[FOR_INC:%.*]]
 ; CHECK:       for.inc:
-; CHECK-NEXT:    [[STOREMERGE2:%.*]] = phi i32 [ [[INC:%.*]], [[FOR_INC]] ], [ 0, [[FOR_INC_PREHEADER]] ]
+; CHECK-NEXT:    [[STOREMERGE2:%.*]] = phi i32 [ [[INC:%.*]], [[FOR_INC_FOR_INC_CRIT_EDGE:%.*]] ], [ 0, [[FOR_INC_PREHEADER]] ]
 ; CHECK-NEXT:    [[IDXPROM:%.*]] = sext i32 [[STOREMERGE2]] to i64
 ; CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i32, ptr [[IN1:%.*]], i64 [[IDXPROM]]
 ; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr [[ARRAYIDX]], align 4
@@ -21,12 +23,16 @@ define i32 @mp_unsgn_cmp(i32 %n, ptr nocapture readonly %in1, ptr nocapture read
 ; CHECK-NEXT:    [[CMP1:%.*]] = icmp slt i32 [[STOREMERGE2]], [[N]]
 ; CHECK-NEXT:    [[CMP2:%.*]] = icmp eq i32 [[SUB]], 0
 ; CHECK-NEXT:    [[OR_COND:%.*]] = and i1 [[CMP2]], [[CMP1]]
-; CHECK-NEXT:    br i1 [[OR_COND]], label [[FOR_INC]], label [[FOR_END:%.*]]
+; CHECK-NEXT:    br i1 [[OR_COND]], label [[FOR_INC_FOR_INC_CRIT_EDGE]], label [[FOR_END:%.*]]
+; CHECK:       for.inc.for.inc_crit_edge:
+; CHECK-NEXT:    br label [[FOR_INC]]
 ; CHECK:       for.end:
 ; CHECK-NEXT:    [[CMP5:%.*]] = icmp sgt i32 [[SUB]], 0
-; CHECK-NEXT:    br i1 [[CMP5]], label [[IF_END8:%.*]], label [[IF_ELSE]]
+; CHECK-NEXT:    br i1 [[CMP5]], label [[IF_END8:%.*]], label [[FOR_END_IF_ELSE_CRIT_EDGE:%.*]]
+; CHECK:       for.end.if.else_crit_edge:
+; CHECK-NEXT:    br label [[IF_ELSE1]]
 ; CHECK:       if.else:
-; CHECK-NEXT:    [[SUB1_LCSSA4:%.*]] = phi i32 [ [[SUB]], [[FOR_END]] ], [ 0, [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[SUB1_LCSSA4:%.*]] = phi i32 [ [[SUB]], [[FOR_END_IF_ELSE_CRIT_EDGE]] ], [ 0, [[IF_ELSE]] ]
 ; CHECK-NEXT:    [[CMP6:%.*]] = icmp slt i32 [[SUB1_LCSSA4]], 0
 ; CHECK-NEXT:    [[DOTSUB1_LCSSA:%.*]] = select i1 [[CMP6]], i32 -1, i32 [[SUB1_LCSSA4]]
 ; CHECK-NEXT:    ret i32 [[DOTSUB1_LCSSA]]
@@ -81,10 +87,21 @@ define fastcc void @barney() {
 ; CHECK-LABEL: @barney(
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    br i1 true, label [[BB29:%.*]], label [[BB35:%.*]]
+; CHECK:       bb.bb35_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB36:%.*]]
 ; CHECK:       bb29:
-; CHECK-NEXT:    br i1 true, label [[BB33:%.*]], label [[BB35]]
+; CHECK-NEXT:    br i1 true, label [[BB33:%.*]], label [[BB29_BB35_CRIT_EDGE:%.*]]
+; CHECK:       bb29.bb35_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB36]]
 ; CHECK:       bb33:
-; CHECK-NEXT:    br i1 true, label [[BB35]], label [[BB35]]
+; CHECK-NEXT:    br i1 true, label [[BB33_BB35_CRIT_EDGE:%.*]], label [[BB33_BB35_CRIT_EDGE1:%.*]]
+; CHECK:       bb33.bb35_crit_edge1:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB36]]
+; CHECK:       bb33.bb35_crit_edge:
+; CHECK-NEXT:    br label [[BB36]]
 ; CHECK:       bb35:
 ; CHECK-NEXT:    unreachable
 ;

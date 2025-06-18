@@ -23,9 +23,14 @@ define void @_Z4testv() #0 personality ptr @__gxx_personality_v0 {
 ; CHECK-NEXT:    [[CAPACITYX_I_I_I_I_I_I:%.*]] = getelementptr inbounds %"class.llvm::SmallVector", ptr [[SV]], i64 0, i32 0, i32 0, i32 0, i32 0, i32 2
 ; CHECK-NEXT:    [[ADD_PTR_I_I_I_I2_I_I:%.*]] = getelementptr inbounds %"union.llvm::SmallVectorBase::U", ptr [[FIRSTEL_I_I_I_I_I_I]], i64 2
 ; CHECK-NEXT:    store ptr [[ADD_PTR_I_I_I_I2_I_I]], ptr [[CAPACITYX_I_I_I_I_I_I]], align 16, !tbaa [[TBAA0]]
-; CHECK-NEXT:    br i1 true, label %[[RETRY_I:.*]], label %[[IF_END_I:.*]]
+; CHECK-NEXT:    br i1 true, label %[[ENTRY_RETRY_I_CRIT_EDGE:.*]], label %[[IF_END_I:.*]]
+; CHECK:       [[ENTRY_RETRY_I_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[RETRY_I:.*]]
 ; CHECK:       [[RETRY_I]]:
-; CHECK-NEXT:    br i1 false, label %[[INVOKE_CONT:.*]], label %[[NEW_NOTNULL_I:.*]]
+; CHECK-NEXT:    br i1 false, label %[[RETRY_I_INVOKE_CONT_CRIT_EDGE:.*]], label %[[NEW_NOTNULL_I:.*]]
+; CHECK:       [[RETRY_I_INVOKE_CONT_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[INVOKE_CONT:.*]]
 ; CHECK:       [[NEW_NOTNULL_I]]:
 ; CHECK-NEXT:    store i32 1, ptr null, align 4, !tbaa [[TBAA4:![0-9]+]]
 ; CHECK-NEXT:    br label %[[INVOKE_CONT]]
@@ -39,10 +44,18 @@ define void @_Z4testv() #0 personality ptr @__gxx_personality_v0 {
 ; CHECK:       [[INVOKE_CONT]]:
 ; CHECK-NEXT:    [[ADD_PTR_I:%.*]] = getelementptr inbounds i8, ptr [[FIRSTEL_I_I_I_I_I_I]], i64 4
 ; CHECK-NEXT:    store ptr [[ADD_PTR_I]], ptr [[ENDX_I_I_I_I_I_I]], align 8, !tbaa [[TBAA0]]
-; CHECK-NEXT:    br i1 true, label %[[NEW_NOTNULL_I11:.*]], label %[[IF_END_I14:.*]]
+; CHECK-NEXT:    br i1 true, label %[[INVOKE_CONT_NEW_NOTNULL_I11_CRIT_EDGE:.*]], label %[[IF_END_I14:.*]]
+; CHECK:       [[INVOKE_CONT_NEW_NOTNULL_I11_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[NEW_NOTNULL_I11:.*]]
 ; CHECK:       [[RETRY_I10:.*]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 poison, label %[[INVOKE_CONT2:.*]], label %[[NEW_NOTNULL_I11]]
+; CHECK-NEXT:    br i1 poison, label %[[RETRY_I10_INVOKE_CONT2_CRIT_EDGE:.*]], label %[[RETRY_I10_NEW_NOTNULL_I11_CRIT_EDGE:.*]]
+; CHECK:       [[RETRY_I10_NEW_NOTNULL_I11_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[NEW_NOTNULL_I11]]
+; CHECK:       [[RETRY_I10_INVOKE_CONT2_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[INVOKE_CONT2:.*]]
 ; CHECK:       [[NEW_NOTNULL_I11]]:
 ; CHECK-NEXT:    store i32 2, ptr [[ADD_PTR_I]], align 4, !tbaa [[TBAA4]]
 ; CHECK-NEXT:    br label %[[INVOKE_CONT2]]
@@ -58,7 +71,9 @@ define void @_Z4testv() #0 personality ptr @__gxx_personality_v0 {
 ; CHECK:       [[INVOKE_CONT3]]:
 ; CHECK-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[SV]], align 16, !tbaa [[TBAA0]]
 ; CHECK-NEXT:    [[CMP_I_I_I_I19:%.*]] = icmp eq ptr [[TMP0]], [[FIRSTEL_I_I_I_I_I_I]]
-; CHECK-NEXT:    br i1 [[CMP_I_I_I_I19]], label %[[_ZN4LLVM11SMALLVECTORIILJ8EED1EV_EXIT21:.*]], label %[[IF_THEN_I_I_I20:.*]]
+; CHECK-NEXT:    br i1 [[CMP_I_I_I_I19]], label %[[INVOKE_CONT3__ZN4LLVM11SMALLVECTORIILJ8EED1EV_EXIT21_CRIT_EDGE:.*]], label %[[IF_THEN_I_I_I20:.*]]
+; CHECK:       [[INVOKE_CONT3__ZN4LLVM11SMALLVECTORIILJ8EED1EV_EXIT21_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[_ZN4LLVM11SMALLVECTORIILJ8EED1EV_EXIT21:.*]]
 ; CHECK:       [[IF_THEN_I_I_I20]]:
 ; CHECK-NEXT:    call void @free(ptr [[TMP0]]) #[[ATTR4]]
 ; CHECK-NEXT:    br label %[[_ZN4LLVM11SMALLVECTORIILJ8EED1EV_EXIT21]]
@@ -70,7 +85,9 @@ define void @_Z4testv() #0 personality ptr @__gxx_personality_v0 {
 ; CHECK-NEXT:            cleanup
 ; CHECK-NEXT:    [[TMP2:%.*]] = load ptr, ptr [[SV]], align 16, !tbaa [[TBAA0]]
 ; CHECK-NEXT:    [[CMP_I_I_I_I:%.*]] = icmp eq ptr [[TMP2]], [[FIRSTEL_I_I_I_I_I_I]]
-; CHECK-NEXT:    br i1 [[CMP_I_I_I_I]], label %[[EH_RESUME:.*]], label %[[IF_THEN_I_I_I:.*]]
+; CHECK-NEXT:    br i1 [[CMP_I_I_I_I]], label %[[LPAD_EH_RESUME_CRIT_EDGE:.*]], label %[[IF_THEN_I_I_I:.*]]
+; CHECK:       [[LPAD_EH_RESUME_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[EH_RESUME:.*]]
 ; CHECK:       [[IF_THEN_I_I_I]]:
 ; CHECK-NEXT:    call void @free(ptr [[TMP2]]) #[[ATTR4]]
 ; CHECK-NEXT:    br label %[[EH_RESUME]]

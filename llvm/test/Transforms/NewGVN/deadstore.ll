@@ -57,7 +57,9 @@ define i32 @test33(i1 %c, ptr %p, i32 %i, i1 %arg) {
 ; CHECK:       bb1:
 ; CHECK-NEXT:    [[V:%.*]] = load i32, ptr [[P:%.*]], align 4
 ; CHECK-NEXT:    call void @unknown_func()
-; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[BB1]], label [[BB3:%.*]]
+; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[BB1_BB1_CRIT_EDGE:%.*]], label [[BB3:%.*]]
+; CHECK:       bb1.bb1_crit_edge:
+; CHECK-NEXT:    br label [[BB1]]
 ; CHECK:       bb3:
 ; CHECK-NEXT:    ret i32 0
 ;

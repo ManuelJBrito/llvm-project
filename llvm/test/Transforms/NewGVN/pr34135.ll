@@ -9,13 +9,19 @@ define void @snork(i32 noundef %arg) {
 ; CHECK-NEXT:    [[TMP:%.*]] = sext i32 [[ARG:%.*]] to i64
 ; CHECK-NEXT:    br label [[BB1:%.*]]
 ; CHECK:       bb1:
-; CHECK-NEXT:    [[TMP2:%.*]] = phi i64 [ 0, [[BB:%.*]] ], [ [[TMP3:%.*]], [[BB1]] ]
+; CHECK-NEXT:    [[TMP2:%.*]] = phi i64 [ 0, [[BB:%.*]] ], [ [[TMP3:%.*]], [[BB1_BB1_CRIT_EDGE:%.*]] ]
 ; CHECK-NEXT:    [[TMP3]] = add i64 [[TMP2]], 1
 ; CHECK-NEXT:    [[TMP4:%.*]] = icmp slt i64 [[TMP3]], [[TMP]]
-; CHECK-NEXT:    br i1 [[TMP4]], label [[BB1]], label [[BB7:%.*]]
+; CHECK-NEXT:    br i1 [[TMP4]], label [[BB1_BB1_CRIT_EDGE]], label [[BB1_BB7_CRIT_EDGE:%.*]]
+; CHECK:       bb1.bb7_crit_edge:
+; CHECK-NEXT:    br label [[BB8:%.*]]
+; CHECK:       bb1.bb1_crit_edge:
+; CHECK-NEXT:    br label [[BB1]]
 ; CHECK:       bb7:
 ; CHECK-NEXT:    [[TMP6:%.*]] = icmp sgt i64 [[TMP]], 1
-; CHECK-NEXT:    br i1 [[TMP6]], label [[BB7]], label [[BB9:%.*]]
+; CHECK-NEXT:    br i1 [[TMP6]], label [[BB7:%.*]], label [[BB9:%.*]]
+; CHECK:       bb7.bb7_crit_edge:
+; CHECK-NEXT:    br label [[BB8]]
 ; CHECK:       bb9:
 ; CHECK-NEXT:    unreachable
 ;

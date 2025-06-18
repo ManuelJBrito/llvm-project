@@ -7,7 +7,9 @@ define i32 @bsR(i32 %n) {
 ; CHECK-LABEL: define i32 @bsR(
 ; CHECK-SAME: i32 [[N:%.*]]) {
 ; CHECK-NEXT:  [[ENTRY:.*:]]
-; CHECK-NEXT:    br i1 false, label %[[COND_NEXT:.*]], label %[[BB19:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_NEXT:.*]], label %[[ENTRY_BB19_CRIT_EDGE:.*]]
+; CHECK:       [[ENTRY_BB19_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB19:.*]]
 ; CHECK:       [[COND_NEXT]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[BB19]]

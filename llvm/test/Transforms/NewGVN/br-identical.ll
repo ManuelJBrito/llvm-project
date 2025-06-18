@@ -13,17 +13,31 @@ define void @widget(i1 %p) {
 ; CHECK-NEXT:    [[T2]] = add i64 [[T1]], 1
 ; CHECK-NEXT:    [[T3:%.*]] = icmp ult i64 0, [[T2]]
 ; CHECK-NEXT:    br i1 [[T3]], label [[BB3:%.*]], label [[BB4:%.*]]
+; CHECK:       bb2.bb4_crit_edge:
+; CHECK-NEXT:    br label [[BB9:%.*]]
 ; CHECK:       bb3:
 ; CHECK-NEXT:    [[T4:%.*]] = call i64 @f()
-; CHECK-NEXT:    br label [[BB4]]
+; CHECK-NEXT:    br label [[BB9]]
 ; CHECK:       bb4:
 ; CHECK-NEXT:    br i1 [[P]], label [[BB5:%.*]], label [[BB6:%.*]]
 ; CHECK:       bb5:
-; CHECK-NEXT:    br i1 true, label [[BB7]], label [[BB7]]
+; CHECK-NEXT:    br i1 true, label [[BB5_BB7_CRIT_EDGE:%.*]], label [[BB5_BB7_CRIT_EDGE1:%.*]]
+; CHECK:       bb5.bb7_crit_edge1:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB10:%.*]]
+; CHECK:       bb5.bb7_crit_edge:
+; CHECK-NEXT:    br label [[BB10]]
 ; CHECK:       bb6:
-; CHECK-NEXT:    br i1 true, label [[BB7]], label [[BB7]]
+; CHECK-NEXT:    br i1 true, label [[BB6_BB7_CRIT_EDGE:%.*]], label [[BB6_BB7_CRIT_EDGE2:%.*]]
+; CHECK:       bb6.bb7_crit_edge2:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB10]]
+; CHECK:       bb6.bb7_crit_edge:
+; CHECK-NEXT:    br label [[BB10]]
 ; CHECK:       bb7:
-; CHECK-NEXT:    br i1 [[P]], label [[BB2]], label [[BB8:%.*]]
+; CHECK-NEXT:    br i1 [[P]], label [[BB7]], label [[BB8:%.*]]
+; CHECK:       bb7.bb2_crit_edge:
+; CHECK-NEXT:    br label [[BB2]]
 ; CHECK:       bb8:
 ; CHECK-NEXT:    ret void
 ;

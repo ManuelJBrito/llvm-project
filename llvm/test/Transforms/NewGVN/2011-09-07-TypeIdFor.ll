@@ -24,6 +24,8 @@ define void @_Z3foov() uwtable personality ptr @__gxx_personality_v0 {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    invoke void @_Z4barv()
 ; CHECK-NEXT:            to label [[RETURN:%.*]] unwind label [[LPAD:%.*]]
+; CHECK:       entry.return_crit_edge:
+; CHECK-NEXT:    br label [[RETURN1:%.*]]
 ; CHECK:       lpad:
 ; CHECK-NEXT:    [[TMP0:%.*]] = landingpad { ptr, i32 }
 ; CHECK-NEXT:            catch ptr @_ZTIi
@@ -42,11 +44,11 @@ define void @_Z3foov() uwtable personality ptr @__gxx_personality_v0 {
 ; CHECK:       ppad:
 ; CHECK-NEXT:    [[TMP3:%.*]] = tail call ptr @__cxa_begin_catch(ptr [[EXC_PTR2_I]]) #[[ATTR1:[0-9]+]]
 ; CHECK-NEXT:    tail call void @__cxa_end_catch() #[[ATTR1]]
-; CHECK-NEXT:    br label [[RETURN]]
+; CHECK-NEXT:    br label [[RETURN1]]
 ; CHECK:       ppad2:
 ; CHECK-NEXT:    [[D_2073_5_I:%.*]] = tail call ptr @__cxa_begin_catch(ptr [[EXC_PTR2_I]]) #[[ATTR1]]
 ; CHECK-NEXT:    tail call void @__cxa_end_catch() #[[ATTR1]]
-; CHECK-NEXT:    br label [[RETURN]]
+; CHECK-NEXT:    br label [[RETURN1]]
 ; CHECK:       next2:
 ; CHECK-NEXT:    call void @_Z7cleanupv()
 ; CHECK-NEXT:    br i1 false, label [[PPAD3:%.*]], label [[NEXT3:%.*]]
@@ -56,10 +58,10 @@ define void @_Z3foov() uwtable personality ptr @__gxx_personality_v0 {
 ; CHECK-NEXT:    resume { ptr, i32 } [[TMP0]]
 ; CHECK:       ppad3:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br label [[RETURN]]
+; CHECK-NEXT:    br label [[RETURN1]]
 ; CHECK:       ppad4:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br label [[RETURN]]
+; CHECK-NEXT:    br label [[RETURN1]]
 ; CHECK:       return:
 ; CHECK-NEXT:    ret void
 ;

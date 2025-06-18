@@ -16,14 +16,21 @@ define hidden void @barrier() align 2 {
 ; CHECK-NEXT:    [[SUB:%.*]] = add nsw i64 [[SHR17]], -1
 ; CHECK-NEXT:    br label [[FIRST:%.*]]
 ; CHECK:       first:
-; CHECK-NEXT:    [[PHI_ONE:%.*]] = phi i64 [ [[SEL]], [[ENTRY:%.*]] ], [ 0, [[FIRST]] ], [ 0, [[THIRD:%.*]] ]
+; CHECK-NEXT:    [[PHI_ONE:%.*]] = phi i64 [ [[SEL]], [[ENTRY:%.*]] ], [ 0, [[FIRST_FIRST_CRIT_EDGE:%.*]] ], [ 0, [[SECOND_FIRST_CRIT_EDGE:%.*]] ]
 ; CHECK-NEXT:    [[CMP_PHI1_SUB:%.*]] = icmp eq i64 [[PHI_ONE]], [[SUB]]
-; CHECK-NEXT:    br i1 [[CMP_PHI1_SUB]], label [[THIRD]], label [[FIRST]]
+; CHECK-NEXT:    br i1 [[CMP_PHI1_SUB]], label [[FIRST_SECOND_CRIT_EDGE:%.*]], label [[FIRST_FIRST_CRIT_EDGE]]
+; CHECK:       first.first_crit_edge:
+; CHECK-NEXT:    br label [[FIRST]]
+; CHECK:       first.second_crit_edge:
+; CHECK-NEXT:    [[INC_PRE:%.*]] = add i64 [[SEL]], 1
+; CHECK-NEXT:    br label [[SECOND:%.*]]
 ; CHECK:       second:
-; CHECK-NEXT:    [[PHI_TWO:%.*]] = phi i64 [ [[SUB]], [[THIRD]] ], [ [[SUB]], [[FIRST]] ]
-; CHECK-NEXT:    [[INC:%.*]] = add i64 [[PHI_TWO]], 1
-; CHECK-NEXT:    [[CMP_INC_SUB:%.*]] = icmp eq i64 [[INC]], [[SUB]]
-; CHECK-NEXT:    br i1 [[CMP_INC_SUB]], label [[THIRD]], label [[FIRST]]
+; CHECK-NEXT:    br i1 false, label [[SECOND_SECOND_CRIT_EDGE:%.*]], label [[SECOND_FIRST_CRIT_EDGE]]
+; CHECK:       second.first_crit_edge:
+; CHECK-NEXT:    br label [[FIRST]]
+; CHECK:       second.second_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[SECOND]]
 ;
 entry:
   %callg = tail call i64 @g()
@@ -68,12 +75,17 @@ define hidden void @barrier2() align 2 {
 ; CHECK:       mainloop:
 ; CHECK-NEXT:    [[FIRSTPHI:%.*]] = phi i64 [ [[REM]], [[ENTRY:%.*]] ], [ 0, [[FIRST_EXIT]] ]
 ; CHECK-NEXT:    [[FIRSTCMP:%.*]] = icmp eq i64 [[FIRSTPHI]], [[SUB]]
-; CHECK-NEXT:    br i1 [[FIRSTCMP]], label [[SECOND_PREHEADER:%.*]], label [[FIRST_EXIT]]
+; CHECK-NEXT:    br i1 [[FIRSTCMP]], label [[SECOND_PREHEADER:%.*]], label [[MAINLOOP_FIRST_EXIT_CRIT_EDGE:%.*]]
+; CHECK:       mainloop.first.exit_crit_edge:
+; CHECK-NEXT:    br label [[FIRST_EXIT]]
 ; CHECK:       second.preheader:
 ; CHECK-NEXT:    [[INC_PRE:%.*]] = add i64 [[REM]], 1
 ; CHECK-NEXT:    br label [[INNERLOOP:%.*]]
 ; CHECK:       innerloop:
-; CHECK-NEXT:    br i1 false, label [[INNERLOOP]], label [[SECOND_EXIT:%.*]]
+; CHECK-NEXT:    br i1 false, label [[INNERLOOP_INNERLOOP_CRIT_EDGE:%.*]], label [[SECOND_EXIT:%.*]]
+; CHECK:       innerloop.innerloop_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[INNERLOOP]]
 ;
 entry:
   %0 = load i64, ptr null, align 8
@@ -115,11 +127,15 @@ define void @barrier3(i64 %arg) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    br label [[FIRSTLOOP:%.*]]
 ; CHECK:       firstloop:
-; CHECK-NEXT:    [[PHI1:%.*]] = phi i64 [ [[ARG:%.*]], [[ENTRY:%.*]] ], [ 0, [[FIRSTLOOP]] ]
+; CHECK-NEXT:    [[PHI1:%.*]] = phi i64 [ [[ARG:%.*]], [[ENTRY:%.*]] ], [ 0, [[FIRSTLOOP_FIRSTLOOP_CRIT_EDGE:%.*]] ]
 ; CHECK-NEXT:    [[CMP1:%.*]] = icmp eq i64 [[PHI1]], -1
-; CHECK-NEXT:    br i1 [[CMP1]], label [[SECONDLOOP:%.*]], label [[FIRSTLOOP]]
+; CHECK-NEXT:    br i1 [[CMP1]], label [[FIRSTLOOP_SECONDLOOP_CRIT_EDGE:%.*]], label [[FIRSTLOOP_FIRSTLOOP_CRIT_EDGE]]
+; CHECK:       firstloop.firstloop_crit_edge:
+; CHECK-NEXT:    br label [[FIRSTLOOP]]
+; CHECK:       firstloop.secondloop_crit_edge:
+; CHECK-NEXT:    br label [[SECONDLOOP:%.*]]
 ; CHECK:       secondloop:
-; CHECK-NEXT:    [[PHI2:%.*]] = phi i64 [ -1, [[SECONDLOOP]] ], [ -1, [[FIRSTLOOP]] ]
+; CHECK-NEXT:    [[PHI2:%.*]] = phi i64 [ -1, [[SECONDLOOP]] ], [ -1, [[FIRSTLOOP_SECONDLOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[INC:%.*]] = add i64 [[PHI2]], 1
 ; CHECK-NEXT:    [[CMP2:%.*]] = icmp eq i64 [[INC]], -1
 ; CHECK-NEXT:    call void @llvm.assume(i1 [[CMP2]])

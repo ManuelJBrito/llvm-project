@@ -12,13 +12,15 @@ define void @non_local_load(ptr %ptr) {
 ; CHECK-NEXT:    store i32 0, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[VAL:%.*]] = phi i32 [ 0, %[[ENTRY]] ], [ [[VAL_INC:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[IV:%.*]] = phi i32 [ [[IV_NEXT:%.*]], %[[LOOP]] ], [ 0, %[[ENTRY]] ]
+; CHECK-NEXT:    [[VAL:%.*]] = phi i32 [ 0, %[[ENTRY]] ], [ [[VAL_INC:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[IV:%.*]] = phi i32 [ [[IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ], [ 0, %[[ENTRY]] ]
 ; CHECK-NEXT:    [[VAL_INC]] = add i32 [[VAL]], 1
 ; CHECK-NEXT:    store i32 [[VAL_INC]], ptr [[PTR]], align 4
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], 1
 ; CHECK-NEXT:    [[LOOP_COND:%.*]] = icmp eq i32 [[IV]], 1000
-; CHECK-NEXT:    br i1 [[LOOP_COND]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[LOOP_COND]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    ret void
 ;
@@ -46,15 +48,17 @@ define void @non_local_load_with_iv_zext(ptr %ptr) {
 ; CHECK-NEXT:    store i32 0, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[VAL:%.*]] = phi i32 [ 0, %[[ENTRY]] ], [ [[VAL_INC:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[IV:%.*]] = phi i32 [ [[IV_NEXT:%.*]], %[[LOOP]] ], [ 0, %[[ENTRY]] ]
+; CHECK-NEXT:    [[VAL:%.*]] = phi i32 [ 0, %[[ENTRY]] ], [ [[VAL_INC:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[IV:%.*]] = phi i32 [ [[IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ], [ 0, %[[ENTRY]] ]
 ; CHECK-NEXT:    [[VAL_INC]] = add i32 [[VAL]], 1
 ; CHECK-NEXT:    store i32 [[VAL_INC]], ptr [[PTR]], align 4
 ; CHECK-NEXT:    [[IV_WIDE:%.*]] = zext i32 [[IV]] to i64
 ; CHECK-NEXT:    call void @foo(i64 [[IV_WIDE]])
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], 1
 ; CHECK-NEXT:    [[LOOP_COND:%.*]] = icmp eq i32 [[IV]], 1000
-; CHECK-NEXT:    br i1 [[LOOP_COND]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[LOOP_COND]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    ret void
 ;
@@ -86,9 +90,9 @@ define void @two_non_local_loads(ptr %ptr1) {
 ; CHECK-NEXT:    store i32 0, ptr [[PTR2]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[VAL1:%.*]] = phi i32 [ 0, %[[ENTRY]] ], [ [[VAL1_INC:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[VAL2:%.*]] = phi i32 [ 0, %[[ENTRY]] ], [ [[VAL2_INC:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[IV:%.*]] = phi i32 [ [[IV_NEXT:%.*]], %[[LOOP]] ], [ 0, %[[ENTRY]] ]
+; CHECK-NEXT:    [[VAL1:%.*]] = phi i32 [ 0, %[[ENTRY]] ], [ [[VAL1_INC:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
+; CHECK-NEXT:    [[VAL2:%.*]] = phi i32 [ 0, %[[ENTRY]] ], [ [[VAL2_INC:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[IV:%.*]] = phi i32 [ [[IV_NEXT:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ], [ 0, %[[ENTRY]] ]
 ; CHECK-NEXT:    [[VAL1_INC]] = add i32 [[VAL1]], 1
 ; CHECK-NEXT:    store i32 [[VAL1_INC]], ptr [[PTR1]], align 4
 ; CHECK-NEXT:    [[VAL2_INC]] = add i32 [[VAL2]], 1
@@ -97,7 +101,9 @@ define void @two_non_local_loads(ptr %ptr1) {
 ; CHECK-NEXT:    call void @foo(i64 [[IV_WIDE]])
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], 1
 ; CHECK-NEXT:    [[LOOP_COND:%.*]] = icmp eq i32 [[IV]], 1000
-; CHECK-NEXT:    br i1 [[LOOP_COND]], label %[[EXIT:.*]], label %[[LOOP]]
+; CHECK-NEXT:    br i1 [[LOOP_COND]], label %[[EXIT:.*]], label %[[LOOP_LOOP_CRIT_EDGE]]
+; CHECK:       [[LOOP_LOOP_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    ret void
 ;

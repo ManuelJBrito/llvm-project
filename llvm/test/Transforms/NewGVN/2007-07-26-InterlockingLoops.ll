@@ -16,11 +16,20 @@ define i32 @NextRootMove(i32 %wtm, i32 %x, i32 %y, i32 %z) {
 ; CHECK-NEXT:    br i1 [[CMP]], label [[COND_TRUE128:%.*]], label [[COND_TRUE145:%.*]]
 ; CHECK:       cond_true128:
 ; CHECK-NEXT:    [[CMP1:%.*]] = icmp eq i32 [[X]], [[Z]]
-; CHECK-NEXT:    br i1 [[CMP1]], label [[BB98_BACKEDGE:%.*]], label [[RETURN_LOOPEXIT:%.*]]
+; CHECK-NEXT:    br i1 [[CMP1]], label [[COND_TRUE128_BB98_BACKEDGE_CRIT_EDGE:%.*]], label [[COND_TRUE128_RETURN_LOOPEXIT_CRIT_EDGE:%.*]]
+; CHECK:       cond_true128.return.loopexit_crit_edge:
+; CHECK-NEXT:    br label [[RETURN_LOOPEXIT:%.*]]
+; CHECK:       cond_true128.bb98.backedge_crit_edge:
+; CHECK-NEXT:    br label [[BB98_BACKEDGE:%.*]]
 ; CHECK:       bb98.backedge:
 ; CHECK-NEXT:    br label [[COND_TRUE116]]
 ; CHECK:       cond_true145:
-; CHECK-NEXT:    br i1 false, label [[BB98_BACKEDGE]], label [[RETURN_LOOPEXIT]]
+; CHECK-NEXT:    br i1 false, label [[COND_TRUE145_BB98_BACKEDGE_CRIT_EDGE:%.*]], label [[COND_TRUE145_RETURN_LOOPEXIT_CRIT_EDGE:%.*]]
+; CHECK:       cond_true145.return.loopexit_crit_edge:
+; CHECK-NEXT:    br label [[RETURN_LOOPEXIT]]
+; CHECK:       cond_true145.bb98.backedge_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB98_BACKEDGE]]
 ; CHECK:       return.loopexit:
 ; CHECK-NEXT:    ret i32 0
 ;

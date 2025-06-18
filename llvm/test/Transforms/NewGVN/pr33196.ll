@@ -14,13 +14,15 @@ define i32 @main() {
 ; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr @c, align 4
 ; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i32 [[TMP1]], -1
 ; CHECK-NEXT:    br i1 [[TOBOOL]], label [[IF_END:%.*]], label [[IF_THEN:%.*]]
+; CHECK:       entry.if.end_crit_edge:
+; CHECK-NEXT:    br label [[IF_END1:%.*]]
 ; CHECK:       if.then:
 ; CHECK-NEXT:    br label [[L:%.*]]
 ; CHECK:       L:
 ; CHECK-NEXT:    [[E_0:%.*]] = phi i32 [ 0, [[IF_THEN]] ], [ [[E_1:%.*]], [[IF_THEN4:%.*]] ]
-; CHECK-NEXT:    br label [[IF_END]]
+; CHECK-NEXT:    br label [[IF_END1]]
 ; CHECK:       if.end:
-; CHECK-NEXT:    [[E_1]] = phi i32 [ [[E_0]], [[L]] ], [ [[TMP]], [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[E_1]] = phi i32 [ [[E_0]], [[L]] ], [ [[TMP]], [[IF_END]] ]
 ; CHECK-NEXT:    store i32 [[E_1]], ptr @a, align 4
 ; CHECK-NEXT:    [[TMP2:%.*]] = load i32, ptr @b, align 4
 ; CHECK-NEXT:    store i32 0, ptr @b, align 4

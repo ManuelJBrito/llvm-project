@@ -10,11 +10,13 @@ define i8 @test(i1 %c, i64 %offset, ptr %ptr) {
 ; CHECK-NEXT:    store i64 1234605616436508552, ptr [[ALLOCA]], align 8
 ; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr i8, ptr [[ALLOCA]], i64 2
 ; CHECK-NEXT:    [[GEP_UNKNOWN:%.*]] = getelementptr i8, ptr [[ALLOCA]], i64 [[OFFSET]]
-; CHECK-NEXT:    br i1 [[C]], label [[JOIN:%.*]], label [[IF:%.*]]
+; CHECK-NEXT:    br i1 [[C]], label [[START_JOIN_CRIT_EDGE:%.*]], label [[IF:%.*]]
+; CHECK:       start.join_crit_edge:
+; CHECK-NEXT:    br label [[JOIN:%.*]]
 ; CHECK:       if:
 ; CHECK-NEXT:    br label [[JOIN]]
 ; CHECK:       join:
-; CHECK-NEXT:    [[PHI:%.*]] = phi ptr [ [[GEP_UNKNOWN]], [[START:%.*]] ], [ [[GEP_2]], [[IF]] ]
+; CHECK-NEXT:    [[PHI:%.*]] = phi ptr [ [[GEP_UNKNOWN]], [[START_JOIN_CRIT_EDGE]] ], [ [[GEP_2]], [[IF]] ]
 ; CHECK-NEXT:    store i8 0, ptr [[ALLOCA]], align 8
 ; CHECK-NEXT:    [[LOAD1:%.*]] = load i64, ptr [[ALLOCA]], align 8
 ; CHECK-NEXT:    store i64 [[LOAD1]], ptr [[PTR]], align 8

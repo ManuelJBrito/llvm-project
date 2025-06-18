@@ -11,12 +11,14 @@ define void @tinkywinky(i1 %arg) {
 ; CHECK:       for.cond.preheader:
 ; CHECK-NEXT:    br label [[FOR_COND2THREAD_PRE_SPLIT:%.*]]
 ; CHECK:       for.cond2thread-pre-split:
-; CHECK-NEXT:    [[CONV24:%.*]] = phi i32 [ 0, [[FOR_COND_PREHEADER]] ], [ [[CONV:%.*]], [[FOR_COND2THREAD_PRE_SPLIT]] ]
+; CHECK-NEXT:    [[CONV24:%.*]] = phi i32 [ 0, [[FOR_COND_PREHEADER]] ], [ [[CONV:%.*]], [[FOR_COND2THREAD_PRE_SPLIT_FOR_COND2THREAD_PRE_SPLIT_CRIT_EDGE:%.*]] ]
 ; CHECK-NEXT:    [[ADD:%.*]] = shl nsw i32 [[CONV24]], 16
 ; CHECK-NEXT:    [[SEXT23:%.*]] = add i32 [[ADD]], 65536
 ; CHECK-NEXT:    [[CONV]] = ashr exact i32 [[SEXT23]], 16
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp slt i32 [[SEXT23]], 3604480
-; CHECK-NEXT:    br i1 [[CMP]], label [[FOR_COND2THREAD_PRE_SPLIT]], label [[L1_LOOPEXIT:%.*]]
+; CHECK-NEXT:    br i1 [[CMP]], label [[FOR_COND2THREAD_PRE_SPLIT_FOR_COND2THREAD_PRE_SPLIT_CRIT_EDGE]], label [[L1_LOOPEXIT:%.*]]
+; CHECK:       for.cond2thread-pre-split.for.cond2thread-pre-split_crit_edge:
+; CHECK-NEXT:    br label [[FOR_COND2THREAD_PRE_SPLIT]]
 ; CHECK:       l1.loopexit:
 ; CHECK-NEXT:    br label [[L1:%.*]]
 ; CHECK:       l1:

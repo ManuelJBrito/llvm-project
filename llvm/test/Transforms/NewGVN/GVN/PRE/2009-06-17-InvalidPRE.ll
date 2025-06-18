@@ -14,7 +14,9 @@ define void @m_adj(ptr %mp, i32 %req_len) nounwind optsize {
 ; CHECK-NEXT:    [[TMP0:%.*]] = icmp eq ptr [[MP]], null
 ; CHECK-NEXT:    [[TMP1:%.*]] = icmp slt i32 [[REQ_LEN]], 0
 ; CHECK-NEXT:    [[OR_COND:%.*]] = or i1 [[TMP1]], [[TMP0]]
-; CHECK-NEXT:    br i1 [[OR_COND]], label %[[RETURN:.*]], label %[[BB4_PREHEADER:.*]]
+; CHECK-NEXT:    br i1 [[OR_COND]], label %[[ENTRY_RETURN_CRIT_EDGE:.*]], label %[[BB4_PREHEADER:.*]]
+; CHECK:       [[ENTRY_RETURN_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[RETURN:.*]]
 ; CHECK:       [[BB4_PREHEADER]]:
 ; CHECK-NEXT:    br label %[[BB4_OUTER:.*]]
 ; CHECK:       [[BB2:.*]]:
@@ -53,7 +55,9 @@ define void @m_adj(ptr %mp, i32 %req_len) nounwind optsize {
 ; CHECK-NEXT:    [[TMP16:%.*]] = zext i16 [[TMP15]] to i32
 ; CHECK-NEXT:    [[TMP17:%.*]] = and i32 [[TMP16]], 2
 ; CHECK-NEXT:    [[TMP18:%.*]] = icmp eq i32 [[TMP17]], 0
-; CHECK-NEXT:    br i1 [[TMP18]], label %[[RETURN]], label %[[BB8:.*]]
+; CHECK-NEXT:    br i1 [[TMP18]], label %[[BB7_RETURN_CRIT_EDGE:.*]], label %[[BB8:.*]]
+; CHECK:       [[BB7_RETURN_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[RETURN]]
 ; CHECK:       [[BB8]]:
 ; CHECK-NEXT:    [[TMP20:%.*]] = getelementptr [[STRUCT_MBUF]], ptr [[MP]], i32 0, i32 6
 ; CHECK-NEXT:    store i32 [[TMP19]], ptr [[TMP20]], align 4

@@ -14,15 +14,19 @@ define i32 @test1() local_unnamed_addr {
 ; CHECK-NEXT:    [[TMP1:%.*]] = phi i1 [ true, [[ENTRY:%.*]] ], [ false, [[COND_END_I:%.*]] ]
 ; CHECK-NEXT:    [[F_08_I:%.*]] = phi i32 [ 0, [[ENTRY]] ], [ [[INC_I:%.*]], [[COND_END_I]] ]
 ; CHECK-NEXT:    [[MUL_I:%.*]] = select i1 [[CMP1_I]], i32 [[F_08_I]], i32 0
-; CHECK-NEXT:    br i1 [[TMP1]], label [[COND_END_I]], label [[COND_TRUE_I:%.*]]
+; CHECK-NEXT:    br i1 [[TMP1]], label [[FOR_BODY_I_COND_END_I_CRIT_EDGE:%.*]], label [[COND_TRUE_I:%.*]]
+; CHECK:       for.body.i.cond.end.i_crit_edge:
+; CHECK-NEXT:    br label [[COND_END_I1:%.*]]
 ; CHECK:       cond.true.i:
 ; CHECK-NEXT:    [[DIV_I:%.*]] = udiv i32 [[MUL_I]], [[F_08_I]]
-; CHECK-NEXT:    br label [[COND_END_I]]
+; CHECK-NEXT:    br label [[COND_END_I1]]
 ; CHECK:       cond.end.i:
-; CHECK-NEXT:    [[COND_I:%.*]] = phi i32 [ [[DIV_I]], [[COND_TRUE_I]] ], [ 0, [[FOR_BODY_I]] ]
+; CHECK-NEXT:    [[COND_I:%.*]] = phi i32 [ [[DIV_I]], [[COND_TRUE_I]] ], [ 0, [[FOR_BODY_I_COND_END_I_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[INC_I]] = add nuw nsw i32 [[F_08_I]], 1
 ; CHECK-NEXT:    [[EXITCOND_I:%.*]] = icmp eq i32 [[INC_I]], 4
-; CHECK-NEXT:    br i1 [[EXITCOND_I]], label [[FN1_EXIT:%.*]], label [[FOR_BODY_I]]
+; CHECK-NEXT:    br i1 [[EXITCOND_I]], label [[FN1_EXIT:%.*]], label [[COND_END_I]]
+; CHECK:       cond.end.i.for.body.i_crit_edge:
+; CHECK-NEXT:    br label [[FOR_BODY_I]]
 ; CHECK:       fn1.exit:
 ; CHECK-NEXT:    [[CALL4:%.*]] = tail call i32 (ptr, ...) @printf(ptr @.str4, i32 [[COND_I]])
 ; CHECK-NEXT:    ret i32 0
@@ -72,17 +76,21 @@ define i32 @test2() local_unnamed_addr {
 ; CHECK-NEXT:    [[TMP1:%.*]] = phi i1 [ true, [[ENTRY:%.*]] ], [ false, [[COND_END_I:%.*]] ]
 ; CHECK-NEXT:    [[F_08_I:%.*]] = phi i32 [ 0, [[ENTRY]] ], [ [[INC_I:%.*]], [[COND_END_I]] ]
 ; CHECK-NEXT:    [[MUL_I:%.*]] = select i1 [[CMP1_I]], i32 [[F_08_I]], i32 0
-; CHECK-NEXT:    br i1 [[TMP1]], label [[COND_END_I]], label [[COND_TRUE_I:%.*]]
+; CHECK-NEXT:    br i1 [[TMP1]], label [[FOR_BODY_I_COND_END_I_CRIT_EDGE:%.*]], label [[COND_TRUE_I:%.*]]
+; CHECK:       for.body.i.cond.end.i_crit_edge:
+; CHECK-NEXT:    br label [[COND_END_I1:%.*]]
 ; CHECK:       cond.true.i:
 ; CHECK-NEXT:    [[DIV_I:%.*]] = udiv i32 [[MUL_I]], [[F_08_I]]
-; CHECK-NEXT:    br label [[COND_END_I]]
+; CHECK-NEXT:    br label [[COND_END_I1]]
 ; CHECK:       cond.end.i:
-; CHECK-NEXT:    [[COND_I:%.*]] = phi i32 [ [[DIV_I]], [[COND_TRUE_I]] ], [ 0, [[FOR_BODY_I]] ]
+; CHECK-NEXT:    [[COND_I:%.*]] = phi i32 [ [[DIV_I]], [[COND_TRUE_I]] ], [ 0, [[FOR_BODY_I_COND_END_I_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[INC_I]] = add nuw nsw i32 [[F_08_I]], 1
 ; CHECK-NEXT:    [[TEST:%.*]] = udiv i32 [[MUL_I]], [[INC_I]]
 ; CHECK-NEXT:    [[CALL5:%.*]] = tail call i32 (ptr, ...) @printf(ptr @.str4, i32 [[TEST]])
 ; CHECK-NEXT:    [[EXITCOND_I:%.*]] = icmp eq i32 [[INC_I]], 4
-; CHECK-NEXT:    br i1 [[EXITCOND_I]], label [[FN1_EXIT:%.*]], label [[FOR_BODY_I]]
+; CHECK-NEXT:    br i1 [[EXITCOND_I]], label [[FN1_EXIT:%.*]], label [[COND_END_I]]
+; CHECK:       cond.end.i.for.body.i_crit_edge:
+; CHECK-NEXT:    br label [[FOR_BODY_I]]
 ; CHECK:       fn1.exit:
 ; CHECK-NEXT:    [[CALL4:%.*]] = tail call i32 (ptr, ...) @printf(ptr @.str4, i32 [[COND_I]])
 ; CHECK-NEXT:    ret i32 0

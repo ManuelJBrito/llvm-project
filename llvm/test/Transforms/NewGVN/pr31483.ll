@@ -20,11 +20,17 @@ define signext i32 @ham(ptr %arg, ptr %arg1) #0 {
 ; CHECK:       bb6:
 ; CHECK-NEXT:    [[TMP7]] = getelementptr inbounds i8, ptr [[TMP3]], i32 1
 ; CHECK-NEXT:    [[TMP9:%.*]] = zext i8 [[TMP4]] to i32
-; CHECK-NEXT:    switch i32 [[TMP9]], label [[BB22]] [
+; CHECK-NEXT:    switch i32 [[TMP9]], label [[BB6_BB22_CRIT_EDGE:%.*]] [
 ; CHECK-NEXT:      i32 115, label [[BB10:%.*]]
 ; CHECK-NEXT:      i32 105, label [[BB16:%.*]]
-; CHECK-NEXT:      i32 99, label [[BB16]]
+; CHECK-NEXT:      i32 99, label [[BB6_BB16_CRIT_EDGE1:%.*]]
 ; CHECK-NEXT:    ]
+; CHECK:       bb6.bb16_crit_edge1:
+; CHECK-NEXT:    br label [[BB17:%.*]]
+; CHECK:       bb6.bb16_crit_edge:
+; CHECK-NEXT:    br label [[BB17]]
+; CHECK:       bb6.bb22_crit_edge:
+; CHECK-NEXT:    br label [[BB22]]
 ; CHECK:       bb10:
 ; CHECK-NEXT:    [[TMP11:%.*]] = load ptr, ptr [[TMP]], align 8
 ; CHECK-NEXT:    [[TMP12:%.*]] = getelementptr inbounds i8, ptr [[TMP11]], i64 8

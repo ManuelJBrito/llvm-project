@@ -22,12 +22,16 @@ define dso_local void @l2tp_recv_dequeue() local_unnamed_addr {
 ; CHECK:       [[FOR_COND]]:
 ; CHECK-NEXT:    [[STOREMERGE:%.*]] = phi ptr [ [[TMP1]], %[[ENTRY]] ], [ null, %[[IF_END:.*]] ]
 ; CHECK-NEXT:    store ptr [[STOREMERGE]], ptr @l2tp_recv_dequeue_skb, align 8
-; CHECK-NEXT:    br i1 [[TOBOOL_NOT]], label %[[IF_END]], label %[[IF_THEN:.*]]
+; CHECK-NEXT:    br i1 [[TOBOOL_NOT]], label %[[FOR_COND_IF_END_CRIT_EDGE:.*]], label %[[IF_THEN:.*]]
+; CHECK:       [[FOR_COND_IF_END_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[IF_END]]
 ; CHECK:       [[IF_THEN]]:
 ; CHECK-NEXT:    [[TMP3:%.*]] = load i32, ptr [[STOREMERGE]], align 4
 ; CHECK-NEXT:    store i32 [[TMP3]], ptr @l2tp_recv_dequeue_session_0, align 4
 ; CHECK-NEXT:    callbr void asm sideeffect "", "!i,~{dirflag},~{fpsr},~{flags}"()
-; CHECK-NEXT:            to label %[[ASM_FALLTHROUGH_I:.*]] [label %if.end]
+; CHECK-NEXT:            to label %[[ASM_FALLTHROUGH_I:.*]] [label %if.then.if.end_crit_edge]
+; CHECK:       [[IF_THEN_IF_END_CRIT_EDGE:.*:]]
+; CHECK-NEXT:    br label %[[IF_END]]
 ; CHECK:       [[ASM_FALLTHROUGH_I]]:
 ; CHECK-NEXT:    br label %[[IF_END]]
 ; CHECK:       [[IF_END]]:

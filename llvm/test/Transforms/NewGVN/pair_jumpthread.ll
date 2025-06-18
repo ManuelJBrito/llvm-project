@@ -41,9 +41,11 @@ define signext i32 @testBI(i32 signext %v) {
 ; CHECK-NEXT:    [[RC_SROA_43_0_EXTRACT_TRUNC:%.*]] = trunc i64 [[RC_SROA_43_0_EXTRACT_SHIFT]] to i32
 ; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i64 [[TMP1]], 0
 ; CHECK-NEXT:    br i1 [[TOBOOL]], label [[IF_END:%.*]], label [[IF_THEN:%.*]]
+; CHECK:       _ZL6calleei.exit.if.end_crit_edge:
+; CHECK-NEXT:    br label [[IF_END1:%.*]]
 ; CHECK:       if.then:
 ; CHECK-NEXT:    [[CALL1:%.*]] = call signext i32 @dummy(i32 signext 0)
-; CHECK-NEXT:    br label [[IF_END]]
+; CHECK-NEXT:    br label [[IF_END1]]
 ; CHECK:       if.end:
 ; CHECK-NEXT:    ret i32 [[RC_SROA_43_0_EXTRACT_TRUNC]]
 ;
@@ -152,9 +154,11 @@ define signext i32 @testIB(i32 signext %v) {
 ; CHECK-NEXT:    [[RC_SROA_0_0_EXTRACT_TRUNC:%.*]] = trunc i64 [[RETVAL_SROA_0_0_I]] to i32
 ; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i64 [[TMP1]], 0
 ; CHECK-NEXT:    br i1 [[TOBOOL]], label [[IF_END:%.*]], label [[IF_THEN:%.*]]
+; CHECK:       _ZL6calleei.exit.if.end_crit_edge:
+; CHECK-NEXT:    br label [[IF_END1:%.*]]
 ; CHECK:       if.then:
 ; CHECK-NEXT:    [[CALL1:%.*]] = call signext i32 @dummy(i32 signext 0)
-; CHECK-NEXT:    br label [[IF_END]]
+; CHECK-NEXT:    br label [[IF_END1]]
 ; CHECK:       if.end:
 ; CHECK-NEXT:    ret i32 [[RC_SROA_0_0_EXTRACT_TRUNC]]
 ;

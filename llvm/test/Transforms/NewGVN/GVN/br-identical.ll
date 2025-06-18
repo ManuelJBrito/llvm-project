@@ -9,21 +9,35 @@ define void @widget(i1 %p) {
 ; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    br label %[[BB2:.*]]
 ; CHECK:       [[BB2]]:
-; CHECK-NEXT:    [[T1:%.*]] = phi i64 [ 0, %[[ENTRY]] ], [ [[T2:%.*]], %[[BB7:.*]] ]
+; CHECK-NEXT:    [[T1:%.*]] = phi i64 [ 0, %[[ENTRY]] ], [ [[T2:%.*]], %[[BB7_BB2_CRIT_EDGE:.*]] ]
 ; CHECK-NEXT:    [[T2]] = add i64 [[T1]], 1
 ; CHECK-NEXT:    [[T3:%.*]] = icmp ult i64 0, [[T2]]
-; CHECK-NEXT:    br i1 [[T3]], label %[[BB3:.*]], label %[[BB4:.*]]
+; CHECK-NEXT:    br i1 [[T3]], label %[[BB3:.*]], label %[[BB2_BB4_CRIT_EDGE:.*]]
+; CHECK:       [[BB2_BB4_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB4:.*]]
 ; CHECK:       [[BB3]]:
 ; CHECK-NEXT:    [[T4:%.*]] = call i64 @f()
 ; CHECK-NEXT:    br label %[[BB4]]
 ; CHECK:       [[BB4]]:
 ; CHECK-NEXT:    br i1 [[P]], label %[[BB5:.*]], label %[[BB6:.*]]
 ; CHECK:       [[BB5]]:
-; CHECK-NEXT:    br i1 true, label %[[BB7]], label %[[BB7]]
+; CHECK-NEXT:    br i1 true, label %[[BB5_BB7_CRIT_EDGE:.*]], label %[[BB5_BB7_CRIT_EDGE1:.*]]
+; CHECK:       [[BB5_BB7_CRIT_EDGE1]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[BB7:.*]]
+; CHECK:       [[BB5_BB7_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB7]]
 ; CHECK:       [[BB6]]:
-; CHECK-NEXT:    br i1 true, label %[[BB7]], label %[[BB7]]
+; CHECK-NEXT:    br i1 true, label %[[BB6_BB7_CRIT_EDGE:.*]], label %[[BB6_BB7_CRIT_EDGE2:.*]]
+; CHECK:       [[BB6_BB7_CRIT_EDGE2]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[BB7]]
+; CHECK:       [[BB6_BB7_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB7]]
 ; CHECK:       [[BB7]]:
-; CHECK-NEXT:    br i1 [[P]], label %[[BB2]], label %[[BB8:.*]]
+; CHECK-NEXT:    br i1 [[P]], label %[[BB7_BB2_CRIT_EDGE]], label %[[BB8:.*]]
+; CHECK:       [[BB7_BB2_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB2]]
 ; CHECK:       [[BB8]]:
 ; CHECK-NEXT:    ret void
 ;

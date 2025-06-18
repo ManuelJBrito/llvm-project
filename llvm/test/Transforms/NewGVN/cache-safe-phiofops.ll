@@ -7,18 +7,29 @@ define i32 @unsafe(i1 %arg, i32 %arg1) {
 ; CHECK-NEXT:  [[BB:.*:]]
 ; CHECK-NEXT:    br label %[[BB4:.*]]
 ; CHECK:       [[BB4]]:
-; CHECK-NEXT:    br i1 [[ARG]], label %[[BB6:.*]], label %[[BB5:.*]]
+; CHECK-NEXT:    br i1 [[ARG]], label %[[BB4_BB6_CRIT_EDGE:.*]], label %[[BB4_BB5_CRIT_EDGE:.*]]
+; CHECK:       [[BB4_BB5_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB5:.*]]
+; CHECK:       [[BB4_BB6_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB6:.*]]
 ; CHECK:       [[BB5]]:
 ; CHECK-NEXT:    br label %[[BB6]]
 ; CHECK:       [[BB6]]:
-; CHECK-NEXT:    [[PHI:%.*]] = phi i32 [ [[ARG1]], %[[BB5]] ], [ 0, %[[BB4]] ]
+; CHECK-NEXT:    [[PHI:%.*]] = phi i32 [ [[ARG1]], %[[BB5]] ], [ 0, %[[BB4_BB6_CRIT_EDGE]] ]
 ; CHECK-NEXT:    store i32 0, ptr null, align 4
-; CHECK-NEXT:    br i1 [[ARG]], label %[[BB8:.*]], label %[[BB7:.*]]
+; CHECK-NEXT:    br i1 [[ARG]], label %[[BB6_BB8_CRIT_EDGE:.*]], label %[[BB7:.*]]
+; CHECK:       [[BB6_BB8_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB8:.*]]
 ; CHECK:       [[BB7]]:
-; CHECK-NEXT:    br i1 true, label %[[BB8]], label %[[BB5]]
+; CHECK-NEXT:    br i1 true, label %[[BB7_BB8_CRIT_EDGE:.*]], label %[[BB7_BB5_CRIT_EDGE:.*]]
+; CHECK:       [[BB7_BB5_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[BB5]]
+; CHECK:       [[BB7_BB8_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB8]]
 ; CHECK:       [[BB8]]:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[ARG1]], %[[BB6]] ], [ 0, %[[BB7]] ]
-; CHECK-NEXT:    [[PHI9:%.*]] = phi i32 [ 0, %[[BB7]] ], [ 1, %[[BB6]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 0, %[[BB7_BB8_CRIT_EDGE]] ], [ [[ARG1]], %[[BB6_BB8_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[PHI9:%.*]] = phi i32 [ 0, %[[BB7_BB8_CRIT_EDGE]] ], [ 1, %[[BB6_BB8_CRIT_EDGE]] ]
 ; CHECK-NEXT:    store i32 [[PHIOFOPS]], ptr null, align 4
 ; CHECK-NEXT:    br label %[[BB4]]
 ;
@@ -54,20 +65,31 @@ define i32 @unsafe_load(i1 %arg) {
 ; CHECK-NEXT:  [[BB:.*:]]
 ; CHECK-NEXT:    br label %[[BB1:.*]]
 ; CHECK:       [[BB1]]:
-; CHECK-NEXT:    br i1 [[ARG]], label %[[BB3:.*]], label %[[BB2:.*]]
+; CHECK-NEXT:    br i1 [[ARG]], label %[[BB1_BB3_CRIT_EDGE:.*]], label %[[BB1_BB2_CRIT_EDGE:.*]]
+; CHECK:       [[BB1_BB2_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB2:.*]]
+; CHECK:       [[BB1_BB3_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB3:.*]]
 ; CHECK:       [[BB2]]:
 ; CHECK-NEXT:    br label %[[BB3]]
 ; CHECK:       [[BB3]]:
-; CHECK-NEXT:    [[PHI4:%.*]] = phi i32 [ 1, %[[BB2]] ], [ 0, %[[BB1]] ]
+; CHECK-NEXT:    [[PHI4:%.*]] = phi i32 [ 1, %[[BB2]] ], [ 0, %[[BB1_BB3_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[LOAD:%.*]] = load i32, ptr null, align 4
 ; CHECK-NEXT:    [[SREM:%.*]] = srem i32 [[LOAD]], [[PHI4]]
 ; CHECK-NEXT:    store i32 [[SREM]], ptr null, align 4
-; CHECK-NEXT:    br i1 [[ARG]], label %[[BB6:.*]], label %[[BB5:.*]]
+; CHECK-NEXT:    br i1 [[ARG]], label %[[BB3_BB6_CRIT_EDGE:.*]], label %[[BB5:.*]]
+; CHECK:       [[BB3_BB6_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB6:.*]]
 ; CHECK:       [[BB5]]:
-; CHECK-NEXT:    br i1 true, label %[[BB6]], label %[[BB2]]
+; CHECK-NEXT:    br i1 true, label %[[BB5_BB6_CRIT_EDGE:.*]], label %[[BB5_BB2_CRIT_EDGE:.*]]
+; CHECK:       [[BB5_BB2_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[BB2]]
+; CHECK:       [[BB5_BB6_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB6]]
 ; CHECK:       [[BB6]]:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[LOAD]], %[[BB3]] ], [ 0, %[[BB5]] ]
-; CHECK-NEXT:    [[PHI7:%.*]] = phi i32 [ 0, %[[BB5]] ], [ 1, %[[BB3]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 0, %[[BB5_BB6_CRIT_EDGE]] ], [ [[LOAD]], %[[BB3_BB6_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[PHI7:%.*]] = phi i32 [ 0, %[[BB5_BB6_CRIT_EDGE]] ], [ 1, %[[BB3_BB6_CRIT_EDGE]] ]
 ; CHECK-NEXT:    store i32 [[PHIOFOPS]], ptr null, align 4
 ; CHECK-NEXT:    br label %[[BB1]]
 ;

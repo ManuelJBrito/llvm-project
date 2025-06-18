@@ -11,16 +11,18 @@ target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 define i32 @test_redundant_load(i32 %X, ptr %Y) !dbg !6 {
 ; CHECK-LABEL: define i32 @test_redundant_load(
 ; CHECK-SAME: i32 [[X:%.*]], ptr [[Y:%.*]]) !dbg [[DBG6:![0-9]+]] {
-; CHECK-NEXT:  [[ENTRY:.*]]:
+; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr [[Y]], align 4, !dbg [[DBG8:![0-9]+]]
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp sgt i32 [[X]], -1, !dbg [[DBG9:![0-9]+]]
-; CHECK-NEXT:    br i1 [[CMP]], label %[[IF_THEN:.*]], label %[[IF_END:.*]], !dbg [[DBG9]]
+; CHECK-NEXT:    br i1 [[CMP]], label %[[IF_THEN:.*]], label %[[ENTRY_IF_END_CRIT_EDGE:.*]], !dbg [[DBG9]]
+; CHECK:       [[ENTRY_IF_END_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[IF_END:.*]], !dbg [[DBG9]]
 ; CHECK:       [[IF_THEN]]:
 ; CHECK-NEXT:    [[ADD:%.*]] = add nsw i32 [[TMP0]], [[TMP0]], !dbg [[DBG10:![0-9]+]]
 ; CHECK-NEXT:    call void @foo(), !dbg [[DBG11:![0-9]+]]
 ; CHECK-NEXT:    br label %[[IF_END]], !dbg [[DBG12:![0-9]+]]
 ; CHECK:       [[IF_END]]:
-; CHECK-NEXT:    [[RESULT_0:%.*]] = phi i32 [ [[ADD]], %[[IF_THEN]] ], [ [[TMP0]], %[[ENTRY]] ]
+; CHECK-NEXT:    [[RESULT_0:%.*]] = phi i32 [ [[ADD]], %[[IF_THEN]] ], [ [[TMP0]], %[[ENTRY_IF_END_CRIT_EDGE]] ]
 ; CHECK-NEXT:    ret i32 [[RESULT_0]], !dbg [[DBG13:![0-9]+]]
 ;
 entry:

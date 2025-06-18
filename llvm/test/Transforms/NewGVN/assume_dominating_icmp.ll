@@ -9,16 +9,20 @@ define i32 @main(i1 %cond1, i32 %arg0, i32 %arg1) {
 ; CHECK-SAME: i1 [[COND1:%.*]], i32 [[ARG0:%.*]], i32 [[ARG1:%.*]]) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    br i1 [[COND1]], label [[BB1:%.*]], label [[BB3:%.*]]
+; CHECK:       entry.bb3_crit_edge:
+; CHECK-NEXT:    br label [[BB4:%.*]]
 ; CHECK:       bb1:
 ; CHECK-NEXT:    [[XOR1:%.*]] = xor i32 [[ARG0]], 1
 ; CHECK-NEXT:    [[COND2:%.*]] = icmp eq i32 [[ARG1]], 0
-; CHECK-NEXT:    br i1 [[COND2]], label [[BB3]], label [[BB2:%.*]]
+; CHECK-NEXT:    br i1 [[COND2]], label [[BB1_BB3_CRIT_EDGE:%.*]], label [[BB2:%.*]]
+; CHECK:       bb1.bb3_crit_edge:
+; CHECK-NEXT:    br label [[BB4]]
 ; CHECK:       bb2:
 ; CHECK-NEXT:    [[COND3:%.*]] = icmp ne i32 [[XOR1]], 0
 ; CHECK-NEXT:    tail call void @llvm.assume(i1 [[COND3]])
-; CHECK-NEXT:    br label [[BB3]]
+; CHECK-NEXT:    br label [[BB4]]
 ; CHECK:       bb3:
-; CHECK-NEXT:    [[PHI:%.*]] = phi i32 [ undef, [[ENTRY:%.*]] ], [ [[XOR1]], [[BB1]] ], [ [[XOR1]], [[BB2]] ]
+; CHECK-NEXT:    [[PHI:%.*]] = phi i32 [ undef, [[BB3]] ], [ [[XOR1]], [[BB1_BB3_CRIT_EDGE]] ], [ [[XOR1]], [[BB2]] ]
 ; CHECK-NEXT:    [[XOR2:%.*]] = xor i32 [[PHI]], -1
 ; CHECK-NEXT:    [[LD:%.*]] = load i32, ptr @c, align 4
 ; CHECK-NEXT:    [[OR:%.*]] = or i32 [[LD]], [[XOR2]]

@@ -17,14 +17,16 @@ define i32 @test_load_on_cold_path(ptr %p) {
 ; CHECK-NEXT:    [[COND:%.*]] = icmp ne i32 [[X]], 0
 ; CHECK-NEXT:    br i1 [[COND]], label [[HOT_PATH:%.*]], label [[COLD_PATH:%.*]]
 ; CHECK:       hot_path:
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1:%.*]]
 ; CHECK:       cold_path:
 ; CHECK-NEXT:    call void @side_effect()
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1]]
 ; CHECK:       backedge:
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], [[X]]
 ; CHECK-NEXT:    [[LOOP_COND:%.*]] = icmp ult i32 [[IV_NEXT]], 1000
-; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[LOOP]], label [[EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[BACKEDGE]], label [[EXIT:%.*]]
+; CHECK:       backedge.loop_crit_edge:
+; CHECK-NEXT:    br label [[LOOP]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret i32 [[X]]
 ;
@@ -65,14 +67,16 @@ define i32 @test_load_on_both_paths(ptr %p) {
 ; CHECK-NEXT:    br i1 [[COND]], label [[HOT_PATH:%.*]], label [[COLD_PATH:%.*]]
 ; CHECK:       hot_path:
 ; CHECK-NEXT:    call void @side_effect()
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1:%.*]]
 ; CHECK:       cold_path:
 ; CHECK-NEXT:    call void @side_effect()
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1]]
 ; CHECK:       backedge:
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], [[X]]
 ; CHECK-NEXT:    [[LOOP_COND:%.*]] = icmp ult i32 [[IV_NEXT]], 1000
-; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[LOOP]], label [[EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[BACKEDGE]], label [[EXIT:%.*]]
+; CHECK:       backedge.loop_crit_edge:
+; CHECK-NEXT:    br label [[LOOP]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret i32 [[X]]
 ;
@@ -114,14 +118,16 @@ define i32 @test_load_on_backedge(ptr %p) {
 ; CHECK-NEXT:    [[COND:%.*]] = icmp ne i32 [[X]], 0
 ; CHECK-NEXT:    br i1 [[COND]], label [[HOT_PATH:%.*]], label [[COLD_PATH:%.*]]
 ; CHECK:       hot_path:
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1:%.*]]
 ; CHECK:       cold_path:
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1]]
 ; CHECK:       backedge:
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], [[X]]
 ; CHECK-NEXT:    call void @side_effect()
 ; CHECK-NEXT:    [[LOOP_COND:%.*]] = icmp ult i32 [[IV_NEXT]], 1000
-; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[LOOP]], label [[EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[BACKEDGE]], label [[EXIT:%.*]]
+; CHECK:       backedge.loop_crit_edge:
+; CHECK-NEXT:    br label [[LOOP]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret i32 [[X]]
 ;
@@ -161,14 +167,18 @@ define i32 @test_load_on_exiting_cold_path_01(ptr %p) {
 ; CHECK-NEXT:    [[COND:%.*]] = icmp ne i32 [[X]], 0
 ; CHECK-NEXT:    br i1 [[COND]], label [[HOT_PATH:%.*]], label [[COLD_PATH:%.*]]
 ; CHECK:       hot_path:
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1:%.*]]
 ; CHECK:       cold_path:
 ; CHECK-NEXT:    [[SIDE_COND:%.*]] = call i1 @side_effect_cond()
-; CHECK-NEXT:    br i1 [[SIDE_COND]], label [[BACKEDGE]], label [[COLD_EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[SIDE_COND]], label [[COLD_PATH_BACKEDGE_CRIT_EDGE:%.*]], label [[COLD_EXIT:%.*]]
+; CHECK:       cold_path.backedge_crit_edge:
+; CHECK-NEXT:    br label [[BACKEDGE1]]
 ; CHECK:       backedge:
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], [[X]]
 ; CHECK-NEXT:    [[LOOP_COND:%.*]] = icmp ult i32 [[IV_NEXT]], 1000
-; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[LOOP]], label [[EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[BACKEDGE]], label [[EXIT:%.*]]
+; CHECK:       backedge.loop_crit_edge:
+; CHECK-NEXT:    br label [[LOOP]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret i32 [[X]]
 ; CHECK:       cold_exit:
@@ -213,14 +223,18 @@ define i32 @test_load_on_exiting_cold_path_02(ptr %p) gc "statepoint-example" pe
 ; CHECK-NEXT:    [[COND:%.*]] = icmp ne i32 [[X]], 0
 ; CHECK-NEXT:    br i1 [[COND]], label [[HOT_PATH:%.*]], label [[COLD_PATH:%.*]]
 ; CHECK:       hot_path:
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1:%.*]]
 ; CHECK:       cold_path:
 ; CHECK-NEXT:    invoke void @side_effect()
-; CHECK-NEXT:            to label [[BACKEDGE]] unwind label [[COLD_EXIT:%.*]]
+; CHECK-NEXT:            to label [[COLD_PATH_BACKEDGE_CRIT_EDGE:%.*]] unwind label [[COLD_EXIT:%.*]]
+; CHECK:       cold_path.backedge_crit_edge:
+; CHECK-NEXT:    br label [[BACKEDGE1]]
 ; CHECK:       backedge:
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], [[X]]
 ; CHECK-NEXT:    [[LOOP_COND:%.*]] = icmp ult i32 [[IV_NEXT]], 1000
-; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[LOOP]], label [[EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[BACKEDGE]], label [[EXIT:%.*]]
+; CHECK:       backedge.loop_crit_edge:
+; CHECK-NEXT:    br label [[LOOP]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret i32 [[X]]
 ; CHECK:       cold_exit:
@@ -268,15 +282,17 @@ define i32 @test_load_on_cold_path_and_backedge(ptr %p) {
 ; CHECK-NEXT:    [[COND:%.*]] = icmp ne i32 [[X]], 0
 ; CHECK-NEXT:    br i1 [[COND]], label [[HOT_PATH:%.*]], label [[COLD_PATH:%.*]]
 ; CHECK:       hot_path:
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1:%.*]]
 ; CHECK:       cold_path:
 ; CHECK-NEXT:    call void @side_effect()
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1]]
 ; CHECK:       backedge:
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], [[X]]
 ; CHECK-NEXT:    [[LOOP_COND:%.*]] = icmp ult i32 [[IV_NEXT]], 1000
 ; CHECK-NEXT:    call void @side_effect()
-; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[LOOP]], label [[EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[BACKEDGE]], label [[EXIT:%.*]]
+; CHECK:       backedge.loop_crit_edge:
+; CHECK-NEXT:    br label [[LOOP]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret i32 [[X]]
 ;
@@ -317,17 +333,19 @@ define i32 @test_load_multi_block_cold_path(ptr %p) {
 ; CHECK-NEXT:    [[COND:%.*]] = icmp ne i32 [[X]], 0
 ; CHECK-NEXT:    br i1 [[COND]], label [[HOT_PATH:%.*]], label [[COLD_PATH_1:%.*]]
 ; CHECK:       hot_path:
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1:%.*]]
 ; CHECK:       cold_path.1:
 ; CHECK-NEXT:    call void @side_effect()
 ; CHECK-NEXT:    call void @side_effect()
 ; CHECK-NEXT:    call void @side_effect()
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1]]
 ; CHECK:       backedge:
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], [[X]]
 ; CHECK-NEXT:    [[LOOP_COND:%.*]] = icmp ult i32 [[IV_NEXT]], 1000
 ; CHECK-NEXT:    call void @side_effect()
-; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[LOOP]], label [[EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[BACKEDGE]], label [[EXIT:%.*]]
+; CHECK:       backedge.loop_crit_edge:
+; CHECK-NEXT:    br label [[LOOP]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret i32 [[X]]
 ;
@@ -376,20 +394,30 @@ define i32 @test_load_on_multi_exiting_cold_path(ptr %p) {
 ; CHECK-NEXT:    [[COND:%.*]] = icmp ne i32 [[X]], 0
 ; CHECK-NEXT:    br i1 [[COND]], label [[HOT_PATH:%.*]], label [[COLD_PATH_1:%.*]]
 ; CHECK:       hot_path:
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1:%.*]]
 ; CHECK:       cold_path.1:
 ; CHECK-NEXT:    [[SIDE_COND_1:%.*]] = call i1 @side_effect_cond()
 ; CHECK-NEXT:    br i1 [[SIDE_COND_1]], label [[COLD_PATH_2:%.*]], label [[COLD_EXIT:%.*]]
+; CHECK:       cold_path.1.cold_exit_crit_edge:
+; CHECK-NEXT:    br label [[COLD_EXIT1:%.*]]
 ; CHECK:       cold_path.2:
 ; CHECK-NEXT:    [[SIDE_COND_2:%.*]] = call i1 @side_effect_cond()
-; CHECK-NEXT:    br i1 [[SIDE_COND_2]], label [[COLD_PATH_3:%.*]], label [[COLD_EXIT]]
+; CHECK-NEXT:    br i1 [[SIDE_COND_2]], label [[COLD_PATH_3:%.*]], label [[COLD_PATH_2_COLD_EXIT_CRIT_EDGE:%.*]]
+; CHECK:       cold_path.2.cold_exit_crit_edge:
+; CHECK-NEXT:    br label [[COLD_EXIT1]]
 ; CHECK:       cold_path.3:
 ; CHECK-NEXT:    [[SIDE_COND_3:%.*]] = call i1 @side_effect_cond()
-; CHECK-NEXT:    br i1 [[SIDE_COND_3]], label [[BACKEDGE]], label [[COLD_EXIT]]
+; CHECK-NEXT:    br i1 [[SIDE_COND_3]], label [[COLD_PATH_3_BACKEDGE_CRIT_EDGE:%.*]], label [[COLD_PATH_3_COLD_EXIT_CRIT_EDGE:%.*]]
+; CHECK:       cold_path.3.cold_exit_crit_edge:
+; CHECK-NEXT:    br label [[COLD_EXIT1]]
+; CHECK:       cold_path.3.backedge_crit_edge:
+; CHECK-NEXT:    br label [[BACKEDGE1]]
 ; CHECK:       backedge:
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], [[X]]
 ; CHECK-NEXT:    [[LOOP_COND:%.*]] = icmp ult i32 [[IV_NEXT]], 1000
-; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[LOOP]], label [[EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[BACKEDGE]], label [[EXIT:%.*]]
+; CHECK:       backedge.loop_crit_edge:
+; CHECK-NEXT:    br label [[LOOP]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret i32 [[X]]
 ; CHECK:       cold_exit:
@@ -442,16 +470,22 @@ define i32 @test_inner_loop(ptr %p, i1 %arg) {
 ; CHECK-NEXT:    [[COND:%.*]] = icmp ne i32 [[X]], 0
 ; CHECK-NEXT:    br i1 [[COND]], label [[HOT_PATH:%.*]], label [[COLD_PATH:%.*]]
 ; CHECK:       hot_path:
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1:%.*]]
 ; CHECK:       cold_path:
 ; CHECK-NEXT:    br label [[INNER_LOOP:%.*]]
 ; CHECK:       inner_loop:
 ; CHECK-NEXT:    call void @side_effect()
-; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[INNER_LOOP]], label [[BACKEDGE]]
+; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[INNER_LOOP_INNER_LOOP_CRIT_EDGE:%.*]], label [[INNER_LOOP_BACKEDGE_CRIT_EDGE:%.*]]
+; CHECK:       inner_loop.backedge_crit_edge:
+; CHECK-NEXT:    br label [[BACKEDGE1]]
+; CHECK:       inner_loop.inner_loop_crit_edge:
+; CHECK-NEXT:    br label [[INNER_LOOP]]
 ; CHECK:       backedge:
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], [[X]]
 ; CHECK-NEXT:    [[LOOP_COND:%.*]] = icmp ult i32 [[IV_NEXT]], 1000
-; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[LOOP]], label [[EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[BACKEDGE]], label [[EXIT:%.*]]
+; CHECK:       backedge.loop_crit_edge:
+; CHECK-NEXT:    br label [[LOOP]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret i32 [[X]]
 ;
@@ -510,14 +544,16 @@ define i32 @test_multiple_cold_paths(ptr %p) {
 ; CHECK-NEXT:    [[COND_3:%.*]] = icmp ne i32 [[X]], 2
 ; CHECK-NEXT:    br i1 [[COND_3]], label [[HOT_PATH_3:%.*]], label [[COLD_PATH_3:%.*]]
 ; CHECK:       hot_path.3:
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1:%.*]]
 ; CHECK:       cold_path.3:
 ; CHECK-NEXT:    call void @side_effect()
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1]]
 ; CHECK:       backedge:
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], [[X]]
 ; CHECK-NEXT:    [[LOOP_COND:%.*]] = icmp ult i32 [[IV_NEXT]], 1000
-; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[LOOP]], label [[EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[BACKEDGE]], label [[EXIT:%.*]]
+; CHECK:       backedge.loop_crit_edge:
+; CHECK-NEXT:    br label [[LOOP]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret i32 [[X]]
 ;
@@ -579,20 +615,26 @@ define i32 @test_side_exit_after_merge(ptr %p) {
 ; CHECK-NEXT:    [[COND:%.*]] = icmp ne i32 [[X]], 0
 ; CHECK-NEXT:    br i1 [[COND]], label [[HOT_PATH:%.*]], label [[COLD_PATH:%.*]]
 ; CHECK:       hot_path:
-; CHECK-NEXT:    br label [[BACKEDGE]]
+; CHECK-NEXT:    br label [[BACKEDGE1:%.*]]
 ; CHECK:       cold_path:
 ; CHECK-NEXT:    [[COND_1:%.*]] = icmp ne i32 [[IV]], 1
 ; CHECK-NEXT:    br i1 [[COND_1]], label [[DO_CALL:%.*]], label [[SIDE_EXITING:%.*]]
+; CHECK:       cold_path.side_exiting_crit_edge:
+; CHECK-NEXT:    br label [[SIDE_EXITING1:%.*]]
 ; CHECK:       do_call:
 ; CHECK-NEXT:    [[SIDE_COND:%.*]] = call i1 @side_effect_cond()
-; CHECK-NEXT:    br label [[SIDE_EXITING]]
+; CHECK-NEXT:    br label [[SIDE_EXITING1]]
 ; CHECK:       side_exiting:
-; CHECK-NEXT:    [[SIDE_COND_PHI:%.*]] = phi i1 [ [[SIDE_COND]], [[DO_CALL]] ], [ true, [[COLD_PATH]] ]
-; CHECK-NEXT:    br i1 [[SIDE_COND_PHI]], label [[BACKEDGE]], label [[COLD_EXIT:%.*]]
+; CHECK-NEXT:    [[SIDE_COND_PHI:%.*]] = phi i1 [ [[SIDE_COND]], [[DO_CALL]] ], [ true, [[SIDE_EXITING]] ]
+; CHECK-NEXT:    br i1 [[SIDE_COND_PHI]], label [[SIDE_EXITING_BACKEDGE_CRIT_EDGE:%.*]], label [[COLD_EXIT:%.*]]
+; CHECK:       side_exiting.backedge_crit_edge:
+; CHECK-NEXT:    br label [[BACKEDGE1]]
 ; CHECK:       backedge:
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], [[X]]
 ; CHECK-NEXT:    [[LOOP_COND:%.*]] = icmp ult i32 [[IV_NEXT]], 1000
-; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[LOOP]], label [[EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[LOOP_COND]], label [[BACKEDGE]], label [[EXIT:%.*]]
+; CHECK:       backedge.loop_crit_edge:
+; CHECK-NEXT:    br label [[LOOP]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret i32 [[X]]
 ; CHECK:       cold_exit:

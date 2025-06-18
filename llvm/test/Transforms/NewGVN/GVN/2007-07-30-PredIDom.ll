@@ -35,7 +35,10 @@ define ptr @_ZN3Exp8toStringEj(ptr %this, i32 %nextpc) {
 ; CHECK-NEXT:    br i1 false, label %[[COND_TRUE73:.*]], label %[[COND_FALSE:.*]]
 ; CHECK:       [[COND_TRUE73]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE108:.*]], label %[[COND_NEXT:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE108:.*]], label %[[COND_TRUE73_COND_NEXT_CRIT_EDGE:.*]]
+; CHECK:       [[COND_TRUE73_COND_NEXT_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT:.*]]
 ; CHECK:       [[COND_TRUE108]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT]]
@@ -62,7 +65,10 @@ define ptr @_ZN3Exp8toStringEj(ptr %this, i32 %nextpc) {
 ; CHECK-NEXT:    br label %[[COND_NEXT181]]
 ; CHECK:       [[COND_NEXT181]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE189:.*]], label %[[COND_NEXT191:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE189:.*]], label %[[COND_NEXT181_COND_NEXT191_CRIT_EDGE:.*]]
+; CHECK:       [[COND_NEXT181_COND_NEXT191_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT191:.*]]
 ; CHECK:       [[COND_TRUE189]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT191]]
@@ -80,7 +86,10 @@ define ptr @_ZN3Exp8toStringEj(ptr %this, i32 %nextpc) {
 ; CHECK-NEXT:    br label %[[COND_NEXT252]]
 ; CHECK:       [[COND_NEXT252]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE265:.*]], label %[[COND_NEXT267:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE265:.*]], label %[[COND_NEXT252_COND_NEXT267_CRIT_EDGE:.*]]
+; CHECK:       [[COND_NEXT252_COND_NEXT267_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT267:.*]]
 ; CHECK:       [[COND_TRUE265]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT267]]
@@ -107,19 +116,28 @@ define ptr @_ZN3Exp8toStringEj(ptr %this, i32 %nextpc) {
 ; CHECK-NEXT:    br label %[[COND_NEXT366]]
 ; CHECK:       [[COND_NEXT366]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE393:.*]], label %[[COND_NEXT395:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE393:.*]], label %[[COND_NEXT366_COND_NEXT395_CRIT_EDGE:.*]]
+; CHECK:       [[COND_NEXT366_COND_NEXT395_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT395:.*]]
 ; CHECK:       [[COND_TRUE393]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT395]]
 ; CHECK:       [[COND_NEXT395]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE406:.*]], label %[[COND_NEXT408:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE406:.*]], label %[[COND_NEXT395_COND_NEXT408_CRIT_EDGE:.*]]
+; CHECK:       [[COND_NEXT395_COND_NEXT408_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT408:.*]]
 ; CHECK:       [[COND_TRUE406]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT408]]
 ; CHECK:       [[COND_NEXT408]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE413:.*]], label %[[COND_NEXT415:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE413:.*]], label %[[COND_NEXT408_COND_NEXT415_CRIT_EDGE:.*]]
+; CHECK:       [[COND_NEXT408_COND_NEXT415_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT415:.*]]
 ; CHECK:       [[COND_TRUE413]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT415]]
@@ -155,25 +173,37 @@ define ptr @_ZN3Exp8toStringEj(ptr %this, i32 %nextpc) {
 ; CHECK-NEXT:    br label %[[COND_NEXT564]]
 ; CHECK:       [[COND_NEXT564]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE597:.*]], label %[[COND_NEXT599:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE597:.*]], label %[[COND_NEXT564_COND_NEXT599_CRIT_EDGE:.*]]
+; CHECK:       [[COND_NEXT564_COND_NEXT599_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT599:.*]]
 ; CHECK:       [[COND_TRUE597]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT599]]
 ; CHECK:       [[COND_NEXT599]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE614:.*]], label %[[COND_NEXT616:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE614:.*]], label %[[COND_NEXT599_COND_NEXT616_CRIT_EDGE:.*]]
+; CHECK:       [[COND_NEXT599_COND_NEXT616_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT616:.*]]
 ; CHECK:       [[COND_TRUE614]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT616]]
 ; CHECK:       [[COND_NEXT616]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE621:.*]], label %[[COND_NEXT623:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE621:.*]], label %[[COND_NEXT616_COND_NEXT623_CRIT_EDGE:.*]]
+; CHECK:       [[COND_NEXT616_COND_NEXT623_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT623:.*]]
 ; CHECK:       [[COND_TRUE621]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT623]]
 ; CHECK:       [[COND_NEXT623]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE628:.*]], label %[[COND_NEXT630:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE628:.*]], label %[[COND_NEXT623_COND_NEXT630_CRIT_EDGE:.*]]
+; CHECK:       [[COND_NEXT623_COND_NEXT630_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT630:.*]]
 ; CHECK:       [[COND_TRUE628]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT630]]
@@ -182,19 +212,28 @@ define ptr @_ZN3Exp8toStringEj(ptr %this, i32 %nextpc) {
 ; CHECK-NEXT:    br label %[[RETURN]]
 ; CHECK:       [[BB633]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE667:.*]], label %[[COND_NEXT669:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE667:.*]], label %[[BB633_COND_NEXT669_CRIT_EDGE:.*]]
+; CHECK:       [[BB633_COND_NEXT669_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT669:.*]]
 ; CHECK:       [[COND_TRUE667]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT669]]
 ; CHECK:       [[COND_NEXT669]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE678:.*]], label %[[COND_NEXT791:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE678:.*]], label %[[COND_NEXT669_COND_NEXT791_CRIT_EDGE:.*]]
+; CHECK:       [[COND_NEXT669_COND_NEXT791_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT791:.*]]
 ; CHECK:       [[COND_TRUE678]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[BB735:.*]]
 ; CHECK:       [[BB679:.*]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE729:.*]], label %[[COND_NEXT731:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE729:.*]], label %[[BB679_COND_NEXT731_CRIT_EDGE:.*]]
+; CHECK:       [[BB679_COND_NEXT731_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT731:.*]]
 ; CHECK:       [[COND_TRUE729]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT731]]
@@ -206,7 +245,10 @@ define ptr @_ZN3Exp8toStringEj(ptr %this, i32 %nextpc) {
 ; CHECK-NEXT:    br i1 false, label %[[BB679]], label %[[BB743:.*]]
 ; CHECK:       [[BB743]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE788:.*]], label %[[COND_NEXT790:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE788:.*]], label %[[BB743_COND_NEXT790_CRIT_EDGE:.*]]
+; CHECK:       [[BB743_COND_NEXT790_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT790:.*]]
 ; CHECK:       [[COND_TRUE788]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT790]]
@@ -215,7 +257,10 @@ define ptr @_ZN3Exp8toStringEj(ptr %this, i32 %nextpc) {
 ; CHECK-NEXT:    br label %[[COND_NEXT791]]
 ; CHECK:       [[COND_NEXT791]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE805:.*]], label %[[COND_NEXT807:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE805:.*]], label %[[COND_NEXT791_COND_NEXT807_CRIT_EDGE:.*]]
+; CHECK:       [[COND_NEXT791_COND_NEXT807_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT807:.*]]
 ; CHECK:       [[COND_TRUE805]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT807]]
@@ -224,13 +269,19 @@ define ptr @_ZN3Exp8toStringEj(ptr %this, i32 %nextpc) {
 ; CHECK-NEXT:    br label %[[RETURN]]
 ; CHECK:       [[BB810]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE870:.*]], label %[[COND_NEXT872:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE870:.*]], label %[[BB810_COND_NEXT872_CRIT_EDGE:.*]]
+; CHECK:       [[BB810_COND_NEXT872_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT872:.*]]
 ; CHECK:       [[COND_TRUE870]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT872]]
 ; CHECK:       [[COND_NEXT872]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE877:.*]], label %[[COND_NEXT879:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE877:.*]], label %[[COND_NEXT872_COND_NEXT879_CRIT_EDGE:.*]]
+; CHECK:       [[COND_NEXT872_COND_NEXT879_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT879:.*]]
 ; CHECK:       [[COND_TRUE877]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT879]]
@@ -239,7 +290,10 @@ define ptr @_ZN3Exp8toStringEj(ptr %this, i32 %nextpc) {
 ; CHECK-NEXT:    br label %[[RETURN]]
 ; CHECK:       [[BB882]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE920:.*]], label %[[COND_NEXT922:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE920:.*]], label %[[BB882_COND_NEXT922_CRIT_EDGE:.*]]
+; CHECK:       [[BB882_COND_NEXT922_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT922:.*]]
 ; CHECK:       [[COND_TRUE920]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT922]]
@@ -248,7 +302,10 @@ define ptr @_ZN3Exp8toStringEj(ptr %this, i32 %nextpc) {
 ; CHECK-NEXT:    br label %[[RETURN]]
 ; CHECK:       [[BB925]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %[[COND_TRUE965:.*]], label %[[COND_NEXT967:.*]]
+; CHECK-NEXT:    br i1 false, label %[[COND_TRUE965:.*]], label %[[BB925_COND_NEXT967_CRIT_EDGE:.*]]
+; CHECK:       [[BB925_COND_NEXT967_CRIT_EDGE]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label %[[COND_NEXT967:.*]]
 ; CHECK:       [[COND_TRUE965]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[COND_NEXT967]]

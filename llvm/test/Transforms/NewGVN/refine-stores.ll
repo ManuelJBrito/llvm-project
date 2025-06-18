@@ -61,7 +61,11 @@ define void @a(i1 %arg) {
 ; CHECK-NEXT:    br label [[E:%.*]]
 ; CHECK:       e:
 ; CHECK-NEXT:    store ptr undef, ptr null, align 8
-; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[C]], label [[E]]
+; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[E_C_CRIT_EDGE:%.*]], label [[E_E_CRIT_EDGE:%.*]]
+; CHECK:       e.e_crit_edge:
+; CHECK-NEXT:    br label [[E]]
+; CHECK:       e.c_crit_edge:
+; CHECK-NEXT:    br label [[C]]
 ;
 b:
   br label %c
@@ -86,18 +90,24 @@ define void @widget(ptr %arg, i1 %arg2) {
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    br label [[BB1:%.*]]
 ; CHECK:       bb1:
-; CHECK-NEXT:    [[TMP:%.*]] = phi ptr [ [[ARG:%.*]], [[BB:%.*]] ], [ null, [[BB1]] ]
+; CHECK-NEXT:    [[TMP:%.*]] = phi ptr [ [[ARG:%.*]], [[BB:%.*]] ], [ null, [[BB1_BB1_CRIT_EDGE:%.*]] ]
 ; CHECK-NEXT:    store ptr [[TMP]], ptr undef, align 8
-; CHECK-NEXT:    br i1 [[ARG2:%.*]], label [[BB1]], label [[BB2:%.*]]
+; CHECK-NEXT:    br i1 [[ARG2:%.*]], label [[BB1_BB1_CRIT_EDGE]], label [[BB1_BB2_CRIT_EDGE:%.*]]
+; CHECK:       bb1.bb2_crit_edge:
+; CHECK-NEXT:    br label [[BB2:%.*]]
+; CHECK:       bb1.bb1_crit_edge:
+; CHECK-NEXT:    br label [[BB1]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    [[TMP3:%.*]] = phi i64 [ [[TMP8:%.*]], [[BB7:%.*]] ], [ 0, [[BB1]] ]
+; CHECK-NEXT:    [[TMP3:%.*]] = phi i64 [ [[TMP8:%.*]], [[BB8:%.*]] ], [ 0, [[BB1_BB2_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[TMP4:%.*]] = icmp eq i64 [[TMP3]], 0
-; CHECK-NEXT:    br i1 [[TMP4]], label [[BB7]], label [[BB5:%.*]]
+; CHECK-NEXT:    br i1 [[TMP4]], label [[BB7:%.*]], label [[BB5:%.*]]
+; CHECK:       bb2.bb7_crit_edge:
+; CHECK-NEXT:    br label [[BB8]]
 ; CHECK:       bb5:
 ; CHECK-NEXT:    [[TMP6:%.*]] = load i64, ptr null, align 8
 ; CHECK-NEXT:    call void @quux()
 ; CHECK-NEXT:    store i64 [[TMP6]], ptr undef, align 8
-; CHECK-NEXT:    br label [[BB7]]
+; CHECK-NEXT:    br label [[BB8]]
 ; CHECK:       bb7:
 ; CHECK-NEXT:    [[TMP8]] = add i64 [[TMP3]], 1
 ; CHECK-NEXT:    br label [[BB2]]
@@ -142,10 +152,13 @@ define void @b(i1 %arg) {
 ; CHECK-NEXT:    unreachable
 ; CHECK:       i:
 ; CHECK-NEXT:    br i1 true, label [[K:%.*]], label [[M:%.*]]
+; CHECK:       i.m_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[M1:%.*]]
 ; CHECK:       k:
 ; CHECK-NEXT:    unreachable
 ; CHECK:       j:
-; CHECK-NEXT:    br label [[M]]
+; CHECK-NEXT:    br label [[M1]]
 ;
   %c = alloca %struct.a
   br label %d

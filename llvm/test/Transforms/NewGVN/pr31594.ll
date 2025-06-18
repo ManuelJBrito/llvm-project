@@ -13,8 +13,10 @@ define i1 @patatino(ptr %blah, i32 %choice) {
 ; CHECK-NEXT:      i32 -1, label [[WHILE_END:%.*]]
 ; CHECK-NEXT:      i32 40, label [[LAND_END:%.*]]
 ; CHECK-NEXT:    ]
+; CHECK:       while.cond.while.end_crit_edge:
+; CHECK-NEXT:    br label [[WHILE_END1:%.*]]
 ; CHECK:       land.end:
-; CHECK-NEXT:    br label [[WHILE_END]]
+; CHECK-NEXT:    br label [[WHILE_END1]]
 ; CHECK:       while.body:
 ; CHECK-NEXT:    br label [[WHILE_COND]]
 ; CHECK:       while.end:
@@ -73,9 +75,11 @@ define void @foo(ptr %arg, i1 %arg2, i1 %arg3) {
 ; CHECK:       bb6:
 ; CHECK-NEXT:    br i1 [[ARG3:%.*]], label [[BB9:%.*]], label [[BB7:%.*]]
 ; CHECK:       bb7:
-; CHECK-NEXT:    switch i8 0, label [[BB6]] [
+; CHECK-NEXT:    switch i8 0, label [[BB7_BB6_CRIT_EDGE:%.*]] [
 ; CHECK-NEXT:      i8 6, label [[BB8:%.*]]
 ; CHECK-NEXT:    ]
+; CHECK:       bb7.bb6_crit_edge:
+; CHECK-NEXT:    br label [[BB6]]
 ; CHECK:       bb8:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label [[BB4]]

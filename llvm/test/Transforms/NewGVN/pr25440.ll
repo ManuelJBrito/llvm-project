@@ -23,24 +23,36 @@ define fastcc void @foo(ptr nocapture readonly %x, i1 %arg, i1 %arg2, i1 %arg3, 
 ; CHECK-NEXT:      i32 43, label [[CLEANUP:%.*]]
 ; CHECK-NEXT:      i32 52, label [[IF_THEN_5:%.*]]
 ; CHECK-NEXT:    ]
+; CHECK:       bb0.cleanup_crit_edge:
+; CHECK-NEXT:    br label [[CLEANUP1:%.*]]
 ; CHECK:       if.then.5:
-; CHECK-NEXT:    br i1 [[ARG]], label [[LAND_LHS_TRUE]], label [[IF_THEN_26:%.*]]
+; CHECK-NEXT:    br i1 [[ARG]], label [[LAND_LHS_TRUE1:%.*]], label [[IF_THEN_26:%.*]]
 ; CHECK:       land.lhs.true:
-; CHECK-NEXT:    br i1 [[ARG2]], label [[CLEANUP]], label [[BB0]]
+; CHECK-NEXT:    br i1 [[ARG2]], label [[LAND_LHS_TRUE_CLEANUP_CRIT_EDGE:%.*]], label [[LAND_LHS_TRUE]]
+; CHECK:       land.lhs.true.bb0_crit_edge:
+; CHECK-NEXT:    br label [[BB0]]
+; CHECK:       land.lhs.true.cleanup_crit_edge:
+; CHECK-NEXT:    br label [[CLEANUP1]]
 ; CHECK:       if.then.26:
 ; CHECK-NEXT:    br i1 [[ARG3]], label [[COND_END:%.*]], label [[COND_FALSE:%.*]]
+; CHECK:       if.then.26.cond.end_crit_edge:
+; CHECK-NEXT:    br label [[COND_END1:%.*]]
 ; CHECK:       cond.false:
 ; CHECK-NEXT:    [[MODE:%.*]] = getelementptr inbounds [[STRUCT_A:%.*]], ptr [[X_TR]], i32 0, i32 1
 ; CHECK-NEXT:    [[BF_LOAD:%.*]] = load i16, ptr [[MODE]], align 2
-; CHECK-NEXT:    br label [[COND_END]]
+; CHECK-NEXT:    br label [[COND_END1]]
 ; CHECK:       cond.end:
-; CHECK-NEXT:    br i1 [[ARG3]], label [[IF_THEN_44:%.*]], label [[CLEANUP]]
+; CHECK-NEXT:    br i1 [[ARG3]], label [[IF_THEN_44:%.*]], label [[COND_END_CLEANUP_CRIT_EDGE:%.*]]
+; CHECK:       cond.end.cleanup_crit_edge:
+; CHECK-NEXT:    br label [[CLEANUP1]]
 ; CHECK:       if.then.44:
 ; CHECK-NEXT:    unreachable
 ; CHECK:       if.end.50:
 ; CHECK-NEXT:    [[ARRAYIDX52:%.*]] = getelementptr inbounds [0 x i32], ptr @length, i32 0, i32 [[CONV]]
 ; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr [[ARRAYIDX52]], align 4
-; CHECK-NEXT:    br i1 [[ARG4]], label [[FOR_BODY_57:%.*]], label [[CLEANUP]]
+; CHECK-NEXT:    br i1 [[ARG4]], label [[FOR_BODY_57:%.*]], label [[IF_END_50_CLEANUP_CRIT_EDGE:%.*]]
+; CHECK:       if.end.50.cleanup_crit_edge:
+; CHECK-NEXT:    br label [[CLEANUP1]]
 ; CHECK:       for.body.57:
 ; CHECK-NEXT:    unreachable
 ; CHECK:       cleanup:
@@ -104,24 +116,36 @@ define void @dfg_lex(i1 %arg, i32 %arg2) {
 ; CHECK-NEXT:    br label [[WHILE_BODYTHREAD_PRE_SPLIT:%.*]]
 ; CHECK:       while.bodythread-pre-split:
 ; CHECK-NEXT:    br i1 [[ARG]], label [[IF_THEN_14:%.*]], label [[IF_END_15:%.*]]
+; CHECK:       while.bodythread-pre-split.if.end.15_crit_edge:
+; CHECK-NEXT:    br label [[IF_END_16:%.*]]
+; CHECK:       while.bodythread-pre-split.if.then.14_crit_edge:
+; CHECK-NEXT:    br label [[IF_THEN_15:%.*]]
 ; CHECK:       if.then.14:
 ; CHECK-NEXT:    [[V1:%.*]] = load i32, ptr @dfg_text, align 4
-; CHECK-NEXT:    br label [[IF_END_15]]
+; CHECK-NEXT:    br label [[IF_END_16]]
 ; CHECK:       if.end.15:
 ; CHECK-NEXT:    [[V2:%.*]] = load ptr, ptr @yy_c_buf_p, align 4
 ; CHECK-NEXT:    br label [[WHILE_COND_16:%.*]]
 ; CHECK:       while.cond.16:
-; CHECK-NEXT:    br i1 [[ARG]], label [[WHILE_COND_16]], label [[WHILE_END:%.*]]
+; CHECK-NEXT:    br i1 [[ARG]], label [[WHILE_COND_16_WHILE_COND_16_CRIT_EDGE:%.*]], label [[WHILE_END:%.*]]
+; CHECK:       while.cond.16.while.cond.16_crit_edge:
+; CHECK-NEXT:    br label [[WHILE_COND_16]]
 ; CHECK:       while.end:
 ; CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, ptr [[V2]], i32 undef
 ; CHECK-NEXT:    store ptr [[ADD_PTR]], ptr @dfg_text, align 4
 ; CHECK-NEXT:    [[SUB_PTR_RHS_CAST25:%.*]] = ptrtoint ptr [[ADD_PTR]] to i32
 ; CHECK-NEXT:    switch i32 [[ARG2]], label [[SW_DEFAULT:%.*]] [
-; CHECK-NEXT:      i32 65, label [[WHILE_BODYTHREAD_PRE_SPLIT]]
+; CHECK-NEXT:      i32 65, label [[WHILE_END_WHILE_BODYTHREAD_PRE_SPLIT_CRIT_EDGE:%.*]]
 ; CHECK-NEXT:      i32 3, label [[RETURN:%.*]]
-; CHECK-NEXT:      i32 57, label [[WHILE_BODYTHREAD_PRE_SPLIT]]
-; CHECK-NEXT:      i32 60, label [[IF_THEN_14]]
+; CHECK-NEXT:      i32 57, label [[WHILE_END_WHILE_BODYTHREAD_PRE_SPLIT_CRIT_EDGE1:%.*]]
+; CHECK-NEXT:      i32 60, label [[WHILE_END_IF_THEN_14_CRIT_EDGE:%.*]]
 ; CHECK-NEXT:    ]
+; CHECK:       while.end.if.then.14_crit_edge:
+; CHECK-NEXT:    br label [[IF_THEN_15]]
+; CHECK:       while.end.while.bodythread-pre-split_crit_edge1:
+; CHECK-NEXT:    br label [[WHILE_BODYTHREAD_PRE_SPLIT]]
+; CHECK:       while.end.while.bodythread-pre-split_crit_edge:
+; CHECK-NEXT:    br label [[WHILE_BODYTHREAD_PRE_SPLIT]]
 ; CHECK:       sw.default:
 ; CHECK-NEXT:    unreachable
 ; CHECK:       return:

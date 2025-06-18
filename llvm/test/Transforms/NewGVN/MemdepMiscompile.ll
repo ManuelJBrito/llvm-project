@@ -19,6 +19,8 @@ define i32 @test() nounwind ssp {
 ; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr [[SHOULDEXIT]], align 4
 ; CHECK-NEXT:    [[CMP1:%.*]] = icmp eq i32 [[TMP0]], 0
 ; CHECK-NEXT:    br i1 [[CMP1]], label [[WHILE_BODY_LR_PH:%.*]], label [[WHILE_END:%.*]]
+; CHECK:       entry.while.end_crit_edge:
+; CHECK-NEXT:    br label [[WHILE_END1:%.*]]
 ; CHECK:       while.body.lr.ph:
 ; CHECK-NEXT:    br label [[WHILE_BODY:%.*]]
 ; CHECK:       while.body:
@@ -26,16 +28,20 @@ define i32 @test() nounwind ssp {
 ; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr [[TASKSIDLE]], align 4
 ; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i32 [[TMP1]], 0
 ; CHECK-NEXT:    br i1 [[TOBOOL]], label [[WHILE_COND_BACKEDGE:%.*]], label [[IF_THEN:%.*]]
+; CHECK:       while.body.while.cond.backedge_crit_edge:
+; CHECK-NEXT:    br label [[WHILE_COND_BACKEDGE1:%.*]]
 ; CHECK:       if.then:
 ; CHECK-NEXT:    store i32 0, ptr [[TASKSIDLE]], align 4
 ; CHECK-NEXT:    call void @TimerCreate(ptr [[SHOULDEXIT]]) #[[ATTR1]]
-; CHECK-NEXT:    br label [[WHILE_COND_BACKEDGE]]
+; CHECK-NEXT:    br label [[WHILE_COND_BACKEDGE1]]
 ; CHECK:       while.cond.backedge:
 ; CHECK-NEXT:    [[TMP2:%.*]] = load i32, ptr [[SHOULDEXIT]], align 4
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq i32 [[TMP2]], 0
-; CHECK-NEXT:    br i1 [[CMP]], label [[WHILE_BODY]], label [[WHILE_COND_WHILE_END_CRIT_EDGE:%.*]]
+; CHECK-NEXT:    br i1 [[CMP]], label [[WHILE_COND_BACKEDGE_WHILE_BODY_CRIT_EDGE:%.*]], label [[WHILE_COND_WHILE_END_CRIT_EDGE:%.*]]
+; CHECK:       while.cond.backedge.while.body_crit_edge:
+; CHECK-NEXT:    br label [[WHILE_BODY]]
 ; CHECK:       while.cond.while.end_crit_edge:
-; CHECK-NEXT:    br label [[WHILE_END]]
+; CHECK-NEXT:    br label [[WHILE_END1]]
 ; CHECK:       while.end:
 ; CHECK-NEXT:    ret i32 0
 ;

@@ -12,7 +12,9 @@ define void @bar(i1 %arg) {
 ; CHECK-NEXT:    [[TMP:%.*]] = load ptr, ptr @global, align 8
 ; CHECK-NEXT:    br label [[BB2:%.*]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    br i1 %arg, label [[BB2]], label [[BB7:%.*]]
+; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[BB2_BB2_CRIT_EDGE:%.*]], label [[BB7:%.*]]
+; CHECK:       bb2.bb2_crit_edge:
+; CHECK-NEXT:    br label [[BB2]]
 ; CHECK:       bb7:
 ; CHECK-NEXT:    br label [[BB10:%.*]]
 ; CHECK:       bb10:

@@ -92,11 +92,13 @@ define i32 @test3(i1 %which) {
 ; CHECK-LABEL: @test3(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    br i1 [[WHICH:%.*]], label [[FINAL:%.*]], label [[DELAY:%.*]]
+; CHECK:       entry.final_crit_edge:
+; CHECK-NEXT:    br label [[FINAL1:%.*]]
 ; CHECK:       delay:
-; CHECK-NEXT:    br label [[FINAL]]
+; CHECK-NEXT:    br label [[FINAL1]]
 ; CHECK:       final:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ -877, [[ENTRY:%.*]] ], [ 113, [[DELAY]] ]
-; CHECK-NEXT:    [[A:%.*]] = phi i32 [ 1000, [[ENTRY]] ], [ 10, [[DELAY]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 113, [[DELAY]] ], [ -877, [[FINAL]] ]
+; CHECK-NEXT:    [[A:%.*]] = phi i32 [ 1000, [[FINAL]] ], [ 10, [[DELAY]] ]
 ; CHECK-NEXT:    ret i32 [[PHIOFOPS]]
 ;
 
@@ -116,11 +118,13 @@ define <2 x i32> @test3vec(i1 %which) {
 ; CHECK-LABEL: @test3vec(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    br i1 [[WHICH:%.*]], label [[FINAL:%.*]], label [[DELAY:%.*]]
+; CHECK:       entry.final_crit_edge:
+; CHECK-NEXT:    br label [[FINAL1:%.*]]
 ; CHECK:       delay:
-; CHECK-NEXT:    br label [[FINAL]]
+; CHECK-NEXT:    br label [[FINAL1]]
 ; CHECK:       final:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi <2 x i32> [ splat (i32 -877), [[ENTRY:%.*]] ], [ splat (i32 113), [[DELAY]] ]
-; CHECK-NEXT:    [[A:%.*]] = phi <2 x i32> [ splat (i32 1000), [[ENTRY]] ], [ splat (i32 10), [[DELAY]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi <2 x i32> [ splat (i32 113), [[DELAY]] ], [ splat (i32 -877), [[FINAL]] ]
+; CHECK-NEXT:    [[A:%.*]] = phi <2 x i32> [ splat (i32 1000), [[FINAL]] ], [ splat (i32 10), [[DELAY]] ]
 ; CHECK-NEXT:    ret <2 x i32> [[PHIOFOPS]]
 ;
 
@@ -140,11 +144,13 @@ define <2 x i32> @test3vec2(i1 %which) {
 ; CHECK-LABEL: @test3vec2(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    br i1 [[WHICH:%.*]], label [[FINAL:%.*]], label [[DELAY:%.*]]
+; CHECK:       entry.final_crit_edge:
+; CHECK-NEXT:    br label [[FINAL1:%.*]]
 ; CHECK:       delay:
-; CHECK-NEXT:    br label [[FINAL]]
+; CHECK-NEXT:    br label [[FINAL1]]
 ; CHECK:       final:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi <2 x i32> [ <i32 -877, i32 -2167>, [[ENTRY:%.*]] ], [ <i32 113, i32 303>, [[DELAY]] ]
-; CHECK-NEXT:    [[A:%.*]] = phi <2 x i32> [ <i32 1000, i32 2500>, [[ENTRY]] ], [ <i32 10, i32 30>, [[DELAY]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi <2 x i32> [ <i32 113, i32 303>, [[DELAY]] ], [ <i32 -877, i32 -2167>, [[FINAL]] ]
+; CHECK-NEXT:    [[A:%.*]] = phi <2 x i32> [ <i32 1000, i32 2500>, [[FINAL]] ], [ <i32 10, i32 30>, [[DELAY]] ]
 ; CHECK-NEXT:    ret <2 x i32> [[PHIOFOPS]]
 ;
 
@@ -208,6 +214,8 @@ define i64 @test5(i64 %arg) {
 ; CHECK-NEXT:    [[TMP:%.*]] = alloca i64, align 8
 ; CHECK-NEXT:    [[TMP1:%.*]] = icmp eq i64 [[ARG:%.*]], 0
 ; CHECK-NEXT:    br i1 [[TMP1]], label [[BB28:%.*]], label [[BB2:%.*]]
+; CHECK:       bb.bb28_crit_edge:
+; CHECK-NEXT:    br label [[BB29:%.*]]
 ; CHECK:       bb2:
 ; CHECK-NEXT:    [[TMP10:%.*]] = load i64, ptr @global, align 16
 ; CHECK-NEXT:    [[TMP11:%.*]] = load i64, ptr @global.1, align 16
@@ -217,19 +225,23 @@ define i64 @test5(i64 %arg) {
 ; CHECK-NEXT:    br label [[BB5:%.*]]
 ; CHECK:       bb5:
 ; CHECK-NEXT:    [[TMP6:%.*]] = icmp eq i64 [[TMP9:%.*]], 0
-; CHECK-NEXT:    br i1 [[TMP6]], label [[BB27:%.*]], label [[BB7]]
+; CHECK-NEXT:    br i1 [[TMP6]], label [[BB27:%.*]], label [[BB5_BB7_CRIT_EDGE:%.*]]
+; CHECK:       bb5.bb7_crit_edge:
+; CHECK-NEXT:    br label [[BB7]]
 ; CHECK:       bb7:
-; CHECK-NEXT:    [[TMP8:%.*]] = phi i64 [ [[ARG]], [[BB2]] ], [ [[TMP9]], [[BB5]] ]
+; CHECK-NEXT:    [[TMP8:%.*]] = phi i64 [ [[ARG]], [[BB2]] ], [ [[TMP9]], [[BB5_BB7_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[TMP9]] = add nsw i64 [[TMP8]], -1
 ; CHECK-NEXT:    [[TMP13:%.*]] = icmp eq i64 [[TMP12]], 0
-; CHECK-NEXT:    br i1 [[TMP13]], label [[BB5]], label [[BB14:%.*]]
+; CHECK-NEXT:    br i1 [[TMP13]], label [[BB7_BB5_CRIT_EDGE:%.*]], label [[BB14:%.*]]
+; CHECK:       bb7.bb5_crit_edge:
+; CHECK-NEXT:    br label [[BB5]]
 ; CHECK:       bb14:
 ; CHECK-NEXT:    br label [[BB15:%.*]]
 ; CHECK:       bb15:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i64 [ [[TMP12]], [[BB14]] ], [ [[TMP25:%.*]], [[BB15]] ]
-; CHECK-NEXT:    [[TMP16:%.*]] = phi i64 [ [[TMP24:%.*]], [[BB15]] ], [ [[TMP11]], [[BB14]] ]
-; CHECK-NEXT:    [[TMP17:%.*]] = phi i64 [ [[TMP22:%.*]], [[BB15]] ], [ [[TMP10]], [[BB14]] ]
-; CHECK-NEXT:    [[TMP18:%.*]] = phi i64 [ [[TMP20:%.*]], [[BB15]] ], [ 0, [[BB14]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i64 [ [[TMP12]], [[BB14]] ], [ [[TMP25:%.*]], [[BB15_BB15_CRIT_EDGE:%.*]] ]
+; CHECK-NEXT:    [[TMP16:%.*]] = phi i64 [ [[TMP24:%.*]], [[BB15_BB15_CRIT_EDGE]] ], [ [[TMP11]], [[BB14]] ]
+; CHECK-NEXT:    [[TMP17:%.*]] = phi i64 [ [[TMP22:%.*]], [[BB15_BB15_CRIT_EDGE]] ], [ [[TMP10]], [[BB14]] ]
+; CHECK-NEXT:    [[TMP18:%.*]] = phi i64 [ [[TMP20:%.*]], [[BB15_BB15_CRIT_EDGE]] ], [ 0, [[BB14]] ]
 ; CHECK-NEXT:    store i64 [[PHIOFOPS]], ptr [[TMP]], align 8
 ; CHECK-NEXT:    [[TMP20]] = add nuw nsw i64 [[TMP18]], 1
 ; CHECK-NEXT:    [[TMP21:%.*]] = getelementptr inbounds [100 x i64], ptr @global, i64 0, i64 [[TMP20]]
@@ -238,9 +250,11 @@ define i64 @test5(i64 %arg) {
 ; CHECK-NEXT:    [[TMP24]] = load i64, ptr [[TMP23]], align 8
 ; CHECK-NEXT:    [[TMP25]] = mul nsw i64 [[TMP24]], [[TMP22]]
 ; CHECK-NEXT:    [[TMP26:%.*]] = icmp eq i64 [[TMP20]], [[TMP25]]
-; CHECK-NEXT:    br i1 [[TMP26]], label [[BB4:%.*]], label [[BB15]]
+; CHECK-NEXT:    br i1 [[TMP26]], label [[BB4:%.*]], label [[BB15_BB15_CRIT_EDGE]]
+; CHECK:       bb15.bb15_crit_edge:
+; CHECK-NEXT:    br label [[BB15]]
 ; CHECK:       bb27:
-; CHECK-NEXT:    br label [[BB28]]
+; CHECK-NEXT:    br label [[BB29]]
 ; CHECK:       bb28:
 ; CHECK-NEXT:    ret i64 0
 ;
@@ -301,17 +315,23 @@ define i8 @test6(ptr %addr) {
 ; CHECK-NEXT:    br label [[MAIN_LOOP:%.*]]
 ; CHECK:       main-loop:
 ; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i1 [ true, [[ENTRY_BLOCK:%.*]] ], [ false, [[CORE:%.*]] ]
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ false, [[ENTRY_BLOCK]] ], [ true, [[CORE]] ]
 ; CHECK-NEXT:    [[PHI:%.*]] = phi i8 [ 0, [[ENTRY_BLOCK]] ], [ 1, [[CORE]] ]
 ; CHECK-NEXT:    store volatile i8 0, ptr [[ADDR:%.*]], align 1
 ; CHECK-NEXT:    br i1 [[PHIOFOPS1]], label [[BUSY_WAIT_PHI_0:%.*]], label [[EXIT:%.*]]
+; CHECK:       main-loop.busy-wait-phi-0_crit_edge:
+; CHECK-NEXT:    br label [[BUSY_WAIT_PHI_1:%.*]]
 ; CHECK:       busy-wait-phi-0:
 ; CHECK-NEXT:    [[LOAD:%.*]] = load volatile i8, ptr [[ADDR]], align 1
 ; CHECK-NEXT:    [[ICMP:%.*]] = icmp eq i8 [[LOAD]], 0
-; CHECK-NEXT:    br i1 [[ICMP]], label [[BUSY_WAIT_PHI_0]], label [[CORE]]
+; CHECK-NEXT:    br i1 [[ICMP]], label [[BUSY_WAIT_PHI_0_BUSY_WAIT_PHI_0_CRIT_EDGE:%.*]], label [[CORE1:%.*]]
+; CHECK:       busy-wait-phi-0.busy-wait-phi-0_crit_edge:
+; CHECK-NEXT:    br label [[BUSY_WAIT_PHI_1]]
 ; CHECK:       core:
-; CHECK-NEXT:    br i1 [[PHIOFOPS]], label [[TRAP:%.*]], label [[MAIN_LOOP]]
+; CHECK-NEXT:    br i1 false, label [[TRAP:%.*]], label [[CORE]]
+; CHECK:       core.main-loop_crit_edge:
+; CHECK-NEXT:    br label [[MAIN_LOOP]]
 ; CHECK:       trap:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    ret i8 1
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret i8 0
@@ -390,7 +410,9 @@ define void @test9(i1 %arg) {
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    br label [[BB1:%.*]]
 ; CHECK:       bb1:
-; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[BB1]], label [[BB2:%.*]]
+; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[BB1_BB1_CRIT_EDGE:%.*]], label [[BB2:%.*]]
+; CHECK:       bb1.bb1_crit_edge:
+; CHECK-NEXT:    br label [[BB1]]
 ; CHECK:       bb2:
 ; CHECK-NEXT:    br label [[BB6:%.*]]
 ; CHECK:       bb6:
@@ -433,13 +455,20 @@ define void @test10(i1 %arg) {
 ; CHECK-NEXT:    [[N:%.*]] = phi ptr [ [[H:%.*]], [[I:%.*]] ], [ null, [[B:%.*]] ]
 ; CHECK-NEXT:    [[H]] = getelementptr i32, ptr [[N]], i64 1
 ; CHECK-NEXT:    [[J:%.*]] = icmp eq ptr [[H]], inttoptr (i64 32 to ptr)
-; CHECK-NEXT:    br i1 [[J]], label [[C:%.*]], label [[I]]
+; CHECK-NEXT:    br i1 [[J]], label [[G_C_CRIT_EDGE:%.*]], label [[I1:%.*]]
+; CHECK:       g.c_crit_edge:
+; CHECK-NEXT:    br label [[C1:%.*]]
 ; CHECK:       i:
-; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[K:%.*]], label [[G]]
+; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[K:%.*]], label [[I]]
+; CHECK:       i.g_crit_edge:
+; CHECK-NEXT:    br label [[G]]
 ; CHECK:       k:
-; CHECK-NEXT:    br i1 false, label [[C]], label [[O:%.*]]
+; CHECK-NEXT:    br i1 false, label [[C:%.*]], label [[O:%.*]]
+; CHECK:       k.c_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[C1]]
 ; CHECK:       o:
-; CHECK-NEXT:    br label [[C]]
+; CHECK-NEXT:    br label [[C1]]
 ; CHECK:       c:
 ; CHECK-NEXT:    ret void
 ;
@@ -473,10 +502,12 @@ define void @test11(i1 %arg) {
 ; CHECK-LABEL: @test11(
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[BB1:%.*]], label [[BB2:%.*]]
+; CHECK:       bb.bb2_crit_edge:
+; CHECK-NEXT:    br label [[BB3:%.*]]
 ; CHECK:       bb1:
-; CHECK-NEXT:    br label [[BB2]]
+; CHECK-NEXT:    br label [[BB3]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    [[TMP:%.*]] = phi i1 [ false, [[BB1]] ], [ true, [[BB:%.*]] ]
+; CHECK-NEXT:    [[TMP:%.*]] = phi i1 [ false, [[BB1]] ], [ true, [[BB2]] ]
 ; CHECK-NEXT:    [[TMP3:%.*]] = call ptr @wombat()
 ; CHECK-NEXT:    [[TMP4:%.*]] = icmp ne ptr [[TMP3]], null
 ; CHECK-NEXT:    [[TMP5:%.*]] = and i1 [[TMP]], [[TMP4]]
@@ -524,8 +555,11 @@ define void @test12(ptr %p) {
 ; CHECK-NEXT:    br label [[BB3:%.*]]
 ; CHECK:       bb3:
 ; CHECK-NEXT:    br i1 true, label [[BB6:%.*]], label [[BB7:%.*]]
+; CHECK:       bb3.bb7_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[BB9:%.*]]
 ; CHECK:       bb6:
-; CHECK-NEXT:    br label [[BB7]]
+; CHECK-NEXT:    br label [[BB9]]
 ; CHECK:       bb7:
 ; CHECK-NEXT:    br label [[BB3]]
 ; CHECK:       bb8:
@@ -564,18 +598,22 @@ define void @test13() {
 ; CHECK-NEXT:    [[TMP:%.*]] = load i8, ptr null, align 1
 ; CHECK-NEXT:    br label [[BB3:%.*]]
 ; CHECK:       bb3:
-; CHECK-NEXT:    [[TMP4:%.*]] = phi ptr [ null, [[BB1]] ], [ [[TMP6:%.*]], [[BB3]] ]
-; CHECK-NEXT:    [[TMP5:%.*]] = phi i32 [ undef, [[BB1]] ], [ [[TMP9:%.*]], [[BB3]] ]
+; CHECK-NEXT:    [[TMP4:%.*]] = phi ptr [ null, [[BB1]] ], [ [[TMP6:%.*]], [[BB3_BB3_CRIT_EDGE:%.*]] ]
+; CHECK-NEXT:    [[TMP5:%.*]] = phi i32 [ undef, [[BB1]] ], [ [[TMP9:%.*]], [[BB3_BB3_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[TMP6]] = getelementptr i8, ptr [[TMP4]], i64 1
 ; CHECK-NEXT:    [[PHIOFOPS:%.*]] = load i8, ptr [[TMP4]], align 1
 ; CHECK-NEXT:    [[TMP8:%.*]] = sext i8 [[PHIOFOPS]] to i32
 ; CHECK-NEXT:    [[TMP9]] = mul i32 [[TMP5]], [[TMP8]]
 ; CHECK-NEXT:    [[TMP10:%.*]] = load i8, ptr [[TMP6]], align 1
 ; CHECK-NEXT:    [[TMP11:%.*]] = icmp eq i8 [[TMP10]], 0
-; CHECK-NEXT:    br i1 [[TMP11]], label [[BB12:%.*]], label [[BB3]]
+; CHECK-NEXT:    br i1 [[TMP11]], label [[BB12:%.*]], label [[BB3_BB3_CRIT_EDGE]]
+; CHECK:       bb3.bb3_crit_edge:
+; CHECK-NEXT:    br label [[BB3]]
 ; CHECK:       bb12:
 ; CHECK-NEXT:    [[TMP14:%.*]] = icmp eq i32 [[TMP9]], 0
-; CHECK-NEXT:    br i1 [[TMP14]], label [[BB1]], label [[BB15:%.*]]
+; CHECK-NEXT:    br i1 [[TMP14]], label [[BB12_BB1_CRIT_EDGE:%.*]], label [[BB15:%.*]]
+; CHECK:       bb12.bb1_crit_edge:
+; CHECK-NEXT:    br label [[BB1]]
 ; CHECK:       bb15:
 ; CHECK-NEXT:    call void (...) @bar()
 ; CHECK-NEXT:    br label [[BB1]]

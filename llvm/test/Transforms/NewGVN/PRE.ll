@@ -227,7 +227,9 @@ define i32 @TypeVII_2(i32 %a, i1 %cond) {
 ; CHECK-NEXT:    br label %[[BB1:.*]]
 ; CHECK:       [[BB1]]:
 ; CHECK-NEXT:    [[CMP1:%.*]] = call i1 @cond(i32 [[C_PRE]])
-; CHECK-NEXT:    br i1 [[CMP1]], label %[[BB1]], label %[[BB2:.*]]
+; CHECK-NEXT:    br i1 [[CMP1]], label %[[BB1_BB1_CRIT_EDGE:.*]], label %[[BB2:.*]]
+; CHECK:       [[BB1_BB1_CRIT_EDGE]]:
+; CHECK-NEXT:    br label %[[BB1]]
 ; CHECK:       [[BB2]]:
 ; CHECK-NEXT:    ret i32 [[C_PRE]]
 ;

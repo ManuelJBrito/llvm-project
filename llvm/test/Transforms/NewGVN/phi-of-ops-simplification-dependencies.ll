@@ -18,6 +18,8 @@ define void @test1(i1 %arg) {
 ; CHECK:       for.body.lr.ph:
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp ugt i32 [[PHIOFOPS]], [[Y_0]]
 ; CHECK-NEXT:    br i1 [[CMP]], label [[FOR_END:%.*]], label [[FOR_BODY4_1:%.*]]
+; CHECK:       for.body.lr.ph.for.end_crit_edge:
+; CHECK-NEXT:    br label [[FOR_END1:%.*]]
 ; CHECK:       for.end:
 ; CHECK-NEXT:    ret void
 ; CHECK:       for.inc6:
@@ -26,7 +28,7 @@ define void @test1(i1 %arg) {
 ; CHECK:       for.body4.1:
 ; CHECK-NEXT:    [[INC_1:%.*]] = add nuw nsw i32 [[Y_0]], 1
 ; CHECK-NEXT:    tail call void @use.i32(i32 [[INC_1]])
-; CHECK-NEXT:    br label [[FOR_END]]
+; CHECK-NEXT:    br label [[FOR_END1]]
 ;
 entry:
   br label %for.cond
@@ -62,11 +64,13 @@ define void @test2(i1 %c, ptr %ptr, i64 %N) {
 ; CHECK-NEXT:    br label [[HEADER:%.*]]
 ; CHECK:       header:
 ; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i64 [ -1, [[ENTRY:%.*]] ], [ [[IV:%.*]], [[LATCH:%.*]] ]
+; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i1 [ true, [[ENTRY]] ], [ false, [[LATCH]] ]
 ; CHECK-NEXT:    [[IV]] = phi i64 [ [[IV_NEXT:%.*]], [[LATCH]] ], [ 0, [[ENTRY]] ]
 ; CHECK-NEXT:    br i1 [[C:%.*]], label [[IF_THEN:%.*]], label [[IF_ELSE:%.*]]
 ; CHECK:       if.then:
-; CHECK-NEXT:    [[CMP1:%.*]] = icmp eq i64 [[IV]], 0
-; CHECK-NEXT:    br i1 [[CMP1]], label [[LATCH]], label [[LOR_RHS:%.*]]
+; CHECK-NEXT:    br i1 [[PHIOFOPS1]], label [[IF_THEN_LATCH_CRIT_EDGE:%.*]], label [[LOR_RHS:%.*]]
+; CHECK:       if.then.latch_crit_edge:
+; CHECK-NEXT:    br label [[LATCH1:%.*]]
 ; CHECK:       lor.rhs:
 ; CHECK-NEXT:    [[IV_ADD_1:%.*]] = add i64 [[IV]], 1
 ; CHECK-NEXT:    [[IDX_1:%.*]] = getelementptr inbounds i16, ptr [[PTR:%.*]], i64 [[IV_ADD_1]]
@@ -75,11 +79,13 @@ define void @test2(i1 %c, ptr %ptr, i64 %N) {
 ; CHECK:       if.else:
 ; CHECK-NEXT:    [[IDX_2:%.*]] = getelementptr inbounds i16, ptr [[PTR]], i64 [[PHIOFOPS]]
 ; CHECK-NEXT:    call void @use.i16(ptr [[IDX_2]])
-; CHECK-NEXT:    br label [[LATCH]]
+; CHECK-NEXT:    br label [[LATCH1]]
 ; CHECK:       latch:
 ; CHECK-NEXT:    [[IV_NEXT]] = add i64 [[IV]], 1
 ; CHECK-NEXT:    [[EC:%.*]] = icmp ugt i64 [[IV_NEXT]], [[N:%.*]]
-; CHECK-NEXT:    br i1 [[EC]], label [[HEADER]], label [[EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[EC]], label [[LATCH]], label [[EXIT:%.*]]
+; CHECK:       latch.header_crit_edge:
+; CHECK-NEXT:    br label [[HEADER]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret void
 ;
@@ -121,18 +127,26 @@ define void @pr49873_cmp_simplification_dependency(ptr %ptr, i1 %c.0) {
 ; CHECK-NEXT:    br label [[LOOP_1:%.*]]
 ; CHECK:       loop.1:
 ; CHECK-NEXT:    br i1 [[C_0:%.*]], label [[LOOP_1_LATCH:%.*]], label [[LOOP_2:%.*]]
-; CHECK:       loop.2:
-; CHECK-NEXT:    [[I130:%.*]] = phi i32 [ [[I132:%.*]], [[LOOP_2]] ], [ 0, [[LOOP_1]] ]
-; CHECK-NEXT:    [[I132]] = add nuw i32 [[I130]], 1
+; CHECK:       loop.1.loop.2_crit_edge:
 ; CHECK-NEXT:    [[I133:%.*]] = load i32, ptr [[PTR:%.*]], align 4
+; CHECK-NEXT:    br label [[LOOP_3:%.*]]
+; CHECK:       loop.1.loop.1.latch_crit_edge:
+; CHECK-NEXT:    br label [[LOOP_1_LATCH1:%.*]]
+; CHECK:       loop.2:
+; CHECK-NEXT:    [[I130:%.*]] = phi i32 [ [[I132:%.*]], [[LOOP_2_LOOP_2_CRIT_EDGE:%.*]] ], [ 0, [[LOOP_2]] ]
+; CHECK-NEXT:    [[I132]] = add nuw i32 [[I130]], 1
 ; CHECK-NEXT:    [[C_1:%.*]] = icmp ult i32 [[I132]], [[I133]]
-; CHECK-NEXT:    br i1 [[C_1]], label [[LOOP_2]], label [[LOOP_2_EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[C_1]], label [[LOOP_2_LOOP_2_CRIT_EDGE]], label [[LOOP_2_EXIT:%.*]]
+; CHECK:       loop.2.loop.2_crit_edge:
+; CHECK-NEXT:    br label [[LOOP_3]]
 ; CHECK:       loop.2.exit:
-; CHECK-NEXT:    br label [[LOOP_1_LATCH]]
+; CHECK-NEXT:    br label [[LOOP_1_LATCH1]]
 ; CHECK:       loop.1.latch:
-; CHECK-NEXT:    [[DOTLCSSA:%.*]] = phi i32 [ 0, [[LOOP_1]] ], [ [[I133]], [[LOOP_2_EXIT]] ]
+; CHECK-NEXT:    [[DOTLCSSA:%.*]] = phi i32 [ 0, [[LOOP_1_LATCH]] ], [ [[I133]], [[LOOP_2_EXIT]] ]
 ; CHECK-NEXT:    [[C_2:%.*]] = icmp ult i32 1, [[DOTLCSSA]]
-; CHECK-NEXT:    br i1 [[C_2]], label [[LOOP_1]], label [[EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[C_2]], label [[LOOP_1_LATCH_LOOP_1_CRIT_EDGE:%.*]], label [[EXIT:%.*]]
+; CHECK:       loop.1.latch.loop.1_crit_edge:
+; CHECK-NEXT:    br label [[LOOP_1]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret void
 ;

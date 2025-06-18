@@ -12,13 +12,15 @@ define i32 @TestNoAsan() {
 ; CHECK-NEXT:    [[TMP3:%.*]] = load i16, ptr [[TMP1]], align 4
 ; CHECK-NEXT:    [[TMP4:%.*]] = icmp eq i16 [[TMP3]], 0
 ; CHECK-NEXT:    br i1 [[TMP4]], label [[TMP9:%.*]], label [[TMP5:%.*]]
+; CHECK:       ._crit_edge:
+; CHECK-NEXT:    br label [[TMP11:%.*]]
 ; CHECK:       5:
 ; CHECK-NEXT:    [[TMP6:%.*]] = getelementptr inbounds i8, ptr [[TMP1]], i64 2
 ; CHECK-NEXT:    [[TMP7:%.*]] = load i16, ptr [[TMP6]], align 2
 ; CHECK-NEXT:    [[TMP8:%.*]] = sext i16 [[TMP7]] to i32
-; CHECK-NEXT:    br label [[TMP9]]
+; CHECK-NEXT:    br label [[TMP11]]
 ; CHECK:       9:
-; CHECK-NEXT:    [[TMP10:%.*]] = phi i32 [ [[TMP8]], [[TMP5]] ], [ 0, [[TMP0:%.*]] ]
+; CHECK-NEXT:    [[TMP10:%.*]] = phi i32 [ [[TMP8]], [[TMP5]] ], [ 0, [[TMP9]] ]
 ; CHECK-NEXT:    ret i32 [[TMP10]]
 ;
   %1 = tail call noalias ptr @_Znam(i64 2)
@@ -49,13 +51,15 @@ define i32 @TestAsan() sanitize_address {
 ; CHECK-NEXT:    [[TMP3:%.*]] = load i16, ptr [[TMP1]], align 4
 ; CHECK-NEXT:    [[TMP4:%.*]] = icmp eq i16 [[TMP3]], 0
 ; CHECK-NEXT:    br i1 [[TMP4]], label [[TMP9:%.*]], label [[TMP5:%.*]]
+; CHECK:       ._crit_edge:
+; CHECK-NEXT:    br label [[TMP11:%.*]]
 ; CHECK:       5:
 ; CHECK-NEXT:    [[TMP6:%.*]] = getelementptr inbounds i8, ptr [[TMP1]], i64 2
 ; CHECK-NEXT:    [[TMP7:%.*]] = load i16, ptr [[TMP6]], align 2
 ; CHECK-NEXT:    [[TMP8:%.*]] = sext i16 [[TMP7]] to i32
-; CHECK-NEXT:    br label [[TMP9]]
+; CHECK-NEXT:    br label [[TMP11]]
 ; CHECK:       9:
-; CHECK-NEXT:    [[TMP10:%.*]] = phi i32 [ [[TMP8]], [[TMP5]] ], [ 0, [[TMP0:%.*]] ]
+; CHECK-NEXT:    [[TMP10:%.*]] = phi i32 [ [[TMP8]], [[TMP5]] ], [ 0, [[TMP9]] ]
 ; CHECK-NEXT:    ret i32 [[TMP10]]
 ;
   %1 = tail call noalias ptr @_Znam(i64 2)
@@ -86,13 +90,15 @@ define i32 @TestHWAsan() sanitize_hwaddress {
 ; CHECK-NEXT:    [[TMP3:%.*]] = load i16, ptr [[TMP1]], align 4
 ; CHECK-NEXT:    [[TMP4:%.*]] = icmp eq i16 [[TMP3]], 0
 ; CHECK-NEXT:    br i1 [[TMP4]], label [[TMP9:%.*]], label [[TMP5:%.*]]
+; CHECK:       ._crit_edge:
+; CHECK-NEXT:    br label [[TMP11:%.*]]
 ; CHECK:       5:
 ; CHECK-NEXT:    [[TMP6:%.*]] = getelementptr inbounds i8, ptr [[TMP1]], i64 2
 ; CHECK-NEXT:    [[TMP7:%.*]] = load i16, ptr [[TMP6]], align 2
 ; CHECK-NEXT:    [[TMP8:%.*]] = sext i16 [[TMP7]] to i32
-; CHECK-NEXT:    br label [[TMP9]]
+; CHECK-NEXT:    br label [[TMP11]]
 ; CHECK:       9:
-; CHECK-NEXT:    [[TMP10:%.*]] = phi i32 [ [[TMP8]], [[TMP5]] ], [ 0, [[TMP0:%.*]] ]
+; CHECK-NEXT:    [[TMP10:%.*]] = phi i32 [ [[TMP8]], [[TMP5]] ], [ 0, [[TMP9]] ]
 ; CHECK-NEXT:    ret i32 [[TMP10]]
 ;
   %1 = tail call noalias ptr @_Znam(i64 2)

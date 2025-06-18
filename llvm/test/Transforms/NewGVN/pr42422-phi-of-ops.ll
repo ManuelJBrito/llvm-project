@@ -39,25 +39,33 @@ define void @d(i1 %arg, i1 %arg2) {
 ; CHECK-NEXT:    br label [[CLEANUP]]
 ; CHECK:       cleanup:
 ; CHECK-NEXT:    [[CLEANUP_DEST:%.*]] = phi i32 [ poison, [[IF_END12]] ], [ 1, [[IF_THEN11]] ], [ 9, [[IF_THEN]] ]
-; CHECK-NEXT:    switch i32 [[CLEANUP_DEST]], label [[CLEANUP14]] [
-; CHECK-NEXT:      i32 0, label [[FOR_COND4]]
+; CHECK-NEXT:    switch i32 [[CLEANUP_DEST]], label [[CLEANUP_CLEANUP14_CRIT_EDGE:%.*]] [
+; CHECK-NEXT:      i32 0, label [[CLEANUP_FOR_COND4_CRIT_EDGE:%.*]]
 ; CHECK-NEXT:      i32 9, label [[FOR_END13:%.*]]
 ; CHECK-NEXT:    ]
+; CHECK:       cleanup.for.cond4_crit_edge:
+; CHECK-NEXT:    br label [[FOR_COND4]]
+; CHECK:       cleanup.cleanup14_crit_edge:
+; CHECK-NEXT:    br label [[CLEANUP14]]
 ; CHECK:       for.end13:
 ; CHECK-NEXT:    br label [[CLEANUP14]]
 ; CHECK:       cleanup14:
-; CHECK-NEXT:    [[CLEANUP_DEST15:%.*]] = phi i32 [ 0, [[FOR_END13]] ], [ [[CLEANUP_DEST]], [[CLEANUP]] ], [ 1, [[FOR_BODY4]] ]
+; CHECK-NEXT:    [[CLEANUP_DEST15:%.*]] = phi i32 [ 0, [[FOR_END13]] ], [ [[CLEANUP_DEST]], [[CLEANUP_CLEANUP14_CRIT_EDGE]] ], [ 1, [[FOR_BODY4]] ]
 ; CHECK-NEXT:    [[COND1:%.*]] = icmp eq i32 [[CLEANUP_DEST15]], 0
 ; CHECK-NEXT:    br i1 [[COND1]], label [[FOR_INC17]], label [[CLEANUP20:%.*]]
+; CHECK:       cleanup14.cleanup20_crit_edge:
+; CHECK-NEXT:    br label [[CLEANUP21:%.*]]
 ; CHECK:       for.inc17:
 ; CHECK-NEXT:    [[INC18]] = add nsw i32 [[TMP0]], 1
 ; CHECK-NEXT:    br label [[FOR_COND1]]
 ; CHECK:       for.end19:
-; CHECK-NEXT:    br label [[CLEANUP20]]
+; CHECK-NEXT:    br label [[CLEANUP21]]
 ; CHECK:       cleanup20:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ true, [[FOR_BODY_FOR_COND4_CRIT_EDGE]] ], [ [[COND1]], [[CLEANUP14]] ]
-; CHECK-NEXT:    [[CLEANUP_DEST21:%.*]] = phi i32 [ [[CLEANUP_DEST15]], [[CLEANUP14]] ], [ 0, [[FOR_BODY_FOR_COND4_CRIT_EDGE]] ]
-; CHECK-NEXT:    br i1 [[PHIOFOPS]], label [[FOR_COND]], label [[CLEANUP23:%.*]]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ true, [[FOR_BODY_FOR_COND4_CRIT_EDGE]] ], [ false, [[CLEANUP20]] ]
+; CHECK-NEXT:    [[CLEANUP_DEST21:%.*]] = phi i32 [ [[CLEANUP_DEST15]], [[CLEANUP20]] ], [ 0, [[FOR_BODY_FOR_COND4_CRIT_EDGE]] ]
+; CHECK-NEXT:    br i1 [[PHIOFOPS]], label [[CLEANUP20_FOR_COND_CRIT_EDGE:%.*]], label [[CLEANUP23:%.*]]
+; CHECK:       cleanup20.for.cond_crit_edge:
+; CHECK-NEXT:    br label [[FOR_COND]]
 ; CHECK:       cleanup23:
 ; CHECK-NEXT:    ret void
 ;

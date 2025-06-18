@@ -40,14 +40,19 @@ define void @test2(i1 %c) {
 ; CHECK-NEXT:    [[INC]] = add nsw i32 [[P_0]], 1
 ; CHECK-NEXT:    [[C_1:%.*]] = icmp slt i32 [[P_0]], 0
 ; CHECK-NEXT:    [[C_1_FREEZE:%.*]] = freeze i1 [[C_1]]
-; CHECK-NEXT:    br i1 [[C_1_FREEZE]], label [[LOOP_BB_2:%.*]], label [[LOOP_LATCH]]
+; CHECK-NEXT:    br i1 [[C_1_FREEZE]], label [[LOOP_BB_2:%.*]], label [[LOOP_HEADER_LOOP_LATCH_CRIT_EDGE:%.*]]
+; CHECK:       loop.header.loop.latch_crit_edge:
+; CHECK-NEXT:    br label [[LOOP_LATCH1:%.*]]
 ; CHECK:       loop.bb.2:
-; CHECK-NEXT:    br label [[LOOP_LATCH]]
+; CHECK-NEXT:    br label [[LOOP_LATCH1]]
 ; CHECK:       loop.latch:
-; CHECK-NEXT:    [[P_2]] = phi i32 [ 0, [[LOOP_BB_2]] ], [ [[P_1]], [[LOOP_HEADER]] ]
+; CHECK-NEXT:    [[P_2]] = phi i32 [ 0, [[LOOP_BB_2]] ], [ [[P_1]], [[LOOP_HEADER_LOOP_LATCH_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[C_2:%.*]] = icmp eq i32 [[P_2]], 123
-; CHECK-NEXT:    br i1 [[C_2]], label [[EXIT:%.*]], label [[LOOP_HEADER]]
+; CHECK-NEXT:    br i1 [[C_2]], label [[EXIT:%.*]], label [[LOOP_LATCH]]
+; CHECK:       loop.latch.loop.header_crit_edge:
+; CHECK-NEXT:    br label [[LOOP_HEADER]]
 ; CHECK:       exit:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    ret void
 ;
 entry:

@@ -191,24 +191,28 @@ define void @issfeoperand(ptr nocapture readonly %array, i1 %cond1, i1 %cond2, p
 ; CHECK-LABEL: @issfeoperand(
 ; CHECK-NEXT:  for.body:
 ; CHECK-NEXT:    br i1 [[COND1:%.*]], label [[COND_TRUE:%.*]], label [[COND_FALSE:%.*]]
+; CHECK:       for.body.cond.false_crit_edge:
+; CHECK-NEXT:    br label [[COND_FALSE1:%.*]]
 ; CHECK:       cond.true:
 ; CHECK-NEXT:    [[ARRAYIDX31:%.*]] = getelementptr inbounds [3 x [2 x [1 x i8]]], ptr [[ARRAY:%.*]], i64 109, i64 0, i64 0, i64 undef
 ; CHECK-NEXT:    [[LD1:%.*]] = load i8, ptr [[ARRAYIDX31]], align 1
-; CHECK-NEXT:    br label [[COND_FALSE]]
+; CHECK-NEXT:    br label [[COND_FALSE1]]
 ; CHECK:       cond.false:
-; CHECK-NEXT:    [[PHI1:%.*]] = phi i8 [ [[LD1]], [[COND_TRUE]] ], [ 0, [[FOR_BODY:%.*]] ]
+; CHECK-NEXT:    [[PHI1:%.*]] = phi i8 [ [[LD1]], [[COND_TRUE]] ], [ 0, [[COND_FALSE]] ]
 ; CHECK-NEXT:    [[ARRAYIDX42:%.*]] = getelementptr inbounds [3 x [2 x [1 x i8]]], ptr [[ARRAY]], i64 109, i64 0, i64 0, i64 undef
 ; CHECK-NEXT:    [[LD2:%.*]] = load i8, ptr [[ARRAYIDX42]], align 1
 ; CHECK-NEXT:    [[CMP1:%.*]] = icmp ult i8 [[LD2]], [[PHI1]]
 ; CHECK-NEXT:    [[ZEXT:%.*]] = zext i1 [[CMP1]] to i32
 ; CHECK-NEXT:    store i32 [[ZEXT]], ptr [[P2:%.*]], align 4
 ; CHECK-NEXT:    br i1 [[COND2:%.*]], label [[COND_END:%.*]], label [[EXIT:%.*]]
+; CHECK:       cond.false.exit_crit_edge:
+; CHECK-NEXT:    br label [[EXIT1:%.*]]
 ; CHECK:       cond.end:
 ; CHECK-NEXT:    [[LD3:%.*]] = load i16, ptr [[P1:%.*]], align 2
 ; CHECK-NEXT:    [[SEXT:%.*]] = sext i16 [[LD3]] to i32
-; CHECK-NEXT:    br label [[EXIT]]
+; CHECK-NEXT:    br label [[EXIT1]]
 ; CHECK:       exit:
-; CHECK-NEXT:    [[PHI2:%.*]] = phi i32 [ [[SEXT]], [[COND_END]] ], [ 0, [[COND_FALSE]] ]
+; CHECK-NEXT:    [[PHI2:%.*]] = phi i32 [ [[SEXT]], [[COND_END]] ], [ 0, [[EXIT]] ]
 ; CHECK-NEXT:    [[CMP2:%.*]] = icmp eq i8 [[LD2]], 0
 ; CHECK-NEXT:    [[SEL:%.*]] = select i1 [[CMP2]], i32 [[PHI2]], i32 0
 ; CHECK-NEXT:    store i32 [[SEL]], ptr [[P3:%.*]], align 4

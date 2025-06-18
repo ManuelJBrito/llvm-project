@@ -9,7 +9,9 @@
 define i32 @direct_intrinsic(i1 %c) {
 ; CHECK-LABEL: define {{[^@]+}}@direct_intrinsic
 ; CHECK-SAME: (i1 [[C:%.*]]) {
-; CHECK-NEXT:    br i1 [[C]], label [[INIT:%.*]], label [[CHECK:%.*]]
+; CHECK-NEXT:    br i1 [[C]], label [[INIT:%.*]], label [[DOTCHECK_CRIT_EDGE:%.*]]
+; CHECK:       .check_crit_edge:
+; CHECK-NEXT:    br label [[CHECK:%.*]]
 ; CHECK:       init:
 ; CHECK-NEXT:    store i32 0, ptr @G1, align 4
 ; CHECK-NEXT:    br label [[CHECK]]
@@ -31,7 +33,9 @@ check:
 define i32 @indirect_intrinsic(i1 %c) {
 ; CHECK-LABEL: define {{[^@]+}}@indirect_intrinsic
 ; CHECK-SAME: (i1 [[C:%.*]]) {
-; CHECK-NEXT:    br i1 [[C]], label [[INIT:%.*]], label [[CHECK:%.*]]
+; CHECK-NEXT:    br i1 [[C]], label [[INIT:%.*]], label [[DOTCHECK_CRIT_EDGE:%.*]]
+; CHECK:       .check_crit_edge:
+; CHECK-NEXT:    br label [[CHECK:%.*]]
 ; CHECK:       init:
 ; CHECK-NEXT:    store i32 0, ptr @G2, align 4
 ; CHECK-NEXT:    br label [[CHECK]]

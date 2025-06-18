@@ -6,7 +6,7 @@ define void @sort(i64 %.16, i1 %arg) {
 ; CHECK-NEXT:  Entry:
 ; CHECK-NEXT:    [[TMP0:%.*]] = extractvalue { i64, i1 } undef, 0
 ; CHECK-NEXT:    [[TMP1:%.*]] = lshr i64 [[TMP0]], 2
-; CHECK-NEXT:    br i1 %arg, label [[DIVZEROFAIL2_I:%.*]], label [[WHILEBODY_LR_PH:%.*]]
+; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[DIVZEROFAIL2_I:%.*]], label [[WHILEBODY_LR_PH:%.*]]
 ; CHECK:       DivZeroFail2.i:
 ; CHECK-NEXT:    unreachable
 ; CHECK:       WhileBody.lr.ph:
@@ -19,14 +19,16 @@ define void @sort(i64 %.16, i1 %arg) {
 ; CHECK-NEXT:    [[TMP5:%.*]] = tail call { i64, i1 } @llvm.uadd.with.overflow.i64(i64 [[TMP4]], i64 1)
 ; CHECK-NEXT:    [[TMP6]] = extractvalue { i64, i1 } [[TMP5]], 0
 ; CHECK-NEXT:    [[TMP8:%.*]] = icmp ugt i64 [[ITERATOR]], [[DOT16]]
-; CHECK-NEXT:    br i1 [[TMP8]], label [[BOUNDSCHECKFAIL275:%.*]], label [[BOUNDSCHECKOK276]]
+; CHECK-NEXT:    br i1 [[TMP8]], label [[BOUNDSCHECKFAIL275:%.*]], label [[BOUNDSCHECKOK277:%.*]]
 ; CHECK:       WhileEnd:
 ; CHECK-NEXT:    ret void
 ; CHECK:       BoundsCheckFail275:
 ; CHECK-NEXT:    unreachable
 ; CHECK:       BoundsCheckOk276:
 ; CHECK-NEXT:    [[TMP7:%.*]] = icmp ult i64 [[TMP6]], [[DOT16]]
-; CHECK-NEXT:    br i1 [[TMP7]], label [[WHILEBODY]], label [[WHILEEND:%.*]]
+; CHECK-NEXT:    br i1 [[TMP7]], label [[BOUNDSCHECKOK276]], label [[WHILEEND:%.*]]
+; CHECK:       BoundsCheckOk276.WhileBody_crit_edge:
+; CHECK-NEXT:    br label [[WHILEBODY]]
 ;
 Entry:
   %0 = extractvalue { i64, i1 } undef, 0

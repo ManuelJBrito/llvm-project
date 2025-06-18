@@ -14,27 +14,40 @@ define void @fn1(i1 %arg) local_unnamed_addr #0 {
 ; CHECK-NEXT:    [[H_128:%.*]] = phi i32 [ [[H_031]], [[FOR_COND_PREHEADER]] ], [ [[H_2:%.*]], [[FOR_INC:%.*]] ]
 ; CHECK-NEXT:    br i1 false, label [[L_LOOPEXIT:%.*]], label [[IF_END:%.*]]
 ; CHECK:       if.end:
-; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[FOR_INC]], label [[IF_END9:%.*]]
+; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[IF_END_FOR_INC_CRIT_EDGE:%.*]], label [[IF_END9:%.*]]
+; CHECK:       if.end.for.inc_crit_edge:
+; CHECK-NEXT:    br label [[FOR_INC1:%.*]]
 ; CHECK:       if.end9:
-; CHECK-NEXT:    br label [[FOR_INC]]
+; CHECK-NEXT:    br label [[FOR_INC1]]
 ; CHECK:       for.inc:
-; CHECK-NEXT:    [[H_2]] = phi i32 [ [[H_128]], [[IF_END]] ], [ 0, [[IF_END9]] ]
-; CHECK-NEXT:    br i1 [[ARG]], label [[WHILE_COND10_LOOPEXIT:%.*]], label [[FOR_BODY]]
+; CHECK-NEXT:    [[H_2]] = phi i32 [ [[H_128]], [[IF_END_FOR_INC_CRIT_EDGE]] ], [ 0, [[IF_END9]] ]
+; CHECK-NEXT:    br i1 [[ARG]], label [[WHILE_COND10_LOOPEXIT:%.*]], label [[FOR_INC]]
+; CHECK:       for.inc.for.body_crit_edge:
+; CHECK-NEXT:    br label [[FOR_BODY]]
 ; CHECK:       while.cond10.loopexit:
 ; CHECK-NEXT:    br label [[WHILE_COND10:%.*]]
 ; CHECK:       while.cond10:
 ; CHECK-NEXT:    [[H_127]] = phi i32 [ [[H_126:%.*]], [[IF_END18:%.*]] ], [ [[H_125:%.*]], [[L:%.*]] ], [ [[H_2]], [[WHILE_COND10_LOOPEXIT]] ]
 ; CHECK-NEXT:    br i1 [[ARG]], label [[WHILE_COND]], label [[WHILE_BODY12:%.*]]
 ; CHECK:       while.body12:
-; CHECK-NEXT:    br i1 false, label [[IF_END18]], label [[L]]
+; CHECK-NEXT:    br i1 false, label [[WHILE_BODY12_IF_END18_CRIT_EDGE:%.*]], label [[WHILE_BODY12_L_CRIT_EDGE:%.*]]
+; CHECK:       while.body12.L_crit_edge:
+; CHECK-NEXT:    br label [[L1:%.*]]
+; CHECK:       while.body12.if.end18_crit_edge:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br label [[IF_END18]]
 ; CHECK:       L.loopexit:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br label [[L]]
+; CHECK-NEXT:    br label [[L1]]
 ; CHECK:       L:
-; CHECK-NEXT:    [[H_125]] = phi i32 [ [[H_127]], [[WHILE_BODY12]] ], [ poison, [[L_LOOPEXIT]] ]
-; CHECK-NEXT:    br i1 [[ARG]], label [[WHILE_COND10]], label [[IF_END18]]
+; CHECK-NEXT:    [[H_125]] = phi i32 [ [[H_127]], [[WHILE_BODY12_L_CRIT_EDGE]] ], [ poison, [[L_LOOPEXIT]] ]
+; CHECK-NEXT:    br i1 [[ARG]], label [[L]], label [[L_IF_END18_CRIT_EDGE:%.*]]
+; CHECK:       L.if.end18_crit_edge:
+; CHECK-NEXT:    br label [[IF_END18]]
+; CHECK:       L.while.cond10_crit_edge:
+; CHECK-NEXT:    br label [[WHILE_COND10]]
 ; CHECK:       if.end18:
-; CHECK-NEXT:    [[H_126]] = phi i32 [ [[H_125]], [[L]] ], [ poison, [[WHILE_BODY12]] ]
+; CHECK-NEXT:    [[H_126]] = phi i32 [ [[H_125]], [[L_IF_END18_CRIT_EDGE]] ], [ poison, [[WHILE_BODY12_IF_END18_CRIT_EDGE]] ]
 ; CHECK-NEXT:    br label [[WHILE_COND10]]
 ;
 entry:
