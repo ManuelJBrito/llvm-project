@@ -37,6 +37,7 @@ define ptr @memset_pattern_clobber_load3(ptr %p) {
 
 define i32 @load_forward_over_memset_pattern(ptr %P, ptr noalias %Q) {
 ; CHECK-LABEL: @load_forward_over_memset_pattern(
+; CHECK-NEXT:    [[V1:%.*]] = load i32, ptr [[Q:%.*]], align 4
 ; CHECK-NEXT:    tail call void @llvm.experimental.memset.pattern.p0.i8.i64(ptr [[P:%.*]], i8 27, i64 8, i1 false)
 ; CHECK-NEXT:    ret i32 0
 ;
