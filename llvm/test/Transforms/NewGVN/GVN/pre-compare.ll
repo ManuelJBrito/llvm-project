@@ -51,11 +51,11 @@ define void @f(i32 %x) noreturn nounwind uwtable ssp {
 ; CHECK-NEXT:    [[CALL:%.*]] = tail call i32 @puts(ptr [[COND]]) #[[ATTR1:[0-9]+]]
 ; CHECK-NEXT:    br label %[[FOR_COND_PREHEADER]]
 ; CHECK:       [[FOR_COND_PREHEADER]]:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ [[CMP1]], %[[IF_THEN]] ], [ false, %[[ENTRY_FOR_COND_PREHEADER_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[CMP3:%.*]] = icmp eq i32 [[X]], 2
 ; CHECK-NEXT:    br label %[[FOR_COND:.*]]
 ; CHECK:       [[FOR_COND]]:
 ; CHECK-NEXT:    [[CALL2:%.*]] = tail call i32 @puts(ptr @.str2) #[[ATTR1]]
-; CHECK-NEXT:    br i1 [[PHIOFOPS]], label %[[FOR_COND_FOR_COND_BACKEDGE_CRIT_EDGE:.*]], label %[[IF_END5:.*]]
+; CHECK-NEXT:    br i1 [[CMP3]], label %[[FOR_COND_FOR_COND_BACKEDGE_CRIT_EDGE:.*]], label %[[IF_END5:.*]]
 ; CHECK:       [[FOR_COND_FOR_COND_BACKEDGE_CRIT_EDGE]]:
 ; CHECK-NEXT:    br label %[[FOR_COND_BACKEDGE:.*]]
 ; CHECK:       [[IF_END5]]:

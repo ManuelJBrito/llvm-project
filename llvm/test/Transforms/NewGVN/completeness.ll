@@ -314,8 +314,8 @@ define i8 @test6(ptr %addr) {
 ; CHECK-NEXT:  entry-block:
 ; CHECK-NEXT:    br label [[MAIN_LOOP:%.*]]
 ; CHECK:       main-loop:
-; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i1 [ true, [[ENTRY_BLOCK:%.*]] ], [ false, [[CORE:%.*]] ]
-; CHECK-NEXT:    [[PHI:%.*]] = phi i8 [ 0, [[ENTRY_BLOCK]] ], [ 1, [[CORE]] ]
+; CHECK-NEXT:    [[PHI:%.*]] = phi i8 [ 0, [[ENTRY_BLOCK:%.*]] ], [ 1, [[CORE:%.*]] ]
+; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = icmp eq i8 [[PHI]], 0
 ; CHECK-NEXT:    store volatile i8 0, ptr [[ADDR:%.*]], align 1
 ; CHECK-NEXT:    br i1 [[PHIOFOPS1]], label [[BUSY_WAIT_PHI_0:%.*]], label [[EXIT:%.*]]
 ; CHECK:       main-loop.busy-wait-phi-0_crit_edge:

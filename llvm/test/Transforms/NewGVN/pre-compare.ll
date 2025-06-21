@@ -51,7 +51,7 @@ define void @f(i32 %x) noreturn nounwind uwtable ssp {
 ; CHECK-NEXT:    [[CALL:%.*]] = tail call i32 @puts(ptr [[COND]]) #[[ATTR1:[0-9]+]]
 ; CHECK-NEXT:    br label [[FOR_COND_PREHEADER1]]
 ; CHECK:       for.cond.preheader:
-; CHECK-NEXT:    [[CMP3:%.*]] = phi i1 [ [[CMP1]], [[IF_THEN]] ], [ false, [[FOR_COND_PREHEADER]] ]
+; CHECK-NEXT:    [[CMP3:%.*]] = icmp eq i32 [[X]], 2
 ; CHECK-NEXT:    br label [[FOR_COND:%.*]]
 ; CHECK:       for.cond:
 ; CHECK-NEXT:    [[CALL2:%.*]] = tail call i32 @puts(ptr @.str2) #[[ATTR1]]

@@ -3124,6 +3124,9 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
 
     return E;
   }
+  // Don't insert PHIs for compares. See comment in OkayForPRE.
+  if (isa<CmpInst>(I))
+    return E;
   auto *ValuePHI = RealToTemp.lookup(I);
   bool NewPHI = false;
   if (!ValuePHI) {

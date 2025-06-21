@@ -61,8 +61,8 @@ define void @d(i1 %arg, i1 %arg2) {
 ; CHECK:       for.end19:
 ; CHECK-NEXT:    br label [[CLEANUP21]]
 ; CHECK:       cleanup20:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ true, [[FOR_BODY_FOR_COND4_CRIT_EDGE]] ], [ false, [[CLEANUP20]] ]
 ; CHECK-NEXT:    [[CLEANUP_DEST21:%.*]] = phi i32 [ [[CLEANUP_DEST15]], [[CLEANUP20]] ], [ 0, [[FOR_BODY_FOR_COND4_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = icmp eq i32 [[CLEANUP_DEST21]], 0
 ; CHECK-NEXT:    br i1 [[PHIOFOPS]], label [[CLEANUP20_FOR_COND_CRIT_EDGE:%.*]], label [[CLEANUP23:%.*]]
 ; CHECK:       cleanup20.for.cond_crit_edge:
 ; CHECK-NEXT:    br label [[FOR_COND]]

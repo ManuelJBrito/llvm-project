@@ -64,10 +64,10 @@ define void @test2(i1 %c, ptr %ptr, i64 %N) {
 ; CHECK-NEXT:    br label [[HEADER:%.*]]
 ; CHECK:       header:
 ; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i64 [ -1, [[ENTRY:%.*]] ], [ [[IV:%.*]], [[LATCH:%.*]] ]
-; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i1 [ true, [[ENTRY]] ], [ false, [[LATCH]] ]
 ; CHECK-NEXT:    [[IV]] = phi i64 [ [[IV_NEXT:%.*]], [[LATCH]] ], [ 0, [[ENTRY]] ]
 ; CHECK-NEXT:    br i1 [[C:%.*]], label [[IF_THEN:%.*]], label [[IF_ELSE:%.*]]
 ; CHECK:       if.then:
+; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = icmp eq i64 [[IV]], 0
 ; CHECK-NEXT:    br i1 [[PHIOFOPS1]], label [[IF_THEN_LATCH_CRIT_EDGE:%.*]], label [[LOR_RHS:%.*]]
 ; CHECK:       if.then.latch_crit_edge:
 ; CHECK-NEXT:    br label [[LATCH1:%.*]]

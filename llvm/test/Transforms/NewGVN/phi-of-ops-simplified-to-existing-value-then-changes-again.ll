@@ -27,8 +27,8 @@ define void @pr36501(i1 %c) {
 ; CHECK:       bb6:
 ; CHECK-NEXT:    br label [[BB7]]
 ; CHECK:       bb7:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ false, [[BB3_BB7_CRIT_EDGE]] ], [ true, [[BB6]] ]
 ; CHECK-NEXT:    [[PHI_3:%.*]] = phi i32 [ [[PHI_2]], [[BB3_BB7_CRIT_EDGE]] ], [ 0, [[BB6]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = icmp eq i32 [[PHI_3]], 0
 ; CHECK-NEXT:    call void @use(i1 [[PHIOFOPS]])
 ; CHECK-NEXT:    br label [[BB1]]
 ;
@@ -117,8 +117,8 @@ define void @pr42422(i1 %c.1, i1 %c.2) {
 ; CHECK:       bb24:
 ; CHECK-NEXT:    br label [[BB26]]
 ; CHECK:       bb25:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ true, [[BB24]] ], [ false, [[BB25]] ]
 ; CHECK-NEXT:    [[TMP26:%.*]] = phi i32 [ [[TMP20]], [[BB25]] ], [ 0, [[BB24]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = icmp eq i32 [[TMP26]], 0
 ; CHECK-NEXT:    br i1 [[PHIOFOPS]], label [[BB25_BB1_CRIT_EDGE:%.*]], label [[BB28:%.*]]
 ; CHECK:       bb25.bb1_crit_edge:
 ; CHECK-NEXT:    br label [[BB1]]
@@ -224,8 +224,8 @@ define void @PR42557(i32 %tmp6, i1 %c.1, i1 %c.2) {
 ; CHECK:       bb18:
 ; CHECK-NEXT:    br label [[BB20]]
 ; CHECK:       bb19:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i1 [ [[TMP13]], [[BB19]] ], [ false, [[BB18]] ]
 ; CHECK-NEXT:    [[TMP20:%.*]] = phi i32 [ [[TMP12]], [[BB19]] ], [ 1, [[BB18]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = icmp eq i32 [[TMP20]], 0
 ; CHECK-NEXT:    call void @use(i1 [[PHIOFOPS]])
 ; CHECK-NEXT:    ret void
 ;
