@@ -119,9 +119,10 @@ define void @dfg_lex(i1 %arg, i32 %arg2) {
 ; CHECK:       while.bodythread-pre-split.if.end.15_crit_edge:
 ; CHECK-NEXT:    br label [[IF_END_16:%.*]]
 ; CHECK:       while.bodythread-pre-split.if.then.14_crit_edge:
+; CHECK-NEXT:    [[V1_PRE:%.*]] = load i32, ptr @dfg_text, align 4
 ; CHECK-NEXT:    br label [[IF_THEN_15:%.*]]
 ; CHECK:       if.then.14:
-; CHECK-NEXT:    [[V1:%.*]] = load i32, ptr @dfg_text, align 4
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[V1_PRE]], [[IF_THEN_14]] ], [ [[TMP0:%.*]], [[WHILE_END_IF_THEN_14_CRIT_EDGE:%.*]] ]
 ; CHECK-NEXT:    br label [[IF_END_16]]
 ; CHECK:       if.end.15:
 ; CHECK-NEXT:    [[V2:%.*]] = load ptr, ptr @yy_c_buf_p, align 4
@@ -132,13 +133,14 @@ define void @dfg_lex(i1 %arg, i32 %arg2) {
 ; CHECK-NEXT:    br label [[WHILE_COND_16]]
 ; CHECK:       while.end:
 ; CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, ptr [[V2]], i32 undef
+; CHECK-NEXT:    [[TMP0]] = ptrtoint ptr [[ADD_PTR]] to i32
 ; CHECK-NEXT:    store ptr [[ADD_PTR]], ptr @dfg_text, align 4
 ; CHECK-NEXT:    [[SUB_PTR_RHS_CAST25:%.*]] = ptrtoint ptr [[ADD_PTR]] to i32
 ; CHECK-NEXT:    switch i32 [[ARG2]], label [[SW_DEFAULT:%.*]] [
 ; CHECK-NEXT:      i32 65, label [[WHILE_END_WHILE_BODYTHREAD_PRE_SPLIT_CRIT_EDGE:%.*]]
 ; CHECK-NEXT:      i32 3, label [[RETURN:%.*]]
 ; CHECK-NEXT:      i32 57, label [[WHILE_END_WHILE_BODYTHREAD_PRE_SPLIT_CRIT_EDGE1:%.*]]
-; CHECK-NEXT:      i32 60, label [[WHILE_END_IF_THEN_14_CRIT_EDGE:%.*]]
+; CHECK-NEXT:      i32 60, label [[WHILE_END_IF_THEN_14_CRIT_EDGE]]
 ; CHECK-NEXT:    ]
 ; CHECK:       while.end.if.then.14_crit_edge:
 ; CHECK-NEXT:    br label [[IF_THEN_15]]

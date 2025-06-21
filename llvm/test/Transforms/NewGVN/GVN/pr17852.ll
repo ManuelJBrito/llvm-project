@@ -5,12 +5,12 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f3
 define void @fn1(ptr byval(%struct.S0) align 8 %p1) {
 ; CHECK-LABEL: define void @fn1(
 ; CHECK-SAME: ptr byval([[STRUCT_S0:%.*]]) align 8 [[P1:%.*]]) {
-; CHECK-NEXT:    br label %[[BB1:.*]]
-; CHECK:       [[BB1]]:
+; CHECK-NEXT:    br label %[[BB2:.*]]
+; CHECK:       [[BB2]]:
 ; CHECK-NEXT:    br i1 true, label %[[IF_ELSE:.*]], label %[[IF_THEN:.*]]
-; CHECK:       [[BB2:.*:]]
+; CHECK:       [[BB1:.*:]]
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br label %[[BB1]]
+; CHECK-NEXT:    br label %[[BB2]]
 ; CHECK:       [[IF_THEN]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[IF_END40:.*]]

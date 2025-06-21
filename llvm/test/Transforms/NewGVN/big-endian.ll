@@ -44,7 +44,8 @@ define i64 @test1(ptr %predA, ptr %predB) {
 define i1 @test2(i8 %V, ptr %P) {
 ; CHECK-LABEL: @test2(
 ; CHECK-NEXT:    store i8 [[V:%.*]], ptr [[P:%.*]], align 1
-; CHECK-NEXT:    [[A:%.*]] = load i1, ptr [[P]], align 1
+; CHECK-NEXT:    [[TMP1:%.*]] = lshr i8 [[V]], 0
+; CHECK-NEXT:    [[A:%.*]] = trunc i8 [[TMP1]] to i1
 ; CHECK-NEXT:    ret i1 [[A]]
 ;
   store i8 %V, ptr %P

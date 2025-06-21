@@ -598,6 +598,7 @@ class NewGVN {
   DenseSet<Instruction *> AllTempInstructions;
   DenseMap<Instruction *, Instruction *> InstrToPREInsertion;
   DenseSet<Instruction *> PREInsertedInstructions;
+  DenseMap<std::pair<Value *, Type *>, Value *> InstrToCoercions;
 
   // This is the set of instructions to revisit on a reachability change.  At
   // the end of the main iteration loop it will contain at least all the phi of
@@ -900,6 +901,9 @@ private:
   Value *findPHIOfOpsLeader(const Expression *, const Instruction *,
                             const BasicBlock *) const;
   Value *findPREOpLeader(Value *, const BasicBlock *);
+  void patchAndReplaceAllUsesWith(Instruction *, Value *);
+  bool canReplace(const Instruction *Orig, Value *Repl) const;
+  Value *getCoercedVal(Value *Repl, Instruction *I);
 
   // Various instruction touch utilities
   template <typename Map, typename KeyType>
@@ -1419,8 +1423,11 @@ Value *NewGVN::lookupOperandLeader(Value *V, bool isBackedge) const {
     if (CC == TOPClass)
       return PoisonValue::get(V->getType());
     Value *Orig = getCopyOf(V);
-    return CC->getStoredValue() ? CC->getStoredValue()
+    Value *Leader = CC->getStoredValue() ? CC->getStoredValue()
                                 : (Orig && isBackedge ? Orig : CC->getLeader());
+    if (Leader->getType() != V->getType())
+      return V;
+    return Leader;
   }
 
   return V;
@@ -1447,7 +1454,6 @@ LoadExpression *NewGVN::createLoadExpression(Type *LoadType, Value *PointerOp,
   auto *E =
       new (ExpressionAllocator) LoadExpression(1, LI, lookupMemoryLeader(MA));
   E->allocateOperands(ArgRecycler, ExpressionAllocator);
-  E->setType(LoadType);
 
   // Give store and loads same opcode so they value number together.
   E->setOpcode(0);
@@ -1465,7 +1471,6 @@ NewGVN::createStoreExpression(StoreInst *SI, const MemoryAccess *MA) const {
   auto *E = new (ExpressionAllocator)
       StoreExpression(SI->getNumOperands(), SI, StoredValueLeader, MA);
   E->allocateOperands(ArgRecycler, ExpressionAllocator);
-  E->setType(SI->getValueOperand()->getType());
 
   // Give store and loads same opcode so they value number together.
   E->setOpcode(0);
@@ -2726,6 +2731,8 @@ void NewGVN::removePREInst(Instruction *I, Instruction *PREInst) {
   PREInsertedInstructions.erase(PREInst);
   ICF->removeInstruction(PREInst);
   MSSAU->removeMemoryAccess(PREInst);
+  PREInst->removeFromParent();
+  InstructionsToErase.insert(PREInst);
 }
 
 // Add PHI Op in BB as a PHI of operations version of ExistingValue.
@@ -2848,6 +2855,9 @@ Value *NewGVN::findLeaderForInst(Instruction *TransInst,
   }
   if (auto *SI = dyn_cast<StoreInst>(FoundVal))
     FoundVal = SI->getValueOperand();
+  if (OrigInst->getType() != FoundVal->getType())
+    FoundVal = getCoercedVal(FoundVal, OrigInst);
+    
   return FoundVal;
 }
 
@@ -3817,10 +3827,10 @@ bool NewGVN::runGVN() {
   for (Instruction *ToErase : InstructionsToErase) {
     if (!ToErase->use_empty())
       ToErase->replaceAllUsesWith(PoisonValue::get(ToErase->getType()));
-
-    assert(ToErase->getParent() &&
-           "BB containing ToErase deleted unexpectedly!");
-    ToErase->eraseFromParent();
+    if (ToErase->getParent())
+      ToErase->eraseFromParent();
+    else
+      ToErase->deleteValue();
   }
   Changed |= !InstructionsToErase.empty();
 
@@ -3976,7 +3986,68 @@ void NewGVN::convertClassToLoadsAndStores(
   }
 }
 
-static void patchAndReplaceAllUsesWith(Instruction *I, Value *Repl) {
+bool NewGVN::canReplace(const Instruction *Orig, Value *Repl) const {
+  if (isa<StoreInst>(Orig))
+    return false;
+  Type *OrigTy = Orig->getType();
+  if (auto *StoreRepl = dyn_cast<StoreInst>(Repl))
+    Repl = StoreRepl->getValueOperand();
+  Type *ReplTy = Repl->getType();
+  if (ReplTy == OrigTy)
+    return true;
+  return canCoerceMustAliasedValueToLoad(Repl, OrigTy, &F);
+}
+
+Value *NewGVN::getCoercedVal(Value *Repl, Instruction *I) {
+  Type *LoadTy = I->getType();
+  if (LoadTy == Repl->getType())
+    return Repl;
+  auto ICIt = InstrToCoercions.find({Repl, LoadTy});
+  if (ICIt != InstrToCoercions.end())
+    Repl = ICIt->second;
+  else {
+    assert(canCoerceMustAliasedValueToLoad(Repl, LoadTy, &F));
+    // If Repl is available everywhere, coerce it just before I; 
+    Instruction *InsertPt = I;
+    // If Repl is an instruction, coerce it just before itself.
+    if (auto *ReplInst = dyn_cast<Instruction>(Repl))
+      InsertPt = &(**ReplInst->getInsertionPointAfterDef());
+    Value *CoercedVal =
+          getValueForLoad(Repl, /*Offset*/ 0, I->getType(), InsertPt, &F);
+    InstrToCoercions.insert({{Repl, I->getType()}, CoercedVal});
+    Repl = CoercedVal;
+  }
+  // The coerce instruction might be marked as dead, revive it.
+  // TODO: we should handle this in a better way, for example by keeping a set
+  // of coercion instructions and not marking them as dead even when they have
+  // no uses.
+  auto *ReplInst = dyn_cast<Instruction>(Repl);
+  if (ReplInst && InstructionsToErase.count(ReplInst))
+    InstructionsToErase.erase(ReplInst);
+  return Repl;
+}
+
+void NewGVN::patchAndReplaceAllUsesWith(Instruction *I, Value *Repl) {
+  if (I->getType() != Repl->getType()) {
+    
+    auto ICIt = InstrToCoercions.find({Repl, I->getType()});
+    if (ICIt != InstrToCoercions.end())
+      Repl = ICIt->second;
+    else {
+      Instruction *InsertPt = I;
+      if (auto *ReplInst = dyn_cast<Instruction>(Repl)) {
+        InsertPt = &(**ReplInst->getInsertionPointAfterDef());
+      }
+      Value *CoercedVal =
+          getValueForLoad(Repl, /*Offset*/ 0, I->getType(), InsertPt, &F);
+
+      InstrToCoercions.insert({{Repl, I->getType()}, CoercedVal});
+      Repl = CoercedVal;
+    }
+    auto *ReplInst = dyn_cast<Instruction>(Repl);
+    if (ReplInst && InstructionsToErase.count(ReplInst))
+      InstructionsToErase.erase(ReplInst);
+  }
   if (!match(I, m_Intrinsic<Intrinsic::ssa_copy>()))
     patchReplacementInstruction(I, Repl);
   I->replaceAllUsesWith(Repl);
@@ -4060,7 +4131,8 @@ Value *NewGVN::findPHIOfOpsLeader(const Expression *E,
     // Anything that isn't an instruction is always available.
     if (!MemberInst)
       return Member;
-    if (DT->dominates(getBlockForValue(MemberInst), BB))
+    if (DT->dominates(getBlockForValue(MemberInst), BB) &&
+        canReplace(OrigInst, Member))
       return Member;
   }
   return nullptr;
@@ -4096,9 +4168,9 @@ void NewGVN::updateIR(Instruction *I, CongruenceClass *CC) {
     return;
   Value *Leader = CC->getStoredValue() ? CC->getStoredValue() : CC->getLeader();
 
-  if (!Leader || Leader == I)
+  if (!Leader || Leader == I ||
+      !canCoerceMustAliasedValueToLoad(Leader, I->getType(), &F))
     return;
-
   if (alwaysAvailable(Leader) || DT->dominates(cast<Instruction>(Leader), I)) {
     // Snapshot uses before udpating.
     for (Use &U : I->uses())
@@ -4259,15 +4331,16 @@ bool NewGVN::eliminateInstructions(Function &F) {
                           << *Member << "\n");
         auto *I = cast<Instruction>(Member);
         assert(Leader != I && "About to accidentally remove our leader");
-        replaceInstruction(I, Leader);
+        if (I->getType() == Leader->getType() ||
+            canCoerceMustAliasedValueToLoad(Leader, I->getType(), &F))
+          replaceInstruction(I, Leader);
         AnythingReplaced = true;
       }
       CC->swap(MembersLeft);
     } else {
       // If this is a singleton, we can skip it.
       if (CC->size() != 1 || RealToTemp.count(Leader)) {
-        Value *DominatingLeader = nullptr;
-        int DFSIn = 0, DFSOut = 0;
+        DenseMap<Type *, ValueDFS> DomLeaderMap;
 
         // Convert the members to DFS ordered sets and then merge them.
         SmallVector<ValueDFS, 8> DFSOrderedSet;
@@ -4280,9 +4353,11 @@ bool NewGVN::eliminateInstructions(Function &F) {
           int MemberDFSOut = VD.DFSOut;
           Value *Def = VD.Def.getPointer();
           bool FromStore = VD.Def.getInt();
+          Type *MemberTy = Def->getType();
           // We ignore void things because we can't get a value from them.
-          if (Def->getType()->isVoidTy())
+          if (MemberTy->isVoidTy())
             continue;
+          TypeSize MemberSize = DL.getTypeStoreSize(MemberTy);
           auto *DefInst = dyn_cast<Instruction>(Def);
           if (DefInst && AllTempInstructions.count(DefInst)) {
             auto *PN = cast<PHINode>(DefInst);
@@ -4300,28 +4375,48 @@ bool NewGVN::eliminateInstructions(Function &F) {
             NumGVNPHIOfOpsEliminations++;
           }
 
-          if (!DominatingLeader) {
-            LLVM_DEBUG(dbgs() << "No Leader\n");
-          } else {
-            LLVM_DEBUG(dbgs() << "Leader DFS numbers are (" << DFSIn << ","
-                              << DFSOut << ")\n");
-          }
-
           LLVM_DEBUG(dbgs() << "Current DFS numbers are (" << MemberDFSIn << ","
                             << MemberDFSOut << ")\n");
-          // If we have no leader or the current leader is out of scope, use Def
-          // as the new leader.
-          bool OutOfScope =
-              MemberDFSIn < DFSIn || MemberDFSOut > DFSOut || !DominatingLeader;
-          if (OutOfScope) {
-            // Use the original Op for ssa_copies to ensure the copies get
-            // eliminated.
-            Value *Orig = getCopyOf(Def);
-            DominatingLeader = Orig ? Orig : Def;
-            DFSIn = MemberDFSIn;
-            DFSOut = MemberDFSOut;
+          Instruction *DominatingLeader = nullptr;
+          TypeSize MaxSize = TypeSize::getZero();
+          SmallPtrSet<Type *, 8> OutOfScopeLeaders;
+          for (auto &KV : DomLeaderMap) {
+            int DFSIn = KV.second.DFSIn;
+            int DFSOut = KV.second.DFSOut;
+            auto *Leader = cast<Instruction>(KV.second.Def.getPointer());
+            Type *Ty = KV.first;
+            TypeSize LeaderSize = DL.getTypeStoreSize(Ty);
+            LLVM_DEBUG(dbgs() << "Leader DFS numbers are (" << DFSIn << ","
+                              << DFSOut << ")\n");
+
+            // If the leader for this type is out-of-scope for the current
+            // member, then it is also out-of-scope for any following member.
+            bool OutOfScope = MemberDFSIn < DFSIn || MemberDFSOut > DFSOut;
+            if (OutOfScope)
+              OutOfScopeLeaders.insert(Ty);
+            else  if (TypeSize::isKnownLE(MemberSize, LeaderSize) &&
+                     TypeSize::isKnownGT(LeaderSize, MaxSize) &&
+                     canCoerceMustAliasedValueToLoad(Leader, MemberTy, &F)) {
+              DominatingLeader = Leader;
+              MaxSize = LeaderSize;
+            }
           }
 
+          for (auto *Ty : OutOfScopeLeaders)
+            DomLeaderMap.erase(Ty);
+
+          // Insert as new leader for the type if necessary.
+          auto DLIt = DomLeaderMap.find(Def->getType());
+          if (DLIt == DomLeaderMap.end())
+            DomLeaderMap.insert({Def->getType(), VD});
+          
+          if (!DominatingLeader)
+            continue;
+          // Use the original Op for ssa_copies to ensure the copies get
+          // eliminated.
+          Instruction *Orig =
+              dyn_cast_or_null<Instruction>(getCopyOf(DominatingLeader));
+          DominatingLeader = Orig ? Orig : DominatingLeader;
           // For anything in this case, what and how we value number
           // guarantees that any side-effects that would have occurred (ie
           // throwing, etc) can be proven to either still occur (because it's
