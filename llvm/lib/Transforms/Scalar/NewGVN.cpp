@@ -178,6 +178,7 @@ LoadExpression::~LoadExpression() = default;
 StoreExpression::~StoreExpression() = default;
 AggregateValueExpression::~AggregateValueExpression() = default;
 PHIExpression::~PHIExpression() = default;
+PointerExpression::~PointerExpression() = default;
 
 } // end namespace GVNExpression
 } // end namespace llvm
@@ -777,6 +778,7 @@ private:
                                              const MemoryAccess *) const;
   const AggregateValueExpression *
   createAggregateValueExpression(Instruction *) const;
+  ExprResult createPointerExpression(Instruction *I) const;
   bool setBasicExpressionInfo(Instruction *, BasicExpression *) const;
 
   // Congruence class handling.
@@ -811,10 +813,13 @@ private:
     return CC;
   }
 
-  CongruenceClass *createSingletonCongruenceClass(Value *Member) {
-    CongruenceClass *CClass = createCongruenceClass(Member, nullptr);
+  CongruenceClass *createSingletonCongruenceClass(Value *Member,
+                                                  Expression *Expr = nullptr) {
+    CongruenceClass *CClass = createCongruenceClass(Member, Expr);
     CClass->insert(Member);
     ValueToClass[Member] = CClass;
+    if (Expr)
+      ValueToExpression[Member] = Expr;
     return CClass;
   }
 
@@ -1328,6 +1333,40 @@ NewGVN::createAggregateValueExpression(Instruction *I) const {
   llvm_unreachable("Unhandled type of aggregate value operation");
 }
 
+NewGVN::ExprResult NewGVN::createPointerExpression(Instruction *I) const {
+  PointerExpression *E = nullptr;
+  if (auto *AI = dyn_cast<AllocaInst>(I)) {
+    E = new (ExpressionAllocator) PointerExpression(AI);
+    if (!AI->getAllocatedType()->isScalableTy()) {
+      if (auto Sz = AI->getAllocationSize(DL); Sz)
+        cast<PointerExpression>(E)->setObjectSize(*Sz);
+    }
+    return ExprResult::some(E);
+  } else if (auto *GEPI = dyn_cast<GetElementPtrInst>(I)) {
+    ExprResult Res = createExpression(GEPI);
+    // If we can simplify it use that, it will either be an existing
+    // pointer or a constant.
+    if (isa<VariableExpression>(Res.Expr) || isa<ConstantExpression>(Res.Expr))
+      return Res;
+
+    // Attempt to build a pointer expression from an existing one.
+    // TODO: handle more cases.
+    const Expression *Expr = ValueToExpression.lookup(GEPI->getPointerOperand());
+    if (auto *PtrExpr = dyn_cast_or_null<PointerExpression>(Expr)) {
+      unsigned BitWidth = DL.getIndexTypeSizeInBits(GEPI->getType());
+      llvm::APInt Offset(BitWidth, 0);
+      if (GEPI->accumulateConstantOffset(DL, Offset)) {
+        return new (ExpressionAllocator)
+            PointerExpression(PtrExpr, Offset.getSExtValue());
+      }
+    }
+    // Default to the expression from createExpression.
+    return Res.Expr;
+  }
+
+  llvm_unreachable("Unhandled type of pointer expression");
+}
+
 const DeadExpression *NewGVN::createDeadExpression() const {
   // DeadExpression has no arguments and all DeadExpression's are the same,
   // so we only need one of them.
@@ -1642,6 +1681,13 @@ const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) const {
                                           DefiningInst, DefiningAccess))
         return CoercionResult;
     }
+  } else {
+    // Alloca is not considered a MemDef by MSSA. Therefore LiveOnEntry with
+    // alloca base pointer implies uninitialized memory.
+    auto *PtrExpr = dyn_cast_or_null<PointerExpression>(
+        ValueToExpression.lookup(LoadAddressLeader));
+    if (PtrExpr && isa<AllocaInst>(PtrExpr->getBasePtr()))
+      return createConstantExpression(UndefValue::get(LI->getType()));
   }
 
   const auto *LE = createLoadExpression(LI->getType(), LoadAddressLeader, LI,
@@ -2145,8 +2191,11 @@ NewGVN::performSymbolicEvaluation(Instruction *I,
   case Instruction::Select:
   case Instruction::ExtractElement:
   case Instruction::InsertElement:
-  case Instruction::GetElementPtr:
     return createExpression(I);
+    break;
+  case Instruction::GetElementPtr:
+  case Instruction::Alloca:
+    return createPointerExpression(I);
     break;
   case Instruction::ShuffleVector:
     // FIXME: Add support for shufflevector to createExpression.
@@ -3216,8 +3265,21 @@ void NewGVN::initializeCongruenceClasses(Function &F) {
   }
 
   // Initialize arguments to be in their own unique congruence classes
-  for (auto &FA : F.args())
-    createSingletonCongruenceClass(&FA);
+  // Create a PointerExpression for pointer arguments.
+  for (auto &FA : F.args()) {
+    Expression *Expr = nullptr;
+    if (FA.getType()->isPointerTy())
+      Expr = new (ExpressionAllocator) PointerExpression(&FA);
+    createSingletonCongruenceClass(&FA, Expr);
+  }
+
+  // Create a PointerExpression for global pointers. 
+  for (auto &GV : F.getParent()->globals()) {
+    if (GV.getType()->isPointerTy()) {
+      auto *Expr = new (ExpressionAllocator) PointerExpression(&GV);
+      createSingletonCongruenceClass(&GV, Expr);
+    }
+  }
 }
 
 void NewGVN::cleanupTables() {

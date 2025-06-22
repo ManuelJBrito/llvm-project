@@ -45,6 +45,7 @@ enum ExpressionType {
   ET_Variable,
   ET_Dead,
   ET_Unknown,
+  ET_Pointer,
   ET_BasicStart,
   ET_Basic,
   ET_AggregateValue,
@@ -542,6 +543,64 @@ public:
     this->BasicExpression::printInternal(OS, false);
     OS << "bb = " << BB;
   }
+};
+
+class PointerExpression : public Expression {
+private:
+  Value *BasePtr = nullptr;
+  std::pair<bool, unsigned> ObjectSize = {false, 0};
+  int64_t Offset = 0;
+
+public:
+  PointerExpression(Value *BasePtr) : PointerExpression(BasePtr, {false, 0}) {}
+  PointerExpression(Value *BasePtr, std::pair<bool, unsigned> ObjectSize)
+      : PointerExpression(BasePtr, ObjectSize, 0) {}
+  PointerExpression(Value *BasePtr, std::pair<bool, unsigned> ObjectSize,
+                    int64_t Offset)
+      : Expression(ET_Pointer, 0), BasePtr(BasePtr), ObjectSize(ObjectSize),
+        Offset(Offset) {}
+  PointerExpression(const PointerExpression *BaseExpr, int64_t Offset)
+      : Expression(ET_Pointer, 0), BasePtr(BaseExpr->BasePtr), ObjectSize(BaseExpr->ObjectSize),
+        Offset(BaseExpr->Offset + Offset) {}
+  PointerExpression() = delete;
+  PointerExpression(const PointerExpression &) = delete;
+  PointerExpression &operator=(const PointerExpression &) = delete;
+  ~PointerExpression() override;
+
+  static bool classof(const Expression *E) {
+    return E->getExpressionType() == ET_Pointer;
+  }
+
+  Value *getBasePtr() const { return BasePtr; }
+  void setObjectSize(unsigned Size) {
+    ObjectSize = {true, Size};
+  }
+
+  bool equals(const Expression &Other) const override {
+    const auto &OE = cast<PointerExpression>(Other);
+    return getBasePtr() == OE.getBasePtr() && ObjectSize == OE.ObjectSize &&
+           Offset == OE.Offset;
+  }
+
+   hash_code getHashValue() const override {
+     return hash_combine(this->Expression::getHashValue(), BasePtr, ObjectSize,
+                         Offset);
+   }
+
+   void printInternal(raw_ostream &OS, bool PrintEType) const override {
+    if (PrintEType)
+      OS << "ExpressionTypePointer, ";
+    this->Expression::printInternal(OS, false);
+    OS << "base ptr = ";
+    OS << *BasePtr;
+    if (Offset)
+      OS << ", offset = + "<< Offset;
+    OS << ", object size = ";
+    if (ObjectSize.first)
+      OS << ObjectSize.second;
+    else 
+      OS << "unknown ";
+   }
 };
 
 class DeadExpression final : public Expression {

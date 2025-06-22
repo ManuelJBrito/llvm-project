@@ -9,10 +9,7 @@ define i32 @a() {
 ; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    [[C:%.*]] = alloca [[STRUCT_ANON:%.*]], align 8
 ; CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i32, ptr [[C]], i32 1
-; CHECK-NEXT:    [[TMP2:%.*]] = load i32, ptr [[TMP1]], align 4
-; CHECK-NEXT:    [[TMP3:%.*]] = or i32 [[TMP2]], 11
-; CHECK-NEXT:    [[TMP4:%.*]] = and i32 [[TMP3]], -21
-; CHECK-NEXT:    store i32 [[TMP4]], ptr [[TMP1]], align 4
+; CHECK-NEXT:    store i32 -21, ptr [[TMP1]], align 4
 ; CHECK-NEXT:    [[CALL:%.*]] = call i32 (...) @x(ptr [[C]])
 ; CHECK-NEXT:    ret i32 undef
 ;

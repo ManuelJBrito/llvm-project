@@ -51,9 +51,7 @@ define i32 @load_clobber_load_gep1(ptr %p) {
 ; CHECK-LABEL: @load_clobber_load_gep1(
 ; CHECK-NEXT:    [[GEP1:%.*]] = getelementptr <vscale x 4 x i32>, ptr [[P:%.*]], i64 0, i64 1
 ; CHECK-NEXT:    [[LOAD1:%.*]] = load i32, ptr [[GEP1]], align 4
-; CHECK-NEXT:    [[GEP2:%.*]] = getelementptr i32, ptr [[P]], i64 1
-; CHECK-NEXT:    [[LOAD2:%.*]] = load i32, ptr [[GEP2]], align 4
-; CHECK-NEXT:    [[ADD:%.*]] = add i32 [[LOAD1]], [[LOAD2]]
+; CHECK-NEXT:    [[ADD:%.*]] = add i32 [[LOAD1]], [[LOAD1]]
 ; CHECK-NEXT:    ret i32 [[ADD]]
 ;
   %gep1 = getelementptr <vscale x 4 x i32>, ptr %p, i64 0, i64 1
@@ -219,10 +217,7 @@ define ptr @load_from_alloc_replaced_with_undef() {
 ; CHECK-LABEL: @load_from_alloc_replaced_with_undef(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[A:%.*]] = alloca <vscale x 4 x i32>, align 16
-; CHECK-NEXT:    [[GEP:%.*]] = getelementptr <vscale x 4 x i32>, ptr [[A]], i64 0, i64 1
-; CHECK-NEXT:    [[LOAD:%.*]] = load i32, ptr [[GEP]], align 4
-; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i32 [[LOAD]], 0
-; CHECK-NEXT:    br i1 [[TOBOOL]], label [[IF_END:%.*]], label [[IF_THEN:%.*]]
+; CHECK-NEXT:    br i1 undef, label [[ENTRY_IF_END_CRIT_EDGE:%.*]], label [[IF_THEN:%.*]]
 ; CHECK:       entry.if.end_crit_edge:
 ; CHECK-NEXT:    br label [[IF_END1:%.*]]
 ; CHECK:       if.then:

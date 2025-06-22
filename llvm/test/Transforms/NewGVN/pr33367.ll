@@ -52,8 +52,7 @@ define %MNR_struct @f000316011717_2(ptr %pDS, ptr %pCG) #2 {
 ; CHECK-NEXT:    store i8 [[CFL]], ptr [[PCARRY]], align 1, !tbaa [[TBAA16:![0-9]+]]
 ; CHECK-NEXT:    br label [[EXIT]]
 ; CHECK:       Exit:
-; CHECK-NEXT:    [[RESTART378:%.*]] = load [[MNR_STRUCT]], ptr [[RESTART]], align 8
-; CHECK-NEXT:    ret [[MNR_STRUCT]] [[RESTART378]]
+; CHECK-NEXT:    ret [[MNR_STRUCT]] undef
 ;
 Entry:
   %restart = alloca %MNR_struct

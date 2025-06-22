@@ -146,9 +146,9 @@ define void @b(i1 %arg) {
 ; CHECK-LABEL: @b(
 ; CHECK-NEXT:  d:
 ; CHECK-NEXT:    [[C:%.*]] = alloca [[STRUCT_A:%.*]], align 8
-; CHECK-NEXT:    [[E:%.*]] = load i32, ptr [[C]], align 4
 ; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[I:%.*]], label [[J:%.*]]
 ; CHECK:       m:
+; CHECK-NEXT:    store i32 undef, ptr [[C]], align 4
 ; CHECK-NEXT:    unreachable
 ; CHECK:       i:
 ; CHECK-NEXT:    br i1 true, label [[K:%.*]], label [[M:%.*]]
@@ -156,6 +156,7 @@ define void @b(i1 %arg) {
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label [[M1:%.*]]
 ; CHECK:       k:
+; CHECK-NEXT:    store i32 undef, ptr [[C]], align 4
 ; CHECK-NEXT:    unreachable
 ; CHECK:       j:
 ; CHECK-NEXT:    br label [[M1]]
