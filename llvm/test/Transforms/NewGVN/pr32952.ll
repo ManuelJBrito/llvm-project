@@ -18,14 +18,16 @@ define i32 @tinkywinky() {
 ; CHECK-NEXT:    br i1 [[CMP]], label [[TINKY:%.*]], label [[WINKY:%.*]]
 ; CHECK:       tinky:
 ; CHECK-NEXT:    store i16 2, ptr @a, align 2
+; CHECK-NEXT:    [[PROMOTED_PRE:%.*]] = zext i16 [[TMP0]] to i32
 ; CHECK-NEXT:    br label [[PATATINO:%.*]]
 ; CHECK:       winky:
+; CHECK-NEXT:    [[OTHER_PRE:%.*]] = zext i16 [[TMP0]] to i32
 ; CHECK-NEXT:    br label [[PATATINO]]
 ; CHECK:       patatino:
+; CHECK-NEXT:    [[PROMOTED:%.*]] = phi i32 [ [[CONV3]], [[WINKY]] ], [ [[PROMOTED_PRE]], [[TINKY]] ]
+; CHECK-NEXT:    [[OTHER:%.*]] = phi i32 [ [[OTHER_PRE]], [[WINKY]] ], [ [[CONV3]], [[TINKY]] ]
 ; CHECK-NEXT:    [[MEH:%.*]] = phi i16 [ [[TMP0]], [[WINKY]] ], [ [[CONV1]], [[TINKY]] ]
 ; CHECK-NEXT:    [[BANANA:%.*]] = phi i16 [ [[TMP0]], [[TINKY]] ], [ [[CONV1]], [[WINKY]] ]
-; CHECK-NEXT:    [[PROMOTED:%.*]] = zext i16 [[BANANA]] to i32
-; CHECK-NEXT:    [[OTHER:%.*]] = zext i16 [[MEH]] to i32
 ; CHECK-NEXT:    [[FIRST:%.*]] = tail call i32 (ptr, ...) @printf(ptr @.str, i32 [[PROMOTED]])
 ; CHECK-NEXT:    [[SECOND:%.*]] = tail call i32 (ptr, ...) @printf(ptr @.str, i32 [[OTHER]])
 ; CHECK-NEXT:    ret i32 0

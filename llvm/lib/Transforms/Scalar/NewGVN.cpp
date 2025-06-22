@@ -1126,10 +1126,12 @@ PHIExpression *NewGVN::createPHIExpression(ArrayRef<ValPair> PHIOperands,
       return false;
     OriginalOpsConstant = OriginalOpsConstant && isa<Constant>(P.first);
     HasBackedge = HasBackedge || isBackedge(BB, PHIBlock);
-    return lookupOperandLeader(P.first) != I;
+    return !isa<PHINode>(I) || lookupOperandLeader(P.first) != I;
   });
   llvm::transform(Filtered, op_inserter(E), [&](const ValPair &P) -> Value * {
-    return lookupOperandLeader(P.first, isBackedge(P.second, PHIBlock));
+    return isa<PHINode>(I)
+               ? lookupOperandLeader(P.first, isBackedge(P.second, PHIBlock))
+               : P.first;
   });
   return E;
 }
@@ -1938,7 +1940,11 @@ NewGVN::performSymbolicPHIEvaluation(ArrayRef<ValPair> PHIOps,
   if (llvm::all_of(Filtered, [&](Value *Arg) { return Arg == AllSameValue; })) {
     // Can't fold phi(undef, X) -> X unless X can't be poison (thus X is undef
     // in the worst case).
-    if (HasUndef && !isGuaranteedNotToBePoison(AllSameValue, AC, nullptr, DT))
+    bool isPREInst =
+        isa<Instruction>(AllSameValue) &&
+        PREInsertedInstructions.count(cast<Instruction>(AllSameValue));
+    if (HasUndef && (isPREInst ||
+                     !isGuaranteedNotToBePoison(AllSameValue, AC, nullptr, DT)))
       return E;
 
     // In LLVM's non-standard representation of phi nodes, it's possible to have
@@ -2801,8 +2807,16 @@ void NewGVN::addPhiOfOps(PHINode *Op, BasicBlock *BB,
 static bool okayForPHIOfOps(const Instruction *I) {
   if (!EnablePhiOfOps)
     return false;
-  return isa<BinaryOperator>(I) || isa<SelectInst>(I) || isa<CmpInst>(I) ||
-         isa<LoadInst>(I);
+  if (isa<AllocaInst>(I) || I->isTerminator() || isa<PHINode>(I) ||
+      I->getType()->isVoidTy() || I->mayHaveSideEffects() ||
+      isa<DbgInfoIntrinsic>(I))
+    return false;
+  if (auto *CallB = dyn_cast<CallBase>(I)) {
+    // We don't currently value number ANY inline asm calls.
+    if (CallB->isInlineAsm())
+      return false;
+  }
+  return true;
 }
 
 // Return true if this operand will be safe to use for phi of ops.
@@ -3173,8 +3187,8 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
 
     return E;
   }
-  // Don't insert PHIs for compares. See comment in OkayForPRE.
-  if (isa<CmpInst>(I))
+  // Don't insert PHIs for compares or geps. See comments in OkayForPRE.
+  if (isa<CmpInst>(I) || isa<GetElementPtrInst>(I))
     return E;
   auto *ValuePHI = RealToTemp.lookup(I);
   bool NewPHI = false;

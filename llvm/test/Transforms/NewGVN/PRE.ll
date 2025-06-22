@@ -22,18 +22,19 @@ bb2:
   ret i32 poison
 }
 
-; FIXME : z -> [x, y]
 define i32 @TypeI_2(i32 %a, i1 %c) {
 ; CHECK-LABEL: define i32 @TypeI_2(
 ; CHECK-SAME: i32 [[A:%.*]], i1 [[C:%.*]]) {
 ; CHECK-NEXT:    br i1 [[C]], label %[[BB1:.*]], label %[[BB2:.*]]
 ; CHECK:       [[BB1]]:
+; CHECK-NEXT:    [[Z:%.*]] = add i32 [[A]], 1
 ; CHECK-NEXT:    br label %[[BB3:.*]]
 ; CHECK:       [[BB2]]:
+; CHECK-NEXT:    [[Y:%.*]] = add i32 [[A]], 1
 ; CHECK-NEXT:    br label %[[BB3]]
 ; CHECK:       [[BB3]]:
-; CHECK-NEXT:    [[Z:%.*]] = add i32 [[A]], 1
-; CHECK-NEXT:    ret i32 [[Z]]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[Y]], %[[BB2]] ], [ [[Z]], %[[BB1]] ]
+; CHECK-NEXT:    ret i32 [[PHIOFOPS]]
 ;
   br i1 %c, label %bb1, label %bb2
 bb1:
@@ -78,18 +79,19 @@ bb3:
   %z = add i32 %a, 1
   ret i32 %z
 }
-; FIXME : z -> [x, z.pre]
 define i32 @TypeIII(i32 %a, i1 %c) {
 ; CHECK-LABEL: define i32 @TypeIII(
 ; CHECK-SAME: i32 [[A:%.*]], i1 [[C:%.*]]) {
 ; CHECK-NEXT:    br i1 [[C]], label %[[BB1:.*]], label %[[BB2:.*]]
 ; CHECK:       [[BB1]]:
+; CHECK-NEXT:    [[Z:%.*]] = add i32 [[A]], 1
 ; CHECK-NEXT:    br label %[[BB3:.*]]
 ; CHECK:       [[BB2]]:
+; CHECK-NEXT:    [[Z_PRE:%.*]] = add i32 [[A]], 1
 ; CHECK-NEXT:    br label %[[BB3]]
 ; CHECK:       [[BB3]]:
-; CHECK-NEXT:    [[Z:%.*]] = add i32 [[A]], 1
-; CHECK-NEXT:    ret i32 [[Z]]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[Z_PRE]], %[[BB2]] ], [ [[Z]], %[[BB1]] ]
+; CHECK-NEXT:    ret i32 [[PHIOFOPS]]
 ;
   br i1 %c, label %bb1, label %bb2
 bb1:
@@ -191,19 +193,22 @@ bb3:
   ret i32 %c
 }
 
-; FIXME : c1 -> [c, c1.pre]
 define i32 @TypeVII_1(i32 %a, i1 %cond) {
 ; CHECK-LABEL: define i32 @TypeVII_1(
 ; CHECK-SAME: i32 [[A:%.*]], i1 [[COND:%.*]]) {
 ; CHECK-NEXT:    br i1 [[COND]], label %[[BB1:.*]], label %[[BB2:.*]]
 ; CHECK:       [[BB1]]:
-; CHECK-NEXT:    br label %[[BB3:.*]]
-; CHECK:       [[BB2]]:
-; CHECK-NEXT:    br label %[[BB3]]
-; CHECK:       [[BB3]]:
 ; CHECK-NEXT:    [[B1:%.*]] = add i32 [[A]], 1
 ; CHECK-NEXT:    [[C1:%.*]] = add i32 [[B1]], 2
-; CHECK-NEXT:    ret i32 [[C1]]
+; CHECK-NEXT:    br label %[[BB3:.*]]
+; CHECK:       [[BB2]]:
+; CHECK-NEXT:    [[B1_PRE:%.*]] = add i32 [[A]], 1
+; CHECK-NEXT:    [[C1_PRE:%.*]] = add i32 [[B1_PRE]], 2
+; CHECK-NEXT:    br label %[[BB3]]
+; CHECK:       [[BB3]]:
+; CHECK-NEXT:    [[PHIOFOPS1:%.*]] = phi i32 [ [[B1_PRE]], %[[BB2]] ], [ [[B1]], %[[BB1]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ [[C1_PRE]], %[[BB2]] ], [ [[C1]], %[[BB1]] ]
+; CHECK-NEXT:    ret i32 [[PHIOFOPS]]
 ;
   br i1 %cond, label %bb1, label %bb2
 bb1:

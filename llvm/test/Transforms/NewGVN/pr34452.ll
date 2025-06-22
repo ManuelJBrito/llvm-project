@@ -12,10 +12,11 @@ define void @sgrep() local_unnamed_addr #0 {
 ; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr @WHOLELINE, align 4, !tbaa [[TBAA1:![0-9]+]]
 ; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i32 [[TMP0]], 0
 ; CHECK-NEXT:    [[DOT:%.*]] = select i1 [[TOBOOL]], i32 2048, i32 2047
+; CHECK-NEXT:    [[DOTPRE:%.*]] = sext i32 [[DOT]] to i64
 ; CHECK-NEXT:    br label [[WHILE_BODY_US:%.*]]
 ; CHECK:       while.body.us:
-; CHECK-NEXT:    [[START_1230_US:%.*]] = phi i32 [ [[DOT]], [[ENTRY:%.*]] ], [ 0, [[WHILE_BODY_US]] ]
-; CHECK-NEXT:    [[TMP1:%.*]] = sext i32 [[START_1230_US]] to i64
+; CHECK-NEXT:    [[TMP1:%.*]] = phi i64 [ [[DOTPRE]], [[ENTRY:%.*]] ], [ 0, [[WHILE_BODY_US]] ]
+; CHECK-NEXT:    [[START_1230_US:%.*]] = phi i32 [ [[DOT]], [[ENTRY]] ], [ 0, [[WHILE_BODY_US]] ]
 ; CHECK-NEXT:    [[TMP2:%.*]] = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 0, i64 [[TMP1]])
 ; CHECK-NEXT:    br label [[WHILE_BODY_US]]
 ;
