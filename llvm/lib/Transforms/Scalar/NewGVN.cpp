@@ -3367,7 +3367,8 @@ std::pair<unsigned, unsigned> NewGVN::assignDFSNumbers(BasicBlock *B,
     // There's no need to call isInstructionTriviallyDead more than once on
     // an instruction. Therefore, once we know that an instruction is dead
     // we change its DFS number so that it doesn't get value numbered.
-    if (isInstructionTriviallyDead(&I, TLI) && !PREInsertedInstructions.count(&I)) {
+    if (isInstructionTriviallyDead(&I, TLI) &&
+        !PREInsertedInstructions.count(&I) && !getCopyOf(&I)) {
       InstrDFS[&I] = 0;
       LLVM_DEBUG(dbgs() << "Skipping trivially dead instruction " << I << "\n");
       markInstructionForDeletion(&I);
@@ -4413,6 +4414,9 @@ bool NewGVN::eliminateInstructions(Function &F) {
         if (I->getType() == Leader->getType() ||
             canCoerceMustAliasedValueToLoad(Leader, I->getType(), &F))
           replaceInstruction(I, Leader);
+        // Ensure predicateinfo copies get removed.
+        if (auto *Orig = getCopyOf(I))
+          replaceInstruction(I, Orig);
         AnythingReplaced = true;
       }
       CC->swap(MembersLeft);

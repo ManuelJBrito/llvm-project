@@ -12,10 +12,10 @@ define void @test1(i1 %arg) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    br label [[FOR_COND:%.*]]
 ; CHECK:       for.cond:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 0, [[ENTRY:%.*]] ], [ [[Y_0:%.*]], [[FOR_INC6:%.*]] ]
-; CHECK-NEXT:    [[Y_0]] = phi i32 [ 1, [[ENTRY]] ], [ [[INC7:%.*]], [[FOR_INC6]] ]
+; CHECK-NEXT:    [[Y_0:%.*]] = phi i32 [ 1, [[ENTRY:%.*]] ], [ [[INC7:%.*]], [[FOR_INC6:%.*]] ]
 ; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[FOR_INC6]], label [[FOR_BODY_LR_PH:%.*]]
 ; CHECK:       for.body.lr.ph:
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = add nsw i32 [[Y_0]], -1
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp ugt i32 [[PHIOFOPS]], [[Y_0]]
 ; CHECK-NEXT:    br i1 [[CMP]], label [[FOR_END:%.*]], label [[FOR_BODY4_1:%.*]]
 ; CHECK:       for.body.lr.ph.for.end_crit_edge:

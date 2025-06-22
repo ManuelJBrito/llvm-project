@@ -354,10 +354,8 @@ void PredicateInfoBuilder::convertUsesToDFSOrdered(
 }
 
 bool shouldRename(Value *V) {
-  // Only want real values, not constants.  Additionally, operands with one use
-  // are only being used in the comparison, which means they will not be useful
-  // for us to consider for predicateinfo.
-  return (isa<Instruction>(V) || isa<Argument>(V)) && !V->hasOneUse();
+  // Only want real values, not constants.
+  return (isa<Instruction>(V) || isa<Argument>(V));
 }
 
 // Collect relevant operations from Comparison that we may want to insert copies
@@ -701,6 +699,7 @@ void PredicateInfoBuilder::renameUses(SmallVectorImpl<Value *> &OpsToRename) {
       // with no renaming needed, just skip it.
       if (RenameStack.empty())
         continue;
+      materializeStack(Counter, RenameStack, Op);
       // Skip values, only want to rename the uses
       if (VD.Def || PossibleCopy)
         continue;
