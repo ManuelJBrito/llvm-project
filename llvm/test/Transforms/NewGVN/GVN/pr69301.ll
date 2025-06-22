@@ -12,6 +12,7 @@ define i64 @test(i1 %c, ptr %p) {
 ; CHECK:       [[LOOP]]:
 ; CHECK-NEXT:    br i1 true, label %[[LOOP_EXIT_CRIT_EDGE:.*]], label %[[LOOP_CONT:.*]]
 ; CHECK:       [[LOOP_EXIT_CRIT_EDGE]]:
+; CHECK-NEXT:    [[RES_PRE:%.*]] = load i64, ptr [[P]], align 8
 ; CHECK-NEXT:    br label %[[EXIT:.*]]
 ; CHECK:       [[LOOP_CONT]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
@@ -23,7 +24,7 @@ define i64 @test(i1 %c, ptr %p) {
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
-; CHECK-NEXT:    [[LOAD6:%.*]] = load i64, ptr [[P]], align 8
+; CHECK-NEXT:    [[LOAD6:%.*]] = phi i64 [ poison, %[[LOOP_CONT_EXIT_CRIT_EDGE]] ], [ [[RES_PRE]], %[[LOOP_EXIT_CRIT_EDGE]] ]
 ; CHECK-NEXT:    ret i64 [[LOAD6]]
 ;
 entry:

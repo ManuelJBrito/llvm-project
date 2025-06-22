@@ -3170,7 +3170,16 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
     addAdditionalUsers(Dep, I);
   sortPHIOps(PHIOps);
   auto *E = performSymbolicPHIEvaluation(PHIOps, I, PHIBlock);
+  bool SimplAvail = false;
   if (isa<ConstantExpression>(E) || isa<VariableExpression>(E)) {
+    SimplAvail = true;
+    if (auto *VE = dyn_cast<VariableExpression>(E)) {
+      Instruction *VarInst = dyn_cast<Instruction>(VE->getVariableValue());
+      SimplAvail = !VarInst || DT->dominates(VarInst, I);
+    }
+  }
+
+  if (SimplAvail) {
     LLVM_DEBUG(
         dbgs()
         << "Not creating real PHI of ops because it simplified to existing "
@@ -4001,12 +4010,10 @@ void NewGVN::convertClassToDFSOrdered(
     if (auto *PN = RealToTemp.lookup(Def)) {
       auto *PHIE =
           dyn_cast_or_null<PHIExpression>(ValueToExpression.lookup(Def));
-      if (PHIE) {
-        VDDef.Def.setInt(false);
-        VDDef.Def.setPointer(PN);
-        VDDef.LocalNum = 0;
-        DFSOrderedSet.push_back(VDDef);
-      }
+      VDDef.Def.setInt(false);
+      VDDef.Def.setPointer(PN);
+      VDDef.LocalNum = 0;
+      DFSOrderedSet.push_back(VDDef);
     }
 
     unsigned int UseCount = 0;
@@ -4319,7 +4326,7 @@ bool NewGVN::eliminateInstructions(Function &F) {
   auto ReplaceUnreachablePHIArgs = [&](PHINode *PHI, BasicBlock *BB) {
     for (auto &Operand : PHI->incoming_values())
       if (!ReachableEdges.count({PHI->getIncomingBlock(Operand), BB})) {
-        LLVM_DEBUG(dbgs() << "Replacing incoming value of " << PHI
+        LLVM_DEBUG(dbgs() << "Replacing incoming value of " << *PHI
                           << " for block "
                           << getBlockName(PHI->getIncomingBlock(Operand))
                           << " with poison due to it being unreachable\n");

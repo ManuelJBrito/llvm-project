@@ -417,8 +417,8 @@ define void @test9(i1 %arg) {
 ; CHECK-NEXT:    br label [[BB6:%.*]]
 ; CHECK:       bb6:
 ; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ -12, [[BB2]] ], [ -11, [[BB6]] ]
-; CHECK-NEXT:    [[TMP7:%.*]] = phi i32 [ 1, [[BB2]] ], [ [[TMP8:%.*]], [[BB6]] ]
-; CHECK-NEXT:    [[TMP8]] = add nuw nsw i32 [[TMP7]], 1
+; CHECK-NEXT:    [[TMP8:%.*]] = phi i32 [ 2, [[BB2]] ], [ 3, [[BB6]] ]
+; CHECK-NEXT:    [[TMP7:%.*]] = phi i32 [ 1, [[BB2]] ], [ [[TMP8]], [[BB6]] ]
 ; CHECK-NEXT:    [[TMP9:%.*]] = add i32 -14, [[TMP7]]
 ; CHECK-NEXT:    br label [[BB6]]
 ;

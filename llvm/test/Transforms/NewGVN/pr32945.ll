@@ -14,10 +14,11 @@ define void @tinkywinky() {
 ; CHECK-NEXT:    [[PATATINO:%.*]] = load i32, ptr null, align 4
 ; CHECK-NEXT:    [[OR:%.*]] = or i32 [[TMP]], [[PATATINO]]
 ; CHECK-NEXT:    store i32 [[OR]], ptr @d, align 4
+; CHECK-NEXT:    [[TMP1_PRE:%.*]] = load i32, ptr @e, align 4
 ; CHECK-NEXT:    br label [[COND_TRUE1]]
 ; CHECK:       cond.true:
-; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr @e, align 4
-; CHECK-NEXT:    [[TMP2:%.*]] = load i32, ptr @d, align 4
+; CHECK-NEXT:    [[TMP2:%.*]] = phi i32 [ poison, [[COND_TRUE]] ], [ [[OR]], [[LOR_LHS_FALSE]] ]
+; CHECK-NEXT:    [[TMP1:%.*]] = phi i32 [ poison, [[COND_TRUE]] ], [ [[TMP1_PRE]], [[LOR_LHS_FALSE]] ]
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq i32 [[TMP1]], [[TMP2]]
 ; CHECK-NEXT:    br i1 [[CMP]], label [[COND_TRUE6:%.*]], label [[COND_FALSE:%.*]]
 ; CHECK:       cond.true.cond.false_crit_edge:

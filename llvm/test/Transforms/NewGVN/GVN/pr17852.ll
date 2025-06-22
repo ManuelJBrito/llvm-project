@@ -5,18 +5,20 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f3
 define void @fn1(ptr byval(%struct.S0) align 8 %p1) {
 ; CHECK-LABEL: define void @fn1(
 ; CHECK-SAME: ptr byval([[STRUCT_S0:%.*]]) align 8 [[P1:%.*]]) {
-; CHECK-NEXT:    br label %[[BB2:.*]]
-; CHECK:       [[BB2]]:
+; CHECK-NEXT:    br label %[[BB1:.*]]
+; CHECK:       [[BB1]]:
 ; CHECK-NEXT:    br i1 true, label %[[IF_ELSE:.*]], label %[[IF_THEN:.*]]
-; CHECK:       [[BB1:.*:]]
+; CHECK:       [[BB2:.*:]]
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br label %[[BB2]]
+; CHECK-NEXT:    br label %[[BB1]]
 ; CHECK:       [[IF_THEN]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[IF_END40:.*]]
 ; CHECK:       [[IF_ELSE]]:
 ; CHECK-NEXT:    br i1 false, label %[[FOR_COND18:.*]], label %[[IF_THEN6:.*]]
 ; CHECK:       [[IF_THEN6]]:
+; CHECK-NEXT:    [[F5:%.*]] = getelementptr inbounds [[STRUCT_S0]], ptr [[P1]], i64 0, i32 3
+; CHECK-NEXT:    [[BF_LOAD38_PRE:%.*]] = load i16, ptr [[F5]], align 8
 ; CHECK-NEXT:    br label %[[IF_END36:.*]]
 ; CHECK:       [[FOR_COND18]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
@@ -28,6 +30,7 @@ define void @fn1(ptr byval(%struct.S0) align 8 %p1) {
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[IF_END36]]
 ; CHECK:       [[IF_END36]]:
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i16 [ [[BF_LOAD38_PRE]], %[[IF_THEN6]] ], [ poison, %[[FOR_COND18_IF_END36_CRIT_EDGE]] ], [ poison, %[[IF_END]] ]
 ; CHECK-NEXT:    br label %[[IF_END40]]
 ; CHECK:       [[IF_END40]]:
 ; CHECK-NEXT:    [[F6:%.*]] = getelementptr inbounds [[STRUCT_S0]], ptr [[P1]], i64 0, i32 4

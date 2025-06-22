@@ -93,8 +93,12 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK:       .lr.ph..lr.ph_crit_edge:
 ; CHECK-NEXT:    br label [[DOTLR_PH]]
 ; CHECK:       ._crit_edge.loopexit:
+; CHECK-NEXT:    [[DOTPRE37:%.*]] = add i64 [[TMP31]], 4294967295
+; CHECK-NEXT:    [[DOTPRE38:%.*]] = trunc i64 [[DOTPRE37]] to i32
 ; CHECK-NEXT:    br label [[DOT_CRIT_EDGE1]]
 ; CHECK:       ._crit_edge:
+; CHECK-NEXT:    [[PHIOFOPS49:%.*]] = phi i64 [ [[DOTPRE37]], [[DOT_CRIT_EDGE_LOOPEXIT]] ], [ poison, [[DOT_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[PHIOFOPS48:%.*]] = phi i32 [ [[DOTPRE38]], [[DOT_CRIT_EDGE_LOOPEXIT]] ], [ poison, [[DOT_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[DOT048_LCSSA:%.*]] = phi i32 [ poison, [[DOT_CRIT_EDGE]] ], [ [[TMP30]], [[DOT_CRIT_EDGE_LOOPEXIT]] ]
 ; CHECK-NEXT:    [[DOT046_LCSSA:%.*]] = phi i64 [ poison, [[DOT_CRIT_EDGE]] ], [ [[TMP31]], [[DOT_CRIT_EDGE_LOOPEXIT]] ]
 ; CHECK-NEXT:    [[TMP33:%.*]] = add nsw i32 [[DOT048_LCSSA]], [[DOT04961]]
@@ -122,10 +126,8 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK-NEXT:    [[TMP50:%.*]] = phi i64 [ [[DOTPRE22]], [[TMP39]] ], [ [[TMP29]], [[DOT_CRIT_EDGE6]] ], [ [[DOTPRE21]], [[TMP38]] ]
 ; CHECK-NEXT:    [[DOT152:%.*]] = phi i32 [ [[DOT05160]], [[TMP39]] ], [ [[TMP36]], [[TMP38]] ], [ [[TMP36]], [[DOT_CRIT_EDGE6]] ]
 ; CHECK-NEXT:    [[DOT150:%.*]] = phi i32 [ [[DOT04961]], [[TMP39]] ], [ 0, [[TMP38]] ], [ 0, [[DOT_CRIT_EDGE6]] ]
-; CHECK-NEXT:    [[TMP40:%.*]] = add i64 [[DOT046_LCSSA]], 4294967295
-; CHECK-NEXT:    [[TMP41:%.*]] = trunc i64 [[TMP40]] to i32
 ; CHECK-NEXT:    [[TMP42:%.*]] = getelementptr inbounds [26 x %struct.Letter], ptr @alPhrase, i64 0, i64 [[INDVARS_IV]], i32 2
-; CHECK-NEXT:    store i32 [[TMP41]], ptr [[TMP42]], align 8, !tbaa [[TBAA12:![0-9]+]]
+; CHECK-NEXT:    store i32 [[PHIOFOPS48]], ptr [[TMP42]], align 8, !tbaa [[TBAA12:![0-9]+]]
 ; CHECK-NEXT:    [[DOT046_:%.*]] = shl i64 [[DOT046_LCSSA]], [[TMP43]]
 ; CHECK-NEXT:    [[TMP44:%.*]] = zext i32 [[DOT152]] to i64
 ; CHECK-NEXT:    [[TMP45:%.*]] = getelementptr inbounds [2 x i64], ptr @aqMainSign, i64 0, i64 [[TMP44]]
@@ -142,7 +144,7 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK-NEXT:    store i32 [[DOT152]], ptr [[TMP55]], align 4, !tbaa [[TBAA16:![0-9]+]]
 ; CHECK-NEXT:    [[TMP56:%.*]] = add nsw i32 [[DOT150]], [[DOT048_LCSSA]]
 ; CHECK-NEXT:    br label [[TMP59]]
-; CHECK:       53:
+; CHECK:       51:
 ; CHECK-NEXT:    [[DOT253]] = phi i32 [ [[DOT05160]], [[TMP27]] ], [ [[DOT152]], [[TMP60]] ]
 ; CHECK-NEXT:    [[DOT2]] = phi i32 [ [[DOT04961]], [[TMP27]] ], [ [[TMP56]], [[TMP60]] ]
 ; CHECK-NEXT:    [[INDVARS_IV_NEXT]] = add nuw nsw i64 [[INDVARS_IV]], 1
@@ -150,7 +152,7 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK-NEXT:    br i1 [[EXITCOND]], label [[TMP57]], label [[TMP61:%.*]]
 ; CHECK:       ..preheader_crit_edge:
 ; CHECK-NEXT:    br label [[DOTPREHEADER]]
-; CHECK:       54:
+; CHECK:       52:
 ; CHECK-NEXT:    ret void
 ;
   tail call void @llvm.memset.p0.i64(ptr align 16 @alPhrase, i8 0, i64 416, i1 false)

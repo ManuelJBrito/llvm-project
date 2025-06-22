@@ -13,11 +13,12 @@ define void @patatino() {
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label [[FOR_COND2:%.*]]
 ; CHECK:       for.cond1:
-; CHECK-NEXT:    [[TMP1:%.*]] = load i16, ptr @b, align 2
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i16 [ poison, [[FOR_COND1]] ], [ [[INC:%.*]], [[FOR_INC1]] ]
+; CHECK-NEXT:    store i16 [[PHIOFOPS]], ptr @b, align 2
 ; CHECK-NEXT:    br label [[FOR_INC1]]
 ; CHECK:       for.inc:
 ; CHECK-NEXT:    [[TMP0:%.*]] = load i16, ptr @b, align 2
-; CHECK-NEXT:    [[INC:%.*]] = add i16 [[TMP0]], 1
+; CHECK-NEXT:    [[INC]] = add i16 [[TMP0]], 1
 ; CHECK-NEXT:    store i16 [[INC]], ptr @b, align 2
 ; CHECK-NEXT:    br label [[FOR_COND2]]
 ;
