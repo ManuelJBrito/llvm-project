@@ -5,6 +5,7 @@
 declare void @capture(ptr)
 declare void @some_call()
 
+; MemorySSA does not understand this.
 define i32 @test_call_before_capture(ptr %p) {
 ; CHECK-LABEL: define i32 @test_call_before_capture(
 ; CHECK-SAME: ptr [[P:%.*]]) {
