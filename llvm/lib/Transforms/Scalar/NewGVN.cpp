@@ -1351,16 +1351,19 @@ NewGVN::ExprResult NewGVN::createPointerExpression(Instruction *I) const {
     if (isa<VariableExpression>(Res.Expr) || isa<ConstantExpression>(Res.Expr))
       return Res;
 
-    // Attempt to build a pointer expression from an existing one.
-    // TODO: handle more cases.
-    const Expression *Expr = ValueToExpression.lookup(GEPI->getPointerOperand());
-    if (auto *PtrExpr = dyn_cast_or_null<PointerExpression>(Expr)) {
-      unsigned BitWidth = DL.getIndexTypeSizeInBits(GEPI->getType());
-      llvm::APInt Offset(BitWidth, 0);
-      if (GEPI->accumulateConstantOffset(DL, Offset)) {
-        return new (ExpressionAllocator)
-            PointerExpression(PtrExpr, Offset.getSExtValue());
+    Value *BasePtr = lookupOperandLeader(GEPI->getPointerOperand());
+    unsigned BitWidth = DL.getIndexTypeSizeInBits(GEPI->getType());
+    SmallMapVector<Value *, APInt, 4> VariableOffsets;
+    APInt Offset(BitWidth, 0);
+    if (GEPI->collectOffset(DL, BitWidth, VariableOffsets, Offset)) {
+      PointerExpression *PtrE =
+          new (ExpressionAllocator) PointerExpression(BasePtr);
+      LLVMContext &Context = GEPI->getContext();
+      for (const auto &[V, Scale] : VariableOffsets) {
+        PtrE->addVariableOffset(V, ConstantInt::get(Context, Scale));
       }
+      PtrE->setConstantOffset(ConstantInt::get(Context, Offset));
+      return PtrE;
     }
     // Default to the expression from createExpression.
     return Res.Expr;
@@ -4008,8 +4011,6 @@ void NewGVN::convertClassToDFSOrdered(
     DFSOrderedSet.push_back(VDDef);
     // If there is a phi node equivalent, add it
     if (auto *PN = RealToTemp.lookup(Def)) {
-      auto *PHIE =
-          dyn_cast_or_null<PHIExpression>(ValueToExpression.lookup(Def));
       VDDef.Def.setInt(false);
       VDDef.Def.setPointer(PN);
       VDDef.LocalNum = 0;

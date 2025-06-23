@@ -549,19 +549,11 @@ class PointerExpression : public Expression {
 private:
   Value *BasePtr = nullptr;
   std::pair<bool, unsigned> ObjectSize = {false, 0};
-  int64_t Offset = 0;
+  Value *ConstantOffset = nullptr;
+  SmallVector<std::pair<Value *, Value *>> VariableOffsets;
 
 public:
-  PointerExpression(Value *BasePtr) : PointerExpression(BasePtr, {false, 0}) {}
-  PointerExpression(Value *BasePtr, std::pair<bool, unsigned> ObjectSize)
-      : PointerExpression(BasePtr, ObjectSize, 0) {}
-  PointerExpression(Value *BasePtr, std::pair<bool, unsigned> ObjectSize,
-                    int64_t Offset)
-      : Expression(ET_Pointer, 0), BasePtr(BasePtr), ObjectSize(ObjectSize),
-        Offset(Offset) {}
-  PointerExpression(const PointerExpression *BaseExpr, int64_t Offset)
-      : Expression(ET_Pointer, 0), BasePtr(BaseExpr->BasePtr), ObjectSize(BaseExpr->ObjectSize),
-        Offset(BaseExpr->Offset + Offset) {}
+  PointerExpression(Value *BasePtr) : Expression(ET_Pointer, 0), BasePtr(BasePtr) {}
   PointerExpression() = delete;
   PointerExpression(const PointerExpression &) = delete;
   PointerExpression &operator=(const PointerExpression &) = delete;
@@ -575,32 +567,63 @@ public:
   void setObjectSize(unsigned Size) {
     ObjectSize = {true, Size};
   }
+  void setConstantOffset(Value *Offset) {
+    ConstantOffset = Offset;
+  }
+  void addVariableOffset(Value *Var, Value *Scale) {
+    VariableOffsets.emplace_back(Var, Scale);
+  }
+
+  bool equalsVariableOffsets(
+      const SmallVector<std::pair<Value *, Value *>> &Other) const {
+    if (VariableOffsets.size() != Other.size())
+      return false;
+
+    for (size_t i = 0; i < VariableOffsets.size(); ++i) {
+      if (VariableOffsets[i].first != Other[i].first ||
+          VariableOffsets[i].second != Other[i].second)
+        return false;
+    }
+
+    return true;
+  }
 
   bool equals(const Expression &Other) const override {
     const auto &OE = cast<PointerExpression>(Other);
     return getBasePtr() == OE.getBasePtr() && ObjectSize == OE.ObjectSize &&
-           Offset == OE.Offset;
+           ConstantOffset == OE.ConstantOffset &&
+           equalsVariableOffsets(OE.VariableOffsets);
   }
 
-   hash_code getHashValue() const override {
-     return hash_combine(this->Expression::getHashValue(), BasePtr, ObjectSize,
-                         Offset);
-   }
+  hash_code getHashValue() const override {
+    return hash_combine(
+        this->Expression::getHashValue(), BasePtr, ConstantOffset, ObjectSize,
+        hash_combine_range(VariableOffsets.begin(), VariableOffsets.end()));
+  }
 
-   void printInternal(raw_ostream &OS, bool PrintEType) const override {
-    if (PrintEType)
-      OS << "ExpressionTypePointer, ";
-    this->Expression::printInternal(OS, false);
-    OS << "base ptr = ";
-    OS << *BasePtr;
-    if (Offset)
-      OS << ", offset = + "<< Offset;
-    OS << ", object size = ";
-    if (ObjectSize.first)
-      OS << ObjectSize.second;
-    else 
-      OS << "unknown ";
-   }
+void printInternal(raw_ostream &OS, bool PrintEType) const override {
+  if (PrintEType)
+    OS << "ExpressionTypePointer, ";
+
+  this->Expression::printInternal(OS, false);
+  OS << "expr = %" << BasePtr->getName();
+  for (const auto &Pair : VariableOffsets) {
+    OS << " + ";
+    if (Pair.second)
+      OS << *Pair.second << " x ";
+    OS << *Pair.first;
+  }
+  if (ConstantOffset) {
+    OS << " + ";
+    OS << *ConstantOffset;
+  }
+  // Print object size info
+  OS << ", object size = ";
+  if (ObjectSize.first)
+    OS << ObjectSize.second;
+  else 
+    OS << "unknown";
+}
 };
 
 class DeadExpression final : public Expression {
