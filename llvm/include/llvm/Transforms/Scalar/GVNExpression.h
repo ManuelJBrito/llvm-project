@@ -549,7 +549,7 @@ class PointerExpression : public Expression {
 private:
   Value *BasePtr = nullptr;
   std::pair<bool, unsigned> ObjectSize = {false, 0};
-  Value *ConstantOffset = nullptr;
+  int64_t ConstantOffset = 0;
   SmallVector<std::pair<Value *, Value *>> VariableOffsets;
 
 public:
@@ -567,11 +567,17 @@ public:
   void setObjectSize(unsigned Size) {
     ObjectSize = {true, Size};
   }
-  void setConstantOffset(Value *Offset) {
+  void setConstantOffset(int64_t Offset) {
     ConstantOffset = Offset;
   }
   void addVariableOffset(Value *Var, Value *Scale) {
     VariableOffsets.emplace_back(Var, Scale);
+  }
+
+  int64_t getOnlyOffset() const {
+    if (VariableOffsets.empty())
+      return ConstantOffset;
+    return -1;
   }
 
   bool equalsVariableOffsets(
@@ -615,7 +621,7 @@ void printInternal(raw_ostream &OS, bool PrintEType) const override {
   }
   if (ConstantOffset) {
     OS << " + ";
-    OS << *ConstantOffset;
+    OS << ConstantOffset;
   }
   // Print object size info
   OS << ", object size = ";

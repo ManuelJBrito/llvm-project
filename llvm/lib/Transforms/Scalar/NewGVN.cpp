@@ -119,6 +119,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <stack>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -599,6 +600,7 @@ class NewGVN {
   DenseSet<Instruction *> AllTempInstructions;
   DenseMap<Instruction *, Instruction *> InstrToPREInsertion;
   DenseSet<Instruction *> PREInsertedInstructions;
+  DenseSet<Instruction *> CoercionInstructions;
   DenseMap<std::pair<Value *, Type *>, Value *> InstrToCoercions;
 
   // This is the set of instructions to revisit on a reachability change.  At
@@ -845,11 +847,12 @@ private:
   // Symbolic evaluation.
   ExprResult checkExprResults(Expression *, Instruction *, Value *) const;
   ExprResult performSymbolicEvaluation(Instruction *,
-                                       SmallPtrSetImpl<Value *> &) const;
+                                       SmallPtrSetImpl<Value *> &);
+  const Expression *valueNumberInsertedInsts(Instruction *I, Instruction *OrigI);
   const Expression *performSymbolicLoadCoercion(Type *, Value *, LoadInst *,
                                                 Instruction *,
-                                                MemoryAccess *) const;
-  const Expression *performSymbolicLoadEvaluation(Instruction *) const;
+                                                MemoryAccess *);
+  const Expression *performSymbolicLoadEvaluation(Instruction *);
   const Expression *performSymbolicStoreEvaluation(Instruction *) const;
   ExprResult performSymbolicCallEvaluation(Instruction *) const;
   void sortPHIOps(MutableArrayRef<ValPair> Ops) const;
@@ -1362,7 +1365,7 @@ NewGVN::ExprResult NewGVN::createPointerExpression(Instruction *I) const {
       for (const auto &[V, Scale] : VariableOffsets) {
         PtrE->addVariableOffset(V, ConstantInt::get(Context, Scale));
       }
-      PtrE->setConstantOffset(ConstantInt::get(Context, Offset));
+      PtrE->setConstantOffset(Offset.getSExtValue());
       return PtrE;
     }
     // Default to the expression from createExpression.
@@ -1575,12 +1578,47 @@ const Expression *NewGVN::performSymbolicStoreEvaluation(Instruction *I) const {
   return createStoreExpression(SI, StoreAccess);
 }
 
+// Value number instructions inserted for coerce value.
+// We use a stack to ensure they get value numbered in the correct order.
+const Expression *NewGVN::valueNumberInsertedInsts(Instruction *I, Instruction *OrigI) {
+  std::stack<Instruction *> VnStack;
+  Instruction *Curr = I;
+  while (Curr && !ValueToClass.lookup(Curr)) {
+    VnStack.push(Curr);
+    if (!Curr->getNumOperands())
+      break;
+    for (auto &U : Curr->operands()) {
+      Value *Op = U.get();
+      if ((Curr = dyn_cast<Instruction>(Op)))
+        break;
+      else if (isa<Argument>(Op))
+        break;
+    }
+  }
+  SmallPtrSet<Value *, 2> Visited;
+  const Expression *E = nullptr;
+  while(!VnStack.empty()) {
+    Curr = VnStack.top();
+    VnStack.pop();
+    auto Res = performSymbolicEvaluation(Curr, Visited);
+    E = Res.Expr;
+    addAdditionalUsers(Res, OrigI);
+    auto *FoundVal = findPHIOfOpsLeader(E, Curr, I->getParent());
+    if (!FoundVal) {
+      performCongruenceFinding(Curr, E, true);
+      CoercionInstructions.insert(Curr);
+    } else {
+      patchAndReplaceAllUsesWith(Curr, FoundVal);
+    }
+  }
+  return E;
+}
 // See if we can extract the value of a loaded pointer from a load, a store, or
 // a memory instruction.
 const Expression *
 NewGVN::performSymbolicLoadCoercion(Type *LoadType, Value *LoadPtr,
                                     LoadInst *LI, Instruction *DepInst,
-                                    MemoryAccess *DefiningAccess) const {
+                                    MemoryAccess *DefiningAccess) {
   assert((!LI || LI->isSimple()) && "Not a simple load");
   if (auto *DepSI = dyn_cast<StoreInst>(DepInst)) {
     // Can't forward from non-atomic to atomic without violating memory model.
@@ -1591,13 +1629,14 @@ NewGVN::performSymbolicLoadCoercion(Type *LoadType, Value *LoadPtr,
       return nullptr;
     int Offset = analyzeLoadFromClobberingStore(LoadType, LoadPtr, DepSI, DL);
     if (Offset >= 0) {
-      if (auto *C = dyn_cast<Constant>(
-              lookupOperandLeader(DepSI->getValueOperand()))) {
-        if (Constant *Res = getConstantValueForLoad(C, Offset, LoadType, DL)) {
-          LLVM_DEBUG(dbgs() << "Coercing load from store " << *DepSI
-                            << " to constant " << *Res << "\n");
-          return createConstantExpression(Res);
-        }
+      Value *SrcVal = DepSI->getValueOperand();
+      if (Value *CoercedVal =
+              getValueForLoad(SrcVal, Offset, LoadType, LI, &F)) {
+        LLVM_DEBUG(dbgs() << "Coercing load from store " << *DepSI << " to "
+                          << *CoercedVal << "\n");
+        if (auto *CoercedValInst = dyn_cast<Instruction>(CoercedVal))
+          return valueNumberInsertedInsts(CoercedValInst, LI);
+        return createVariableOrConstant(CoercedVal);
       }
     }
   } else if (auto *DepLI = dyn_cast<LoadInst>(DepInst)) {
@@ -1606,23 +1645,26 @@ NewGVN::performSymbolicLoadCoercion(Type *LoadType, Value *LoadPtr,
       return nullptr;
     int Offset = analyzeLoadFromClobberingLoad(LoadType, LoadPtr, DepLI, DL);
     if (Offset >= 0) {
-      // We can coerce a constant load into a load.
-      if (auto *C = dyn_cast<Constant>(lookupOperandLeader(DepLI)))
-        if (auto *PossibleConstant =
-                getConstantValueForLoad(C, Offset, LoadType, DL)) {
-          LLVM_DEBUG(dbgs() << "Coercing load from load " << *LI
-                            << " to constant " << *PossibleConstant << "\n");
-          return createConstantExpression(PossibleConstant);
-        }
+      Value *SrcVal = lookupOperandLeader(DepLI);
+      if (Value *CoercedVal =
+              getValueForLoad(SrcVal, Offset, LoadType, LI, &F)) {
+        LLVM_DEBUG(dbgs() << "Coercing load from load " << *DepLI << " to "
+                          << *CoercedVal << "\n");
+        if (auto *CoercedValInst = dyn_cast<Instruction>(CoercedVal))
+          return valueNumberInsertedInsts(CoercedValInst, LI);
+        return createVariableOrConstant(CoercedVal);
+      }
     }
   } else if (auto *DepMI = dyn_cast<MemIntrinsic>(DepInst)) {
     int Offset = analyzeLoadFromClobberingMemInst(LoadType, LoadPtr, DepMI, DL);
     if (Offset >= 0) {
-      if (auto *PossibleConstant =
-              getConstantMemInstValueForLoad(DepMI, Offset, LoadType, DL)) {
-        LLVM_DEBUG(dbgs() << "Coercing load from meminst " << *DepMI
-                          << " to constant " << *PossibleConstant << "\n");
-        return createConstantExpression(PossibleConstant);
+      if (Value *CoercedVal =
+              getMemInstValueForLoad(DepMI, Offset, LoadType, LI, DL)) {
+        LLVM_DEBUG(dbgs() << "Coercing load from meminst " << *DepMI << " to "
+                          << *CoercedVal << "\n");
+        if (auto *CoercedValInst = dyn_cast<Instruction>(CoercedVal))
+          return valueNumberInsertedInsts(CoercedValInst, LI);
+        return createVariableOrConstant(CoercedVal);
       }
     }
   }
@@ -1655,7 +1697,7 @@ NewGVN::performSymbolicLoadCoercion(Type *LoadType, Value *LoadPtr,
   return nullptr;
 }
 
-const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) const {
+const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) {
   auto *LI = cast<LoadInst>(I);
 
   // We can eliminate in favor of non-simple loads, but we won't be able to
@@ -1694,6 +1736,22 @@ const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) const {
     if (PtrExpr && isa<AllocaInst>(PtrExpr->getBasePtr()))
       return createConstantExpression(UndefValue::get(LI->getType()));
   }
+
+  LoadInst *DomLoad = nullptr;
+  // Try to forward from loads that have the same defining access.
+  for (auto *User : DefiningAccess->users()) {
+    if (auto *MU = dyn_cast<MemoryUse>(User)) {
+      if (auto *ULI = dyn_cast<LoadInst>(MU->getMemoryInst()))
+        if (DT->dominates(ULI, LI) && (!DomLoad || getRank(ULI) < getRank(LI))) {
+          DomLoad = ULI;
+        }
+    }
+  }
+
+  if (DomLoad)
+    if (const auto *CoercionResult = performSymbolicLoadCoercion(
+            LI->getType(), LoadAddressLeader, LI, DomLoad, DefiningAccess))
+      return CoercionResult;
 
   const auto *LE = createLoadExpression(LI->getType(), LoadAddressLeader, LI,
                                         DefiningAccess);
@@ -2129,7 +2187,7 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
 // Substitute and symbolize the instruction before value numbering.
 NewGVN::ExprResult
 NewGVN::performSymbolicEvaluation(Instruction *I,
-                                  SmallPtrSetImpl<Value *> &Visited) const {
+                                  SmallPtrSetImpl<Value *> &Visited) {
 
   const Expression *E = nullptr;
   // TODO: memory intrinsics.
@@ -3380,7 +3438,8 @@ std::pair<unsigned, unsigned> NewGVN::assignDFSNumbers(BasicBlock *B,
     // an instruction. Therefore, once we know that an instruction is dead
     // we change its DFS number so that it doesn't get value numbered.
     if (isInstructionTriviallyDead(&I, TLI) &&
-        !PREInsertedInstructions.count(&I) && !getCopyOf(&I)) {
+        !PREInsertedInstructions.count(&I) && !getCopyOf(&I) &&
+        !CoercionInstructions.count(&I)) {
       InstrDFS[&I] = 0;
       LLVM_DEBUG(dbgs() << "Skipping trivially dead instruction " << I << "\n");
       markInstructionForDeletion(&I);

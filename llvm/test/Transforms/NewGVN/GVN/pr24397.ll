@@ -7,12 +7,12 @@ define i64 @foo(ptr %arrayidx) {
 ; CHECK-SAME: ptr [[ARRAYIDX:%.*]]) {
 ; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    [[P:%.*]] = load ptr, ptr [[ARRAYIDX]], align 8
-; CHECK-NEXT:    [[TMP0:%.*]] = ptrtoint ptr [[P]] to i64
 ; CHECK-NEXT:    br label %[[BB2:.*]]
 ; CHECK:       [[ENTRY2:.*:]]
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br label %[[BB2]]
 ; CHECK:       [[BB2]]:
+; CHECK-NEXT:    [[TMP0:%.*]] = ptrtoint ptr [[P]] to i64
 ; CHECK-NEXT:    ret i64 [[TMP0]]
 ;
 entry:

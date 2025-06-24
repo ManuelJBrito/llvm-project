@@ -133,9 +133,8 @@ define void @dfg_lex(i1 %arg, i32 %arg2) {
 ; CHECK-NEXT:    br label [[WHILE_COND_16]]
 ; CHECK:       while.end:
 ; CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, ptr [[V2]], i32 undef
-; CHECK-NEXT:    [[TMP0]] = ptrtoint ptr [[ADD_PTR]] to i32
 ; CHECK-NEXT:    store ptr [[ADD_PTR]], ptr @dfg_text, align 4
-; CHECK-NEXT:    [[SUB_PTR_RHS_CAST25:%.*]] = ptrtoint ptr [[ADD_PTR]] to i32
+; CHECK-NEXT:    [[TMP0]] = ptrtoint ptr [[ADD_PTR]] to i32
 ; CHECK-NEXT:    switch i32 [[ARG2]], label [[SW_DEFAULT:%.*]] [
 ; CHECK-NEXT:      i32 65, label [[WHILE_END_WHILE_BODYTHREAD_PRE_SPLIT_CRIT_EDGE:%.*]]
 ; CHECK-NEXT:      i32 3, label [[RETURN:%.*]]

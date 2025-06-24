@@ -25,6 +25,7 @@ define float @rle(ptr %p) {
 ; CHECK-SAME: ptr [[P:%.*]]) {
 ; CHECK-NEXT:    [[R:%.*]] = load float, ptr [[P]], align 4
 ; CHECK-NEXT:    call void @llvm.sideeffect()
+; CHECK-NEXT:    [[TMP1:%.*]] = bitcast float [[R]] to i32
 ; CHECK-NEXT:    [[T:%.*]] = fadd float [[R]], [[R]]
 ; CHECK-NEXT:    ret float [[T]]
 ;
