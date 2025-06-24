@@ -8,10 +8,10 @@ define double @phi_translation_hoists_add(ptr %a, i64 %idx) {
 ; ADD-TRANS-ON-SAME: ptr [[A:%.*]], i64 [[IDX:%.*]]) {
 ; ADD-TRANS-ON-NEXT:  [[ENTRY:.*:]]
 ; ADD-TRANS-ON-NEXT:    [[ADD_PHI_TRANS_INSERT:%.*]] = add nuw nsw i64 [[IDX]], 1
-; ADD-TRANS-ON-NEXT:    br label %[[FOR_BODY:.*]]
-; ADD-TRANS-ON:       [[FOR_BODY]]:
 ; ADD-TRANS-ON-NEXT:    [[GEP_PHI_TRANS_INSERT:%.*]] = getelementptr inbounds double, ptr [[A]], i64 [[ADD_PHI_TRANS_INSERT]]
 ; ADD-TRANS-ON-NEXT:    [[LOAD_PRE:%.*]] = load double, ptr [[GEP_PHI_TRANS_INSERT]], align 8
+; ADD-TRANS-ON-NEXT:    br label %[[FOR_BODY:.*]]
+; ADD-TRANS-ON:       [[FOR_BODY]]:
 ; ADD-TRANS-ON-NEXT:    [[CMP:%.*]] = fcmp ole double [[LOAD_PRE]], 1.000000e+00
 ; ADD-TRANS-ON-NEXT:    br i1 [[CMP]], label %[[EXIT:.*]], label %[[FOR_BODY_FOR_BODY_CRIT_EDGE:.*]]
 ; ADD-TRANS-ON:       [[FOR_BODY_FOR_BODY_CRIT_EDGE]]:

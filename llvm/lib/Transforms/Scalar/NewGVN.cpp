@@ -838,7 +838,8 @@ private:
   void removePhiOfOps(Instruction *I, PHINode *PHITemp);
   void removePREInst(Instruction *I, Instruction *PREInst);
   bool okayForPRE(Instruction *I, BasicBlock *Pred, BasicBlock *PHIBlock);
-  bool safeForPRE(Instruction *PREInst, BasicBlock *InsertBB);
+  bool safeForPRE(Instruction *PREInst, BasicBlock *InsertBB,
+                  BasicBlock *PHIBlock, unsigned PredNum);
 
   // Value number an Instruction or MemoryPhi.
   void valueNumberMemoryPhi(MemoryPhi *);
@@ -1742,7 +1743,8 @@ const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) {
   for (auto *User : DefiningAccess->users()) {
     if (auto *MU = dyn_cast<MemoryUse>(User)) {
       if (auto *ULI = dyn_cast<LoadInst>(MU->getMemoryInst()))
-        if (DT->dominates(ULI, LI) && (!DomLoad || getRank(ULI) < getRank(LI))) {
+        if (!PREInsertedInstructions.count(ULI) && DT->dominates(ULI, LI) &&
+            (!DomLoad || getRank(ULI) < getRank(LI))) {
           DomLoad = ULI;
         }
     }
@@ -2848,6 +2850,17 @@ void NewGVN::removePREInst(Instruction *I, Instruction *PREInst) {
   ICF->removeInstruction(PREInst);
   MSSAU->removeMemoryAccess(PREInst);
   InstructionsToErase.insert(PREInst);
+  PREInst->setName("dead.pre");
+  if (auto *LI = dyn_cast<LoadInst>(PREInst)) {
+    auto *GEPI = dyn_cast<GetElementPtrInst>(LI->getPointerOperand());
+    if (GEPI && PREInsertedInstructions.count(GEPI)) {
+      performCongruenceFinding(GEPI, createDeadExpression(), true);
+      PREInsertedInstructions.erase(GEPI);
+      InstructionsToErase.insert(GEPI);
+      GEPI->setName("dead.gep.insert");
+      errs() << "dead gep\n";
+    }
+  }
 }
 
 // Add PHI Op in BB as a PHI of operations version of ExistingValue.
@@ -3045,17 +3058,42 @@ bool NewGVN::okayForPRE(Instruction *CurInst, BasicBlock *PredBB, BasicBlock *PH
   return true;
 }
 
-bool NewGVN::safeForPRE(Instruction *PREInst, BasicBlock *InsertBB) {
+bool NewGVN::safeForPRE(Instruction *PREInst, BasicBlock *InsertBB,
+                        BasicBlock *PHIBlock, unsigned PredNum) {
   // The instruction can only be materialized if all operands are available.
   // TODO: materialize GEP operands if it eliminates a load.
   // TODO: value coercion
   for (Use &U : PREInst->operands()) {
     Value *Op = U.get();
+    if (isa<PHINode>(Op)) {
+      Op = Op->DoPHITranslation(PHIBlock, InsertBB);
+    } else if (auto *ValuePHI = RealToTemp.lookup(Op)) {
+      if (getBlockForValue(ValuePHI) == PHIBlock)
+        Op = ValuePHI->getIncomingValueForBlock(InsertBB);
+    } else if (auto *PHIE = dyn_cast_or_null<PHIExpression>(
+                   ValueToExpression.lookup(Op))) {
+      if (PHIE->getBB() == PHIBlock)
+        Op = PHIE->getOperand(PredNum);
+    } else {
+      Op = lookupOperandLeader(Op);
+    }
     if (Value *PREOpLeader = findPREOpLeader(Op, InsertBB)) {
       // If a leader is found, we can replace the operand.
       U.set(PREOpLeader);
+    } else if (auto *GEPI = dyn_cast<GetElementPtrInst>(Op)) {
+      // Materialize GEP if it eliminates a load.
+      Instruction *ValueOp = GEPI->clone();
+      ValueOp->insertBefore(PREInst);
+      if (safeForPRE(ValueOp, InsertBB, PHIBlock, PredNum)) {
+        valueNumberInsertedInsts(ValueOp, PREInst);
+        PREInsertedInstructions.insert(ValueOp);
+        ValueOp->setName(GEPI->getName() + ".phi.trans.insert");
+        U.set(ValueOp);
+      } else {
+        ValueOp->eraseFromParent();
+        return false;
+      }
     } else {
-      // If any operand has no leader, it's not safe.
       return false;
     }
   }
@@ -3134,7 +3172,9 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
   llvm::sort(Preds, [&](BasicBlock *A, BasicBlock *B) {
     return BlockInstRange.lookup(A).first < BlockInstRange.lookup(B).first;
   });
+  unsigned PredNum = -1;
   for (auto *PredBB : Preds) {
+    ++PredNum;
     Value *FoundVal = nullptr;
     SmallPtrSet<Value *, 4> CurrentDeps;
     // We could just skip unreachable edges entirely but it's tricky to do
@@ -3166,6 +3206,10 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
         } else if (auto *ValuePHI = RealToTemp.lookup(Op)) {
           if (getBlockForValue(ValuePHI) == PHIBlock)
             Op = ValuePHI->getIncomingValueForBlock(PredBB);
+        } else if (auto *PHIE = dyn_cast_or_null<PHIExpression>(
+                       ValueToExpression.lookup(Op))) {
+          if (PHIE->getBB() == PHIBlock)
+            Op = PHIE->getOperand(PredNum);
         }
         // If we phi-translated the op, it must be safe.
         SafeForPHIOfOps =
@@ -3186,7 +3230,8 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
                                                       MemAccess, I, PredBB);
       isBackedgeEval = false;
       if (!FoundVal) {
-        if (!okayForPRE(I, PredBB, PHIBlock) || !safeForPRE(ValueOp, PredBB)) {
+        if (!okayForPRE(I, PredBB, PHIBlock) ||
+            !safeForPRE(ValueOp, PredBB, PHIBlock, PredNum)) {
           LLVM_DEBUG(
               dbgs()
               << "Could not find leader, and cannot insert instruction\n");

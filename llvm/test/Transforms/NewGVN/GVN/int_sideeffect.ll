@@ -48,7 +48,6 @@ define float @licm(i64 %n, ptr nocapture readonly %p) #0 {
 ; CHECK-NEXT:    [[I:%.*]] = phi i64 [ 0, %[[BB0]] ], [ [[T5:%.*]], %[[LOOP_LOOP_CRIT_EDGE:.*]] ]
 ; CHECK-NEXT:    [[SUM:%.*]] = phi float [ 0.000000e+00, %[[BB0]] ], [ [[T4:%.*]], %[[LOOP_LOOP_CRIT_EDGE]] ]
 ; CHECK-NEXT:    call void @llvm.sideeffect()
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast float [[T3_PRE]] to i32
 ; CHECK-NEXT:    [[T4]] = fadd float [[SUM]], [[T3_PRE]]
 ; CHECK-NEXT:    [[T5]] = add i64 [[I]], 1
 ; CHECK-NEXT:    [[T6:%.*]] = icmp ult i64 [[T5]], [[N]]

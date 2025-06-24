@@ -33,8 +33,8 @@ define i32 @test(i32 %i) nounwind {
 ; CHECK:       [[BB1_BB3_CRIT_EDGE]]:
 ; CHECK-NEXT:    br label %[[BB3]]
 ; CHECK:       [[BB3]]:
+; CHECK-NEXT:    [[DEAD:%.*]] = phi i32 [ [[TMP4]], %[[BB]] ], [ [[TMP7]], %[[BB1_BB3_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[TMP9:%.*]] = getelementptr [100 x i32], ptr @H, i32 0, i32 [[I]]
-; CHECK-NEXT:    [[DEAD:%.*]] = load i32, ptr [[TMP9]], align 4
 ; CHECK-NEXT:    ret i32 [[DEAD]]
 ; CHECK:       [[BB4]]:
 ; CHECK-NEXT:    ret i32 0
