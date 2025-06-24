@@ -7,10 +7,12 @@ define void @patatino(i1 %arg) {
 ; CHECK-LABEL: @patatino(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr @d, align 4
+; CHECK-NEXT:    [[OR_PRE1:%.*]] = or i32 [[TMP0]], 8
 ; CHECK-NEXT:    br label [[FOR_END10:%.*]]
 ; CHECK:       for.end10:
-; CHECK-NEXT:    [[OR:%.*]] = or i32 [[TMP0]], 8
-; CHECK-NEXT:    br i1 %arg, label [[IF_END:%.*]], label [[FOR_END10]]
+; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[IF_END:%.*]], label [[FOR_END10_FOR_END10_CRIT_EDGE:%.*]]
+; CHECK:       for.end10.for.end10_crit_edge:
+; CHECK-NEXT:    br label [[FOR_END10]]
 ; CHECK:       if.end:
 ; CHECK-NEXT:    ret void
 ;

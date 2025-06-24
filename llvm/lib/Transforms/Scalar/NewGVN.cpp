@@ -2847,7 +2847,6 @@ void NewGVN::removePREInst(Instruction *I, Instruction *PREInst) {
   PREInsertedInstructions.erase(PREInst);
   ICF->removeInstruction(PREInst);
   MSSAU->removeMemoryAccess(PREInst);
-  PREInst->removeFromParent();
   InstructionsToErase.insert(PREInst);
 }
 
@@ -3130,7 +3129,12 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
   RevisitOnReachabilityChange[PHIBlock].reset(InstrToDFSNum(I));
   if (pred_size(PHIBlock) < 2)
     return nullptr;
-  for (auto *PredBB : predecessors(PHIBlock)) {
+  
+  SmallVector<BasicBlock *, 4> Preds(predecessors(PHIBlock));
+  llvm::sort(Preds, [&](BasicBlock *A, BasicBlock *B) {
+    return BlockInstRange.lookup(A).first < BlockInstRange.lookup(B).first;
+  });
+  for (auto *PredBB : Preds) {
     Value *FoundVal = nullptr;
     SmallPtrSet<Value *, 4> CurrentDeps;
     // We could just skip unreachable edges entirely but it's tricky to do
