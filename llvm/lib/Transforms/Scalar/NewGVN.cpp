@@ -3212,6 +3212,7 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
           if (PHIE->getBB() == PHIBlock)
             Op = PHIE->getOperand(PredNum);
         }
+        Op = lookupOperandLeader(Op);
         // If we phi-translated the op, it must be safe.
         SafeForPHIOfOps =
             SafeForPHIOfOps &&

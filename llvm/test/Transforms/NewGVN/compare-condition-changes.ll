@@ -52,7 +52,6 @@ define void @test2(i1 %c) {
 ; CHECK:       loop.latch.loop.header_crit_edge:
 ; CHECK-NEXT:    br label [[LOOP_HEADER]]
 ; CHECK:       exit:
-; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    ret void
 ;
 entry:
