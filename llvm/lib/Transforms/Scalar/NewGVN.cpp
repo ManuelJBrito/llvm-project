@@ -701,6 +701,7 @@ class NewGVN {
   DenseMap<Instruction *, SmallPtrSet<Use *, 8>> Snapshot;
   DenseMap<Instruction *, SmallVector<std::pair<unsigned, MDNode *>, 4>>
       SnapshotMD;
+  DenseMap<Instruction *, BasicBlock::iterator> SnapshotICF;
 
   // Set of rolled back instructions. This is for the case where a rolledback
   // instruction ends up not changing classes, the uses still need to be
@@ -4380,10 +4381,25 @@ void NewGVN::updateIR(Instruction *I, CongruenceClass *CC) {
     }
     
     patchAndReplaceAllUsesWith(I, Leader);
+    // Remove dominated special instructions, as these might block code motion.
+    if (ICF->isSpecialInstruction(I)) {
+      auto OptIT = I->getInsertionPointAfterDef();
+      if (OptIT && OptIT->getNodeParent() == I->getParent()) {
+        SnapshotICF.insert({I, *OptIT});
+        I->removeFromParent();
+      }
+    }
   }
 }
 
 void NewGVN::rollbackIR() {
+  // Rollback removed Special Instructions
+  for (auto &KV : SnapshotICF) {
+    auto *I = KV.first;
+    I->insertBefore(KV.second);
+  }
+  SnapshotICF.clear();
+
   // Rollback IR updates.
   for (auto &KV : Snapshot) {
     auto *I = KV.first;
