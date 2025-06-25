@@ -150,13 +150,11 @@ define i32 @main(i32 %argc, ptr %argv) {
 ; CHECK-NEXT:    store i32 1, ptr @numi, align 4
 ; CHECK-NEXT:    br label %[[BB91:.*]]
 ; CHECK:       [[BB:.*]]:
-; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr @numi, align 4
-; CHECK-NEXT:    [[TMP3:%.*]] = call i32 (ptr, ...) @printf(ptr @.str43, i32 [[TMP1]])
+; CHECK-NEXT:    [[TMP3:%.*]] = call i32 (ptr, ...) @printf(ptr @.str43, i32 [[TMP1:%.*]])
 ; CHECK-NEXT:    store i32 0, ptr [[I]], align 4
 ; CHECK-NEXT:    br label %[[BB13:.*]]
 ; CHECK:       [[BB4:.*]]:
-; CHECK-NEXT:    [[TMP5:%.*]] = load i32, ptr [[I]], align 4
-; CHECK-NEXT:    [[TMP7:%.*]] = getelementptr [17 x i32], ptr @trialx, i32 0, i32 [[TMP5]]
+; CHECK-NEXT:    [[TMP7:%.*]] = getelementptr [17 x i32], ptr @trialx, i32 0, i32 [[TMP5:%.*]]
 ; CHECK-NEXT:    [[TMP8:%.*]] = load i32, ptr [[TMP7]], align 4
 ; CHECK-NEXT:    [[TMP9:%.*]] = call i32 @userfun(i32 [[TMP8]])
 ; CHECK-NEXT:    [[TMP10:%.*]] = getelementptr [17 x i32], ptr @correct_result, i32 0, i32 [[TMP5]]
@@ -165,8 +163,8 @@ define i32 @main(i32 %argc, ptr %argv) {
 ; CHECK-NEXT:    store i32 [[TMP12]], ptr [[I]], align 4
 ; CHECK-NEXT:    br label %[[BB13]]
 ; CHECK:       [[BB13]]:
-; CHECK-NEXT:    [[PHIOFOPS4:%.*]] = phi i32 [ 0, %[[BB]] ], [ [[TMP12]], %[[BB4]] ]
-; CHECK-NEXT:    [[TMP15:%.*]] = icmp sle i32 [[PHIOFOPS4]], 16
+; CHECK-NEXT:    [[TMP5]] = phi i32 [ 0, %[[BB]] ], [ [[TMP12]], %[[BB4]] ]
+; CHECK-NEXT:    [[TMP15:%.*]] = icmp sle i32 [[TMP5]], 16
 ; CHECK-NEXT:    [[TMP1516:%.*]] = zext i1 [[TMP15]] to i32
 ; CHECK-NEXT:    br i1 [[TMP15]], label %[[BB4]], label %[[BB17:.*]]
 ; CHECK:       [[BB17]]:
@@ -238,8 +236,8 @@ define i32 @main(i32 %argc, ptr %argv) {
 ; CHECK-NEXT:    store i32 [[TMP90]], ptr @numi, align 4
 ; CHECK-NEXT:    br label %[[BB91]]
 ; CHECK:       [[BB91]]:
-; CHECK-NEXT:    [[PHIOFOPS3:%.*]] = phi i32 [ 1, %[[ENTRY]] ], [ [[TMP90]], %[[COND_NEXT]] ]
-; CHECK-NEXT:    [[TMP93:%.*]] = icmp sgt i32 [[PHIOFOPS3]], 5
+; CHECK-NEXT:    [[TMP1]] = phi i32 [ 1, %[[ENTRY]] ], [ [[TMP90]], %[[COND_NEXT]] ]
+; CHECK-NEXT:    [[TMP93:%.*]] = icmp sgt i32 [[TMP1]], 5
 ; CHECK-NEXT:    [[TMP9394:%.*]] = zext i1 [[TMP93]] to i32
 ; CHECK-NEXT:    br i1 [[TMP93]], label %[[COND_TRUE96:.*]], label %[[COND_NEXT97:.*]]
 ; CHECK:       [[COND_TRUE96]]:

@@ -1598,7 +1598,7 @@ const Expression *NewGVN::valueNumberInsertedInsts(Instruction *I, Instruction *
     }
   }
   SmallPtrSet<Value *, 2> Visited;
-  const Expression *E = nullptr;
+  const Expression *E = ValueToExpression.lookup(I);
   while(!VnStack.empty()) {
     Curr = VnStack.top();
     VnStack.pop();
