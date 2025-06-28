@@ -2859,7 +2859,6 @@ void NewGVN::removePREInst(Instruction *I, Instruction *PREInst) {
       PREInsertedInstructions.erase(GEPI);
       InstructionsToErase.insert(GEPI);
       GEPI->setName("dead.gep.insert");
-      errs() << "dead gep\n";
     }
   }
 }
@@ -3176,6 +3175,7 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
   unsigned PredNum = -1;
   for (auto *PredBB : Preds) {
     ++PredNum;
+    bool Backedge = isBackedge(PHIBlock, PredBB);
     Value *FoundVal = nullptr;
     SmallPtrSet<Value *, 4> CurrentDeps;
     // We could just skip unreachable edges entirely but it's tricky to do
@@ -3212,7 +3212,9 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
           if (PHIE->getBB() == PHIBlock)
             Op = PHIE->getOperand(PredNum);
         }
-        Op = lookupOperandLeader(Op);
+        // Don't use leader from the future.
+        if (!Backedge)
+          Op = lookupOperandLeader(Op);
         // If we phi-translated the op, it must be safe.
         SafeForPHIOfOps =
             SafeForPHIOfOps &&
