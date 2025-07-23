@@ -825,7 +825,7 @@ private:
   bool okayForPRE(Instruction *I, BasicBlock *Pred, BasicBlock *PHIBlock);
   bool safeForPRE(Instruction *PREInst, BasicBlock *InsertBB,
                   BasicBlock *PHIBlock, unsigned PredNum);
-  std::pair<Instruction *, const Expression *> valueNumberInsertedInsts(Instruction *I,
+  std::pair<Value *, const Expression *> valueNumberInsertedInsts(Instruction *I,
                                              Instruction *OrigI);
 
   // Value number an Instruction or MemoryPhi.
@@ -1610,7 +1610,8 @@ const Expression *OptPRE::performSymbolicLoadEvaluation(Instruction *I) {
   for (auto *User : DefiningAccess->users()) {
     if (auto *MU = dyn_cast<MemoryUse>(User)) {
       if (auto *ULI = dyn_cast<LoadInst>(MU->getMemoryInst()))
-        if (DT->dominates(ULI, LI) && (!DomLoad || getRank(ULI) < getRank(LI))) {
+        if (InstrDFS[ULI] && DT->dominates(ULI, LI) &&
+              (!DomLoad || getRank(ULI) < getRank(LI))) {
           DomLoad = ULI;
         }
     }
@@ -2824,7 +2825,7 @@ bool OptPRE::safeForPRE(Instruction *PREInst, BasicBlock *InsertBB,
 }
 
 // We use a stack to ensure instructions are value numbered in the correct order.
-std::pair<Instruction *, const Expression *> OptPRE::valueNumberInsertedInsts(Instruction *I,
+std::pair<Value *, const Expression *> OptPRE::valueNumberInsertedInsts(Instruction *I,
                                                    Instruction *OrigI) {
   std::stack<Instruction *> VnStack;
   std::queue<Value *> Worklist;
@@ -2857,11 +2858,13 @@ std::pair<Instruction *, const Expression *> OptPRE::valueNumberInsertedInsts(In
       InsertedInstructions.insert(Curr);
       FoundVal = Curr;
     } else {
+      if (auto *SI = dyn_cast<StoreInst>(FoundVal))
+        FoundVal = SI->getValueOperand();
       Curr->replaceAllUsesWith(FoundVal);
       Curr->eraseFromParent();
     }
   }
-  return std::make_pair(cast<Instruction>(FoundVal), E);
+  return std::make_pair(FoundVal, E);
 }
 
 static bool okayForPHIOfOps(const Instruction *I) {
@@ -3128,7 +3131,9 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
           return nullptr;
         }
         // Value number materialized instruction.
-        ValueOp = valueNumberInsertedInsts(ValueOp, I).first;
+        Value *VNOp = valueNumberInsertedInsts(ValueOp, I).first;
+        assert(isa<Instruction>(VNOp) && "Expected Instruction");
+        ValueOp = cast<Instruction>(VNOp);
         InstrToPREInsertion[I] = ValueOp;
         ValueOp->setName(I->getName() + ".pre");
         ICF->insertInstructionTo(ValueOp, PredBB);
@@ -4559,7 +4564,8 @@ bool OptPRE::eliminateInstructions(Function &F) {
           auto *ReplacedInst = cast<Instruction>(U->get());
           auto *PI = PredInfo->getPredicateInfoFor(ReplacedInst);
           if (!PI || DominatingLeader != PI->OriginalOp)
-            patchReplacementInstruction(ReplacedInst, DominatingLeader);
+            patchReplacementInstruction(PI ? cast<Instruction>(PI->OriginalOp)
+                                   : ReplacedInst, DominatingLeader);
 
           LLVM_DEBUG(dbgs()
                      << "Found replacement " << *DominatingLeader << " for "

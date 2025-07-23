@@ -4075,7 +4075,8 @@ bool NewGVN::eliminateInstructions(Function &F) {
           auto *ReplacedInst = cast<Instruction>(U->get());
           auto *PI = PredInfo->getPredicateInfoFor(ReplacedInst);
           if (!PI || DominatingLeader != PI->OriginalOp)
-            patchReplacementInstruction(ReplacedInst, DominatingLeader);
+            patchReplacementInstruction(PI ? cast<Instruction>(PI->OriginalOp)
+                                   : ReplacedInst, DominatingLeader);
 
           LLVM_DEBUG(dbgs()
                      << "Found replacement " << *DominatingLeader << " for "
