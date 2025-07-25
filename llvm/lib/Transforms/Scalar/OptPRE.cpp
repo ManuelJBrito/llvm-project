@@ -1166,7 +1166,7 @@ OptPRE::ExprResult OptPRE::checkExprResults(Expression *E, Instruction *I,
   CongruenceClass *CC = ValueToClass.lookup(V);
   if (CC) {
     if (CC->getLeader() && CC->getLeader() != I) {
-      return ExprResult::some(createVariableOrConstant(CC->getLeader()), V);
+      return ExprResult::some(createVariableOrConstant(CC->getLeader()));
     }
     if (CC->getDefiningExpr()) {
       if (I)
@@ -1174,7 +1174,7 @@ OptPRE::ExprResult OptPRE::checkExprResults(Expression *E, Instruction *I,
                           << " expression " << *CC->getDefiningExpr() << "\n");
       NumOptPREOpsSimplified++;
       deleteExpression(E);
-      return ExprResult::some(CC->getDefiningExpr(), V);
+      return ExprResult::some(CC->getDefiningExpr());
     }
   }
 
@@ -2139,7 +2139,7 @@ void OptPRE::touchAndErase(Map &M, const KeyType &Key) {
 
 void OptPRE::addAdditionalUsers(Value *To, Value *User) const {
   assert(User && To != User);
-  if (isa<Instruction>(To))
+  if (isa<Instruction>(To) && !InsertedInstructions.count(cast<Instruction>(To)))
     AdditionalUsers[To].insert(User);
 }
 
@@ -2182,7 +2182,8 @@ void OptPRE::markUsersTouched(Value *V, Value *OldLeader) {
     Value *Curr = Worklist.pop_back_val();
     if (!Visited.insert(Curr).second)
       continue;
-    if (isa<Instruction>(Curr))
+    auto *CurrInst = dyn_cast<Instruction>(Curr);
+    if (CurrInst && !InsertedInstructions.count(CurrInst))
       TouchedInstructions.set(InstrToDFSNum(Curr));
     for (User *U : Curr->users()) {
       if (Instruction *UserInst = dyn_cast<Instruction>(U)) {
@@ -3159,8 +3160,6 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
     LLVM_DEBUG(dbgs() << "Found phi of ops operand " << *FoundVal << " in "
                       << getBlockName(PredBB) << "\n");
   }
-  for (auto *Dep : Deps)
-    addAdditionalUsers(Dep, I);
   sortPHIOps(PHIOps);
   auto *E = performSymbolicPHIEvaluation(PHIOps, I, PHIBlock);
    bool SimplAvail = false;
@@ -3182,8 +3181,9 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
     // changes, the PHI-of-op may change also, so we need to add the operands as
     // additional users.
     for (auto &O : PHIOps) {
-      if (O.first != I)
-        addAdditionalUsers(O.first, I);
+      auto *OI = dyn_cast<Instruction>(O.first);
+      if (OI && OI != I && !InsertedInstructions.count(OI))
+        addAdditionalUsers(OI, I);
     }
 
     return E;
