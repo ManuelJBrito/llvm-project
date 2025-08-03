@@ -124,6 +124,7 @@
 #include <stack>
 #include <string>
 #include <tuple>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -167,6 +168,16 @@ static cl::opt<bool> EnableUpdateIR("enable-optpre-update-ir", cl::init(true),
 
 static cl::opt<bool> EnablePRE("enable-optpre-pre", cl::init(true), cl::Hidden);
 
+static cl::list<std::string>
+    SkipFuncsList("skip-funcs", cl::value_desc("function names"),
+                   cl::desc("Skip OptPRE for functions in the list"),
+                   cl::CommaSeparated, cl::Hidden);
+
+bool isFunctionInSkipList(StringRef FunctionName) {
+  static std::unordered_set<std::string> PrintFuncNames(SkipFuncsList.begin(),
+                                                      SkipFuncsList.end());
+  return PrintFuncNames.count(std::string(FunctionName));
+}
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
 //===----------------------------------------------------------------------===//
@@ -586,6 +597,7 @@ class OptPRE {
   // RealToTemp.
   DenseSet<Instruction *> AllTempInstructions;
   DenseMap<Instruction *, Instruction *> InstrToPREInsertion;
+  DenseMap<Instruction *, Instruction *> PREInsertionToInstr;
   DenseSet<Instruction *> InsertedInstructions;
 
   // This is the set of instructions to revisit on a reachability change.  At
@@ -824,7 +836,7 @@ private:
   void removePREInst(Instruction *I, Instruction *PREInst);
   bool okayForPRE(Instruction *I, BasicBlock *Pred, BasicBlock *PHIBlock);
   bool safeForPRE(Instruction *PREInst, BasicBlock *InsertBB,
-                  BasicBlock *PHIBlock, unsigned PredNum);
+                  BasicBlock *PHIBlock, unsigned PredNum, Instruction *I);
   std::pair<Value *, const Expression *> valueNumberInsertedInsts(Instruction *I,
                                              Instruction *OrigI);
 
@@ -2722,11 +2734,18 @@ void OptPRE::removePhiOfOps(Instruction *I, PHINode *PHITemp) {
 
 // Remove the PRE inserted instruction for I
 void OptPRE::removePREInst(Instruction *I, Instruction *PREInst) {
+  for (User *U : PREInst->users()) {
+    auto *UI = dyn_cast<Instruction>(U);
+    if (UI && PREInsertionToInstr.count(UI)) {
+      removePREInst(PREInsertionToInstr.lookup(UI), UI);
+    }
+  }
   // Cleanup partition.
   performCongruenceFinding(PREInst, createDeadExpression(), true);
 
   // Update maps
   InstrToPREInsertion.erase(I);
+  PREInsertionToInstr.erase(PREInst);
   InsertedInstructions.erase(PREInst);
 
   // Update extended IR.
@@ -2799,7 +2818,7 @@ bool OptPRE::okayForPRE(Instruction *CurInst, BasicBlock *PredBB, BasicBlock *PH
 }
 
 bool OptPRE::safeForPRE(Instruction *PREInst, BasicBlock *InsertBB,
-                        BasicBlock *PHIBlock, unsigned PredNum) {
+                        BasicBlock *PHIBlock, unsigned PredNum, Instruction *I) {
   // The instruction can only be materialized if all operands are available.
   for (Use &U : PREInst->operands()) {
     Value *Op = U.get();
@@ -2818,6 +2837,13 @@ bool OptPRE::safeForPRE(Instruction *PREInst, BasicBlock *InsertBB,
     if (Value *PREOpLeader = findPREOpLeader(Op, InsertBB)) {
       // If a leader is found, we can replace the operand.
       U.set(PREOpLeader);
+      
+      // If PREOpLeader is itself a PRE insertion, the dependency will not
+      // be materialized in the IR. Add the original instruction for the PREOpLeader
+      // has a user of the original instruction for which we are performing PRE.
+      if (auto *LeaderI = dyn_cast<Instruction>(PREOpLeader))
+        if (auto *OrigI = PREInsertionToInstr.lookup(LeaderI))
+          addAdditionalUsers(OrigI, I);
     } else {
       return false;
     }
@@ -3115,7 +3141,7 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
       isBackedgeEval = false;
       if (!FoundVal) {
         if (!okayForPRE(I, PredBB, PHIBlock) ||
-            !safeForPRE(ValueOp, PredBB, PHIBlock, PredNum)) {
+            !safeForPRE(ValueOp, PredBB, PHIBlock, PredNum, I)) {
           LLVM_DEBUG(
               dbgs()
               << "Could not find leader, and cannot insert instruction\n");
@@ -3136,10 +3162,12 @@ OptPRE::makePossiblePHIOfOps(Instruction *I,
         assert(isa<Instruction>(VNOp) && "Expected Instruction");
         ValueOp = cast<Instruction>(VNOp);
         InstrToPREInsertion[I] = ValueOp;
+        PREInsertionToInstr[ValueOp] = I;
         ValueOp->setName(I->getName() + ".pre");
         ICF->insertInstructionTo(ValueOp, PredBB);
         InsertedInstructions.insert(ValueOp);
         FoundVal = ValueOp;
+        LLVM_DEBUG(dbgs() << "PRE Insertion for " << *I << "\n");
       } else {
         if (MemAccess) {
           MSSAU->removeMemoryAccess(ValueOp, true);
@@ -3469,6 +3497,11 @@ void OptPRE::valueNumberInstruction(Instruction *I) {
           if (auto *PREInst = InstrToPREInsertion.lookup(I))
             removePREInst(I, PREInst);
         }
+      } else {
+        if (auto *Op = RealToTemp.lookup(I))
+          removePhiOfOps(I, Op);
+        if (auto *PREInst = InstrToPREInsertion.lookup(I))
+          removePREInst(I, PREInst);
       }
     } else {
       // Mark the instruction as unused so we don't value number it again.
@@ -4708,6 +4741,10 @@ bool OptPRE::shouldSwapOperandsForIntrinsic(const Value *A, const Value *B,
 }
 
 PreservedAnalyses OptPREPass::run(Function &F, AnalysisManager<Function> &AM) {
+  if (isFunctionInSkipList(F.getName())) {
+    LLVM_DEBUG(dbgs() << "Skipping OptPRE for " << F.getName() << "\n");
+    return PreservedAnalyses::all();
+  }
   // Apparently the order in which we get these results matter for
   // the old GVN (see Chandler's comment in GVN.cpp). I'll keep
   // the same order here, just in case.
