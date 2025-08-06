@@ -929,7 +929,7 @@ private:
 
   // Utilities.
   void cleanupTables();
-  std::pair<unsigned, unsigned> assignDFSNumbers(BasicBlock *, unsigned);
+  std::pair<unsigned, unsigned> assignDFSNumbers(BasicBlock *, unsigned, bool Skip = true);
   void updateProcessedCount(const Value *V);
   void verifyMemoryCongruency() const;
   void verifyIterationSettled(Function &F);
@@ -3375,7 +3375,7 @@ void OptPRE::cleanupTables() {
 // Assign local DFS number mapping to instructions, and leave space for Value
 // PHI's.
 std::pair<unsigned, unsigned> OptPRE::assignDFSNumbers(BasicBlock *B,
-                                                       unsigned Start) {
+                                                       unsigned Start, bool skip) {
   unsigned End = Start;
   if (MemoryAccess *MemPhi = getMemoryAccess(B)) {
     InstrDFS[MemPhi] = End++;
@@ -3391,7 +3391,8 @@ std::pair<unsigned, unsigned> OptPRE::assignDFSNumbers(BasicBlock *B,
         !InsertedInstructions.count(&I)) {
       InstrDFS[&I] = 0;
       LLVM_DEBUG(dbgs() << "Skipping trivially dead instruction " << I << "\n");
-      markInstructionForDeletion(&I);
+      if (Skip)
+        markInstructionForDeletion(&I);
       continue;
     }
     if (isa<PHINode>(&I))
@@ -4393,7 +4394,7 @@ bool OptPRE::eliminateInstructions(Function &F) {
   BlockInstRange.clear();
   for (auto *DTN : depth_first(DT->getRootNode())) {
     BasicBlock *B = DTN->getBlock();
-    const auto &BlockRange = assignDFSNumbers(B, ICount);
+    const auto &BlockRange = assignDFSNumbers(B, ICount, /* Skip */false);
     BlockInstRange.insert({B, BlockRange});
     ICount += BlockRange.second - BlockRange.first;
   }
