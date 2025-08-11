@@ -168,6 +168,12 @@ static cl::opt<bool> EnableUpdateIR("enable-optpre-update-ir", cl::init(true),
 
 static cl::opt<bool> EnablePRE("enable-optpre-pre", cl::init(true), cl::Hidden);
 
+static cl::opt<bool> EnableValueCoercion("enable-optpre-coercion", cl::init(true), cl::Hidden);
+
+static cl::opt<bool> EnableSplitAllCriticalEdges("enable-optpre-split-edges", cl::init(true), cl::Hidden);
+
+static cl::opt<bool> EnableMergeBranches("enable-optpre-merge-branches", cl::init(true), cl::Hidden);
+
 static cl::list<std::string>
     SkipFuncsList("skip-funcs", cl::value_desc("function names"),
                    cl::desc("Skip OptPRE for functions in the list"),
@@ -1505,6 +1511,8 @@ const Expression *
 OptPRE::performSymbolicLoadCoercion(Type *LoadType, Value *LoadPtr,
                                     LoadInst *LI, Instruction *DepInst,
                                     MemoryAccess *DefiningAccess) {
+  if (!EnableValueCoercion)
+    return nullptr;
   assert((!LI || LI->isSimple()) && "Not a simple load");
   if (auto *DepSI = dyn_cast<StoreInst>(DepInst)) {
     // Can't forward from non-atomic to atomic without violating memory model.
@@ -2812,8 +2820,8 @@ bool OptPRE::okayForPRE(Instruction *CurInst, BasicBlock *PredBB, BasicBlock *PH
     return false;
   
   unsigned SuccNum = GetSuccessorNumber(PredBB, PHIBB);
-  assert(!isCriticalEdge(PredBB->getTerminator(), SuccNum) 
-         && "Unexpected critical edge");
+  if(isCriticalEdge(PredBB->getTerminator(), SuccNum))
+    return false;
   return true;
 }
 
@@ -2880,6 +2888,7 @@ std::pair<Value *, const Expression *> OptPRE::valueNumberInsertedInsts(Instruct
     E = Res.Expr;
     addAdditionalUsers(Res, OrigI);
     FoundVal = findPHIOfOpsLeader(E, Curr, I->getParent());
+    FoundVal = nullptr;
     if (!FoundVal) {
       performCongruenceFinding(Curr, E, true);
       InsertedInstructions.insert(Curr);
@@ -3375,7 +3384,7 @@ void OptPRE::cleanupTables() {
 // Assign local DFS number mapping to instructions, and leave space for Value
 // PHI's.
 std::pair<unsigned, unsigned> OptPRE::assignDFSNumbers(BasicBlock *B,
-                                                       unsigned Start, bool skip) {
+                                                       unsigned Start, bool Skip) {
   unsigned End = Start;
   if (MemoryAccess *MemPhi = getMemoryAccess(B)) {
     InstrDFS[MemPhi] = End++;
@@ -4302,7 +4311,7 @@ void OptPRE::rollbackIR() {
     auto *I = KV.first;
     I->insertBefore(KV.second);
   }
-  SnapshotICF.clear();
+
   // Rollback IR updates.
   for (auto &KV : Snapshot) {
     auto *I = KV.first;
@@ -4317,6 +4326,9 @@ void OptPRE::rollbackIR() {
     for (auto MDN : KV.second)
       I->setMetadata(MDN.first, MDN.second);
   }
+  SnapshotICF.clear();
+  Snapshot.clear();
+  SnapshotMD.clear();
 }
 
 bool OptPRE::eliminateInstructions(Function &F) {
@@ -4760,23 +4772,27 @@ PreservedAnalyses OptPREPass::run(Function &F, AnalysisManager<Function> &AM) {
   DomTreeUpdater DTU(DT, DomTreeUpdater::UpdateStrategy::Lazy);
   MemorySSAUpdater Updater(&MSSA);
 
-  // Merge unconditional branches.
-  for (BasicBlock &BB : make_early_inc_range(F)) {
-    bool RemovedBlock =
-        MergeBlockIntoPredecessor(&BB, &DTU, &LI, &Updater, nullptr);
-    if (RemovedBlock)
-      ++NumOptPREBlocksDeleted;
+  if (EnableMergeBranches) {
+    // Merge unconditional branches.
+    for (BasicBlock &BB : make_early_inc_range(F)) {
+      bool RemovedBlock =
+          MergeBlockIntoPredecessor(&BB, &DTU, &LI, &Updater, nullptr);
+      if (RemovedBlock)
+        ++NumOptPREBlocksDeleted;
 
-    Changed |= RemovedBlock;
+      Changed |= RemovedBlock;
+    }
+    DTU.flush();
   }
-  DTU.flush();
 
   // Split critical edges.
-  Changed |= SplitAllCriticalEdges(
+  if (EnableSplitAllCriticalEdges) {
+    Changed |= SplitAllCriticalEdges(
       F, CriticalEdgeSplittingOptions(&DT, &LI, &Updater)
                                       .unsetPreserveLoopSimplify());
+  }
 
-  Changed = OptPRE(F, &DT, &AC, &TLI, &AA, &MSSA, F.getDataLayout()).runGVN();
+  Changed |= OptPRE(F, &DT, &AC, &TLI, &AA, &MSSA, F.getDataLayout()).runGVN();
   if (!Changed)
     return PreservedAnalyses::all();
   PreservedAnalyses PA;
