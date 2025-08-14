@@ -524,6 +524,8 @@ public:
     return EB->getExpressionType() == ET_Phi;
   }
 
+  const BasicBlock *getBB() const {return BB;}
+
   bool equals(const Expression &Other) const override {
     if (!this->BasicExpression::equals(Other))
       return false;
