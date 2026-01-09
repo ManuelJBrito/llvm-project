@@ -2889,6 +2889,7 @@ static bool isGEPKnownNonNull(const GEPOperator *GEP, const SimplifyQuery &Q,
 static bool isKnownNonNullFromDominatingCondition(const Value *V,
                                                   const Instruction *CtxI,
                                                   const DominatorTree *DT) {
+  return false;
   assert(!isa<Constant>(V) && "Called for constant?");
 
   if (!CtxI || !DT)
