@@ -203,6 +203,9 @@ static cl::opt<bool> ExtraVectorizerPasses(
     "extra-vectorizer-passes", cl::init(false), cl::Hidden,
     cl::desc("Run cleanup optimization passes after vectorization"));
 
+static cl::opt<bool> SkipGVN("skip-gvn", cl::init(false), cl::Hidden,
+                               cl::desc("Skip value numbering"));
+
 static cl::opt<bool> RunNewGVN("enable-newgvn", cl::init(false), cl::Hidden,
                                cl::desc("Run the NewGVN pass"));
 
@@ -740,10 +743,12 @@ PassBuilder::buildFunctionSimplificationPipeline(OptimizationLevel Level,
 
   // Eliminate redundancies.
   FPM.addPass(MergedLoadStoreMotionPass());
-  if (RunNewGVN)
-    FPM.addPass(NewGVNPass());
-  else
-    FPM.addPass(GVNPass());
+  if (!SkipGVN) {
+    if (RunNewGVN)
+      FPM.addPass(NewGVNPass());
+    else
+      FPM.addPass(GVNPass());
+  }
 
   // Sparse conditional constant propagation.
   // FIXME: It isn't clear why we do this *after* loop passes rather than
@@ -2196,10 +2201,12 @@ PassBuilder::buildLTODefaultPipeline(OptimizationLevel Level,
                /*AllowSpeculation=*/true),
       /*USeMemorySSA=*/true));
 
-  if (RunNewGVN)
-    MainFPM.addPass(NewGVNPass());
-  else
-    MainFPM.addPass(GVNPass());
+  if (!SkipGVN) {
+    if (RunNewGVN)
+      MainFPM.addPass(NewGVNPass());
+    else
+      MainFPM.addPass(GVNPass());
+  }
 
   // Remove dead memcpy()'s.
   MainFPM.addPass(MemCpyOptPass());
