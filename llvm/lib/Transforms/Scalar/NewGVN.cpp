@@ -101,6 +101,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/DebugCounter.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/JSON.h"
 #include "llvm/Support/PointerLikeTypeTraits.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar/GVNExpression.h"
@@ -145,6 +146,13 @@ DEBUG_COUNTER(VNCounter, "newgvn-vn",
               "Controls which instructions are value numbered");
 DEBUG_COUNTER(PHIOfOpsCounter, "newgvn-phi",
               "Controls which instructions we create phi of ops for");
+DEBUG_COUNTER(NewGVNEliminate, "newgvn-eliminate",
+              "Controls which NewGVN eliminations are performed");
+
+static cl::list<std::string> SkipNewGVNFuncs(
+    "skip-newgvn-for-funcs", cl::Hidden, cl::CommaSeparated,
+    cl::desc("Skip NewGVN for these functions (comma-separated)"));
+
 // Currently store defining access refinement is too slow due to basicaa being
 // egregiously slow.  This flag lets us keep it working while we work on this
 // issue.
@@ -154,6 +162,7 @@ static cl::opt<bool> EnableStoreRefinement("enable-store-refinement",
 /// Currently, the generation "phi of ops" can result in correctness issues.
 static cl::opt<bool> EnablePhiOfOps("enable-phi-of-ops", cl::init(true),
                                     cl::Hidden);
+static cl::opt<std::string> PairsFile("pairs-file", cl::init(""), cl::Hidden); 
 
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
@@ -3846,6 +3855,34 @@ Value *NewGVN::findPHIOfOpsLeader(const Expression *E,
   return nullptr;
 }
 
+struct refinement_pair {
+  static constexpr const char *StatusStr[] = {"SUCCESS", "", "INVALID",
+                                              "SKIP",  "TIMEOUT", "ERROR"};
+  static constexpr const char *TOOL_TAG = "LLVM-NewGVN";
+
+  std::string fn_name;
+  std::string src_name;
+  std::string tgt_name;
+  bool is_universal = true;
+
+  refinement_pair(std::string fn_name, std::string src_name,
+                  std::string tgt_name)
+      : fn_name(fn_name), src_name(src_name), tgt_name(tgt_name) {}
+
+  void write(llvm::json::OStream &J) const {
+    J.object([&] {
+      J.attribute("tool", TOOL_TAG);
+      J.attribute("fn", fn_name);
+      J.attribute("src", src_name);
+      J.attribute("tgt", tgt_name);
+      J.attribute("univ", is_universal);
+      J.attribute("status", "");
+      J.attribute("reason", "");
+    });
+  }
+};
+
+
 bool NewGVN::eliminateInstructions(Function &F) {
   // This is a non-standard eliminator. The normal way to eliminate is
   // to walk the dominator tree in order, keeping track of available
@@ -3913,6 +3950,23 @@ bool NewGVN::eliminateInstructions(Function &F) {
     }
   }
 
+  SmallVector<refinement_pair, 32> RefPairs;
+  auto GetName = [](const Value *V) {
+    if (V->hasName())
+      return V->getName().str();
+
+    if (const llvm::ConstantInt *CI = llvm::dyn_cast<llvm::ConstantInt>(V)) {
+        llvm::SmallString<40> Str; 
+        CI->getValue().toString(Str, 10, /*Signed*/false); 
+        return std::string(Str.str());
+    }
+
+    std::string S;
+    raw_string_ostream OS(S);
+    V->printAsOperand(OS, false);
+    return S;
+  };
+
   // Map to store the use counts
   DenseMap<const Value *, unsigned int> UseCounts;
   for (auto *CC : reverse(CongruenceClasses)) {
@@ -3955,6 +4009,9 @@ bool NewGVN::eliminateInstructions(Function &F) {
           MembersLeft.insert(Member);
           continue;
         }
+        std::string TargetName;
+        if (!PredInfo->getPredicateInfoFor(Member))
+          RefPairs.emplace_back(F.getName().str(), GetName(Member), GetName(Leader));
 
         LLVM_DEBUG(dbgs() << "Found replacement " << *(Leader) << " for "
                           << *Member << "\n");
@@ -3962,6 +4019,8 @@ bool NewGVN::eliminateInstructions(Function &F) {
         assert(Leader != I && "About to accidentally remove our leader");
         replaceInstruction(I, Leader);
         AnythingReplaced = true;
+
+      
       }
       CC->swap(MembersLeft);
     } else {
@@ -4060,6 +4119,8 @@ bool NewGVN::eliminateInstructions(Function &F) {
             if (!EliminationStack.empty() && DefI && !FromStore) {
               Value *DominatingLeader = EliminationStack.back();
               if (DominatingLeader != Def) {
+                if (!PredInfo->getPredicateInfoFor(DefI))
+                  RefPairs.emplace_back(F.getName().str(), GetName(DefI), GetName(DominatingLeader));
                 // Even if the instruction is removed, we still need to update
                 // flags/metadata due to downstreams users of the leader.
                 patchReplacementInstruction(DefI, DominatingLeader);
@@ -4197,6 +4258,27 @@ bool NewGVN::eliminateInstructions(Function &F) {
       }
     }
   }
+  errs() << "Found " << RefPairs.size() << " refinement pair(s)\n";
+  
+  std::optional<llvm::raw_fd_ostream> FileOS;
+  if (!PairsFile.empty()) {
+      std::error_code EC;
+      FileOS.emplace(PairsFile, EC);
+      if (EC) {
+          llvm::errs() << "Error opening output file: " << EC.message() << "\n";
+          return -1;
+      }
+  }
+
+  // Select FileOS if it exists, otherwise use outs()
+  llvm::raw_ostream &OS = FileOS ? *FileOS : llvm::outs();
+  llvm::json::OStream J(OS, 2);
+  J.array([&] {
+      for (const auto &P : RefPairs) {
+          P.write(J);
+      }
+  });
+
   return AnythingReplaced;
 }
 
@@ -4262,6 +4344,10 @@ bool NewGVN::shouldSwapOperandsForPredicate(const Value *A, const Value *B,
 }
 
 PreservedAnalyses NewGVNPass::run(Function &F, AnalysisManager<Function> &AM) {
+  if (!SkipNewGVNFuncs.empty() &&
+      llvm::is_contained(SkipNewGVNFuncs, F.getName()))
+    return PreservedAnalyses::all();
+
   // Apparently the order in which we get these results matter for
   // the old GVN (see Chandler's comment in GVN.cpp). I'll keep
   // the same order here, just in case.

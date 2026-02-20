@@ -68,6 +68,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/DebugCounter.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/AssumeBundleBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
@@ -136,6 +137,13 @@ static cl::opt<uint32_t> MaxNumInsnsPerBlock(
     "gvn-max-num-insns", cl::Hidden, cl::init(100),
     cl::desc("Max number of instructions to scan in each basic block in GVN "
              "(default = 100)"));
+
+static cl::list<std::string> SkipGVNFuncs(
+    "skip-gvn-for-funcs", cl::Hidden, cl::CommaSeparated,
+    cl::desc("Skip GVN for these functions (comma-separated)"));
+
+DEBUG_COUNTER(GVNEliminate, "gvn-eliminate",
+              "Controls which GVN eliminations are performed");
 
 struct llvm::GVNPass::Expression {
   uint32_t Opcode;
@@ -876,6 +884,9 @@ bool GVNPass::isMemorySSAEnabled() const {
 }
 
 PreservedAnalyses GVNPass::run(Function &F, FunctionAnalysisManager &AM) {
+  if (!SkipGVNFuncs.empty() && llvm::is_contained(SkipGVNFuncs, F.getName()))
+    return PreservedAnalyses::all();
+
   // FIXME: The order of evaluation of these 'getResult' calls is very
   // significant! Re-ordering these variables will cause GVN when run alone to
   // be less effective! We should fix memdep and basic-aa to not exhibit this
@@ -2187,6 +2198,9 @@ bool GVNPass::processLoad(LoadInst *L) {
 
   Value *AvailableValue = AV->MaterializeAdjustedValue(L, L);
 
+  if (!DebugCounter::shouldExecute(GVNEliminate))
+    return false;
+
   // MaterializeAdjustedValue is responsible for combining metadata.
   ICF->removeUsersOf(L);
   L->replaceAllUsesWith(AvailableValue);
@@ -2783,6 +2797,8 @@ bool GVNPass::processInstruction(Instruction *I) {
   }
 
   // Remove it!
+  if (!DebugCounter::shouldExecute(GVNEliminate))
+    return false;
   patchAndReplaceAllUsesWith(I, Repl);
   if (MD && Repl->getType()->isPtrOrPtrVectorTy())
     MD->invalidateCachedPointerInfo(Repl);
