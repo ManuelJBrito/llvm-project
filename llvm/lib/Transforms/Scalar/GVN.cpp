@@ -1904,6 +1904,9 @@ bool GVNPass::PerformLoadPRE(LoadInst *Load, AvailValInBlkVect &ValuesPerBlock,
     VN.lookupOrAdd(I);
   }
 
+  if (!DebugCounter::shouldExecute(GVNEliminate))
+    return false;
+
   eliminatePartiallyRedundantLoad(Load, ValuesPerBlock, PredLoads,
                                   &CriticalEdgePredAndLoad);
   ++NumPRELoad;
@@ -1981,6 +1984,10 @@ bool GVNPass::performLoopLoadPRE(LoadInst *Load,
   AvailableLoads[Preheader] = LoadPtr;
 
   LLVM_DEBUG(dbgs() << "GVN REMOVING PRE LOOP LOAD: " << *Load << '\n');
+
+  if (!DebugCounter::shouldExecute(GVNEliminate))
+    return false;
+
   eliminatePartiallyRedundantLoad(Load, ValuesPerBlock, AvailableLoads,
                                   /*CriticalEdgePredAndLoad*/ nullptr);
   ++NumPRELoopLoad;
@@ -2055,6 +2062,9 @@ bool GVNPass::processNonLocalLoad(LoadInst *Load) {
   // its value.  Insert PHIs and remove the fully redundant value now.
   if (UnavailableBlocks.empty()) {
     LLVM_DEBUG(dbgs() << "GVN REMOVING NONLOCAL LOAD: " << *Load << '\n');
+
+    if (!DebugCounter::shouldExecute(GVNEliminate))
+      return Changed;
 
     // Perform PHI construction.
     Value *V = ConstructSSAForLoadSet(Load, ValuesPerBlock, *this);
@@ -2232,6 +2242,9 @@ bool GVNPass::processMaskedLoad(IntrinsicInst *I) {
   if (!match(DepInst,
              m_MaskedStore(m_Value(StoreVal), m_Value(), m_Specific(Mask))) ||
       StoreVal->getType() != I->getType())
+    return false;
+
+  if (!DebugCounter::shouldExecute(GVNEliminate))
     return false;
 
   // Remove the load but generate a select for the passthrough
@@ -3030,6 +3043,9 @@ bool GVNPass::performScalarPRE(Instruction *CurInst) {
   // Don't do PRE when it might increase code size, i.e. when
   // we would need to insert instructions in more than one pred.
   if (NumWithout > 1 || NumWith == 0)
+    return false;
+
+  if (!DebugCounter::shouldExecute(GVNEliminate))
     return false;
 
   // We may have a case where all predecessors have the instruction,
