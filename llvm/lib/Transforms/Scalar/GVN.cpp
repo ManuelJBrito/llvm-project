@@ -2502,6 +2502,9 @@ bool GVNPass::propagateEquality(
     if (isa<Constant>(LHS) && isa<Constant>(RHS))
       continue;
 
+    if (!DebugCounter::shouldExecute(GVNEliminate))
+      continue;
+
     // Prefer a constant on the right-hand side, or an Argument if no constants.
     if (isa<Constant>(LHS) || (isa<Argument>(LHS) && !isa<Constant>(RHS)))
       std::swap(LHS, RHS);
@@ -2683,6 +2686,8 @@ bool GVNPass::processInstruction(Instruction *I) {
   // "%z = and i32 %x, %y" becomes "%z = and i32 %x, %x" which we now simplify.
   const DataLayout &DL = I->getDataLayout();
   if (Value *V = simplifyInstruction(I, {DL, TLI, DT, AC})) {
+    if (!DebugCounter::shouldExecute(GVNEliminate))
+      return false;
     bool Changed = false;
     if (!I->use_empty()) {
       // Simplification can cause a special instruction to become not special.
@@ -2847,6 +2852,8 @@ bool GVNPass::runImpl(Function &F, AssumptionCache &RunAC, DominatorTree &RunDT,
   // Merge unconditional branches, allowing PRE to catch more
   // optimization opportunities.
   for (BasicBlock &BB : make_early_inc_range(F)) {
+    if (!DebugCounter::shouldExecute(GVNEliminate))
+      continue;
     bool RemovedBlock = MergeBlockIntoPredecessor(&BB, &DTU, &LI, MSSAU, MD);
     if (RemovedBlock)
       ++NumGVNBlocks;
