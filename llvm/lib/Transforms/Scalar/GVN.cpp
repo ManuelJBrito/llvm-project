@@ -114,6 +114,8 @@ static cl::opt<bool>
 GVNEnableSplitBackedgeInLoadPRE("enable-split-backedge-in-load-pre",
                                 cl::init(false));
 static cl::opt<bool> GVNEnableMemDep("enable-gvn-memdep", cl::init(true));
+static cl::opt<bool> GVNEnableNonLocalLoadElim("enable-gvn-nonlocal-load-elim",
+                                                cl::init(true), cl::Hidden);
 static cl::opt<bool> GVNEnableMemorySSA("enable-gvn-memoryssa",
                                         cl::init(false));
 static cl::opt<bool> GVNEnableBlockMerge("enable-gvn-block-merge",
@@ -2062,7 +2064,7 @@ bool GVNPass::processNonLocalLoad(LoadInst *Load) {
   // If all of the instructions we depend on produce a known value for this
   // load, then it is fully redundant and we can use PHI insertion to compute
   // its value.  Insert PHIs and remove the fully redundant value now.
-  if (UnavailableBlocks.empty()) {
+  if (UnavailableBlocks.empty() && GVNEnableNonLocalLoadElim) {
     LLVM_DEBUG(dbgs() << "GVN REMOVING NONLOCAL LOAD: " << *Load << '\n');
 
     if (!DebugCounter::shouldExecute(GVNEliminate))
