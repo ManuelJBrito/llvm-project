@@ -75,6 +75,7 @@
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
+#include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Analysis/MemorySSA.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
@@ -2741,16 +2742,21 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
   if (!isCycleFree(I))
     return nullptr;
 
-  // TODO: We don't do phi translation on memory accesses because it's
-  // complicated. For a load, we'd need to be able to simulate a new memoryuse,
-  // which we don't have a good way of doing ATM.
+  // For loads, walk to the actual clobbering access. The raw defining access
+  // may be a non-aliasing same-block store (e.g. different TBAA type); the
+  // real clobber might be a MemoryPhi that we can use to drive phi-of-ops.
   auto *MemAccess = getMemoryAccess(I);
-  // If the memory operation is defined by a memory operation this block that
-  // isn't a MemoryPhi, transforming the pointer backwards through a scalar phi
-  // can't help, as it would still be killed by that memory operation.
-  if (MemAccess && !isa<MemoryPhi>(MemAccess->getDefiningAccess()) &&
-      MemAccess->getDefiningAccess()->getBlock() == I->getParent())
-    return nullptr;
+  MemoryPhi *MemPhiOp = nullptr;
+  if (MemAccess) {
+    MemoryAccess *Clobber = MSSAWalker->getClobberingMemoryAccess(MemAccess);
+    MemPhiOp = dyn_cast<MemoryPhi>(Clobber);
+    // If we walked past the raw defining access, register a dependency so
+    // that the load is re-evaluated when the clobbering access changes.
+    if (Clobber != MemAccess->getDefiningAccess())
+      addMemoryUsers(lookupMemoryLeader(Clobber), MemAccess);
+    if (!MemPhiOp && Clobber->getBlock() == I->getParent())
+      return nullptr;
+  }
 
   // Convert op of phis to phi of ops
   SmallPtrSet<const Value *, 10> VisitedOps;
@@ -2783,80 +2789,148 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
       return nullptr;
   }
 
-  if (!OpPHI)
+  if (!OpPHI && !MemPhiOp)
     return nullptr;
 
   SmallVector<ValPair, 4> PHIOps;
-  SmallPtrSet<Value *, 4> Deps;
-  auto *PHIBlock = getBlockForValue(OpPHI);
-  RevisitOnReachabilityChange[PHIBlock].reset(InstrToDFSNum(I));
-  for (unsigned PredNum = 0; PredNum < OpPHI->getNumOperands(); ++PredNum) {
-    auto *PredBB = OpPHI->getIncomingBlock(PredNum);
-    Value *FoundVal = nullptr;
-    SmallPtrSet<Value *, 4> CurrentDeps;
-    // We could just skip unreachable edges entirely but it's tricky to do
-    // with rewriting existing phi nodes.
-    if (ReachableEdges.count({PredBB, PHIBlock})) {
-      // Clone the instruction, create an expression from it that is
-      // translated back into the predecessor, and see if we have a leader.
-      Instruction *ValueOp = I->clone();
-      // Emit the temporal instruction in the predecessor basic block where the
-      // corresponding value is defined.
-      ValueOp->insertBefore(PredBB->getTerminator()->getIterator());
-      if (MemAccess)
-        TempToMemory.insert({ValueOp, MemAccess});
-      bool SafeForPHIOfOps = true;
-      VisitedOps.clear();
-      for (auto &Op : ValueOp->operands()) {
-        auto *OrigOp = &*Op;
-        // When these operand changes, it could change whether there is a
-        // leader for us or not, so we have to add additional users.
-        if (isa<PHINode>(Op)) {
-          Op = Op->DoPHITranslation(PHIBlock, PredBB);
-          if (Op != OrigOp && Op != I)
-            CurrentDeps.insert(Op);
-        } else if (auto *ValuePHI = RealToTemp.lookup(Op)) {
-          if (getBlockForValue(ValuePHI) == PHIBlock)
-            Op = ValuePHI->getIncomingValueForBlock(PredBB);
+  BasicBlock *PHIBlock = nullptr;
+
+  if (OpPHI) {
+    // Existing path: phi-of-ops driven by a scalar PHI operand.
+    SmallPtrSet<Value *, 4> Deps;
+    PHIBlock = getBlockForValue(OpPHI);
+    RevisitOnReachabilityChange[PHIBlock].reset(InstrToDFSNum(I));
+    for (unsigned PredNum = 0; PredNum < OpPHI->getNumOperands(); ++PredNum) {
+      auto *PredBB = OpPHI->getIncomingBlock(PredNum);
+      Value *FoundVal = nullptr;
+      SmallPtrSet<Value *, 4> CurrentDeps;
+      // We could just skip unreachable edges entirely but it's tricky to do
+      // with rewriting existing phi nodes.
+      if (ReachableEdges.count({PredBB, PHIBlock})) {
+        // Clone the instruction, create an expression from it that is
+        // translated back into the predecessor, and see if we have a leader.
+        Instruction *ValueOp = I->clone();
+        // Emit the temporal instruction in the predecessor basic block where
+        // the corresponding value is defined.
+        ValueOp->insertBefore(PredBB->getTerminator()->getIterator());
+        if (MemAccess)
+          TempToMemory.insert({ValueOp, MemAccess});
+        bool SafeForPHIOfOps = true;
+        VisitedOps.clear();
+        for (auto &Op : ValueOp->operands()) {
+          auto *OrigOp = &*Op;
+          // When these operand changes, it could change whether there is a
+          // leader for us or not, so we have to add additional users.
+          if (isa<PHINode>(Op)) {
+            Op = Op->DoPHITranslation(PHIBlock, PredBB);
+            if (Op != OrigOp && Op != I)
+              CurrentDeps.insert(Op);
+          } else if (auto *ValuePHI = RealToTemp.lookup(Op)) {
+            if (getBlockForValue(ValuePHI) == PHIBlock)
+              Op = ValuePHI->getIncomingValueForBlock(PredBB);
+          }
+          // If we phi-translated the op, it must be safe.
+          SafeForPHIOfOps =
+              SafeForPHIOfOps &&
+              (Op != OrigOp || OpIsSafeForPHIOfOps(Op, PHIBlock, VisitedOps));
         }
-        // If we phi-translated the op, it must be safe.
-        SafeForPHIOfOps =
-            SafeForPHIOfOps &&
-            (Op != OrigOp || OpIsSafeForPHIOfOps(Op, PHIBlock, VisitedOps));
-      }
-      // FIXME: For those things that are not safe we could generate
-      // expressions all the way down, and see if this comes out to a
-      // constant.  For anything where that is true, and unsafe, we should
-      // have made a phi-of-ops (or value numbered it equivalent to something)
-      // for the pieces already.
-      FoundVal = !SafeForPHIOfOps ? nullptr
-                                  : findLeaderForInst(ValueOp, Visited,
-                                                      MemAccess, I, PredBB);
-      ValueOp->eraseFromParent();
-      if (!FoundVal) {
-        // We failed to find a leader for the current ValueOp, but this might
-        // change in case of the translated operands change.
-        if (SafeForPHIOfOps)
-          for (auto *Dep : CurrentDeps)
-            addAdditionalUsers(Dep, I);
+        // FIXME: For those things that are not safe we could generate
+        // expressions all the way down, and see if this comes out to a
+        // constant.  For anything where that is true, and unsafe, we should
+        // have made a phi-of-ops (or value numbered it equivalent to something)
+        // for the pieces already.
+        FoundVal = !SafeForPHIOfOps ? nullptr
+                                    : findLeaderForInst(ValueOp, Visited,
+                                                        MemAccess, I, PredBB);
+        ValueOp->eraseFromParent();
+        if (!FoundVal) {
+          // We failed to find a leader for the current ValueOp, but this might
+          // change in case of the translated operands change.
+          if (SafeForPHIOfOps)
+            for (auto *Dep : CurrentDeps)
+              addAdditionalUsers(Dep, I);
 
-        return nullptr;
+          return nullptr;
+        }
+        Deps.insert_range(CurrentDeps);
+      } else {
+        LLVM_DEBUG(dbgs() << "Skipping phi of ops operand for incoming block "
+                          << getBlockName(PredBB)
+                          << " because the block is unreachable\n");
+        FoundVal = PoisonValue::get(I->getType());
+        RevisitOnReachabilityChange[PHIBlock].set(InstrToDFSNum(I));
       }
-      Deps.insert_range(CurrentDeps);
-    } else {
-      LLVM_DEBUG(dbgs() << "Skipping phi of ops operand for incoming block "
-                        << getBlockName(PredBB)
-                        << " because the block is unreachable\n");
-      FoundVal = PoisonValue::get(I->getType());
-      RevisitOnReachabilityChange[PHIBlock].set(InstrToDFSNum(I));
+
+      PHIOps.push_back({FoundVal, PredBB});
+      LLVM_DEBUG(dbgs() << "Found phi of ops operand " << *FoundVal << " in "
+                        << getBlockName(PredBB) << "\n");
     }
+    for (auto *Dep : Deps)
+      addAdditionalUsers(Dep, I);
+  } else {
+    // MemoryPhi-driven phi-of-ops for loads: the pointer doesn't change
+    // across predecessors, only the memory state does.
+    auto *LI = cast<LoadInst>(I);
+    PHIBlock = MemPhiOp->getBlock();
+    RevisitOnReachabilityChange[PHIBlock].reset(InstrToDFSNum(I));
+    if (pred_size(PHIBlock) < 2)
+      return nullptr;
 
-    PHIOps.push_back({FoundVal, PredBB});
-    LLVM_DEBUG(dbgs() << "Found phi of ops operand " << *FoundVal << " in "
-                      << getBlockName(PredBB) << "\n");
+    Value *LoadAddr = lookupOperandLeader(LI->getPointerOperand());
+    MemoryLocation MemLoc = MemoryLocation::get(LI);
+
+    for (auto *PredBB : predecessors(PHIBlock)) {
+      Value *FoundVal = nullptr;
+      if (ReachableEdges.count({PredBB, PHIBlock})) {
+        // Walk from the MemoryPhi incoming value to find the clobber for this
+        // load's memory location in this predecessor.
+        MemoryAccess *IncomingMA = MemPhiOp->getIncomingValueForBlock(PredBB);
+        MemoryAccess *PredClobber =
+            MSSAWalker->getClobberingMemoryAccess(IncomingMA, MemLoc);
+
+        if (!MSSA->isLiveOnEntryDef(PredClobber)) {
+          if (auto *MD = dyn_cast<MemoryDef>(PredClobber)) {
+            Instruction *DefInst = MD->getMemoryInst();
+            if (!ReachableBlocks.count(DefInst->getParent())) {
+              FoundVal = PoisonValue::get(LI->getType());
+            } else {
+              // Try constant coercion from the clobbering instruction.
+              if (const auto *CoercionExpr = performSymbolicLoadCoercion(
+                      LI->getType(), LoadAddr, LI, DefInst, PredClobber))
+                FoundVal = findPHIOfOpsLeader(CoercionExpr, I, PredBB);
+            }
+          }
+        }
+        if (!FoundVal) {
+          // Create a LoadExpression with the predecessor's clobber and look
+          // for a leader. Store-to-load forwarding happens implicitly via
+          // equalsLoadStoreHelper when the store is in the same congruence
+          // class.
+          auto *LE =
+              createLoadExpression(LI->getType(), LoadAddr, LI, PredClobber);
+          FoundVal = findPHIOfOpsLeader(LE, I, PredBB);
+          if (!FoundVal) {
+            // No leader yet. Track the memory dependency so we revisit when
+            // the clobbering access's memory class changes.
+            addMemoryUsers(lookupMemoryLeader(PredClobber), MemAccess);
+            return nullptr;
+          }
+        }
+        if (auto *SI = dyn_cast<StoreInst>(FoundVal))
+          FoundVal = SI->getValueOperand();
+      } else {
+        LLVM_DEBUG(dbgs() << "Skipping phi of ops operand for incoming block "
+                          << getBlockName(PredBB)
+                          << " because the block is unreachable\n");
+        FoundVal = PoisonValue::get(I->getType());
+        RevisitOnReachabilityChange[PHIBlock].set(InstrToDFSNum(I));
+      }
+
+      PHIOps.push_back({FoundVal, PredBB});
+      LLVM_DEBUG(dbgs() << "Found phi of ops operand " << *FoundVal << " in "
+                        << getBlockName(PredBB) << "\n");
+    }
   }
-  for (auto *Dep : Deps)
-    addAdditionalUsers(Dep, I);
   sortPHIOps(PHIOps);
   auto *E = performSymbolicPHIEvaluation(PHIOps, I, PHIBlock);
   if (isa<ConstantExpression>(E) || isa<VariableExpression>(E)) {
@@ -2877,8 +2951,9 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
   auto *ValuePHI = RealToTemp.lookup(I);
   bool NewPHI = false;
   if (!ValuePHI) {
-    ValuePHI =
-        PHINode::Create(I->getType(), OpPHI->getNumOperands(), "phiofops");
+    unsigned NumPreds =
+        OpPHI ? OpPHI->getNumOperands() : pred_size(PHIBlock);
+    ValuePHI = PHINode::Create(I->getType(), NumPreds, "phiofops");
     addPhiOfOps(ValuePHI, PHIBlock, I);
     NewPHI = true;
     NumGVNPHIOfOpsCreated++;
@@ -3133,9 +3208,15 @@ void NewGVN::valueNumberInstruction(Instruction *I) {
       Symbolized = Res.Expr;
       addAdditionalUsers(Res, I);
 
-      // Make a phi of ops if necessary
+      // Make a phi of ops if necessary.
+      // Also attempt for loads whose clobbering access is a MemoryPhi,
+      // even if the load doesn't use a scalar PHI operand.
+      bool ShouldTryPHIOfOps = PHINodeUses.count(I);
+      if (!ShouldTryPHIOfOps)
+        if (auto *LE = dyn_cast_or_null<LoadExpression>(Symbolized))
+          ShouldTryPHIOfOps = isa<MemoryPhi>(LE->getMemoryLeader());
       if (Symbolized && !isa<ConstantExpression>(Symbolized) &&
-          !isa<VariableExpression>(Symbolized) && PHINodeUses.count(I)) {
+          !isa<VariableExpression>(Symbolized) && ShouldTryPHIOfOps) {
         auto *PHIE = makePossiblePHIOfOps(I, Visited);
         // If we created a phi of ops, use it.
         // If we couldn't create one, make sure we don't leave one lying around
@@ -4258,26 +4339,23 @@ bool NewGVN::eliminateInstructions(Function &F) {
       }
     }
   }
-  errs() << "Found " << RefPairs.size() << " refinement pair(s)\n";
-  
-  std::optional<llvm::raw_fd_ostream> FileOS;
   if (!PairsFile.empty()) {
-      std::error_code EC;
-      FileOS.emplace(PairsFile, EC);
-      if (EC) {
-          llvm::errs() << "Error opening output file: " << EC.message() << "\n";
-          return -1;
-      }
-  }
+    errs() << "Found " << RefPairs.size() << " refinement pair(s)\n";
 
-  // Select FileOS if it exists, otherwise use outs()
-  llvm::raw_ostream &OS = FileOS ? *FileOS : llvm::outs();
-  llvm::json::OStream J(OS, 2);
-  J.array([&] {
+    std::error_code EC;
+    llvm::raw_fd_ostream FileOS(PairsFile, EC);
+    if (EC) {
+      llvm::errs() << "Error opening output file: " << EC.message() << "\n";
+      return -1;
+    }
+
+    llvm::json::OStream J(FileOS, 2);
+    J.array([&] {
       for (const auto &P : RefPairs) {
-          P.write(J);
+        P.write(J);
       }
-  });
+    });
+  }
 
   return AnythingReplaced;
 }
