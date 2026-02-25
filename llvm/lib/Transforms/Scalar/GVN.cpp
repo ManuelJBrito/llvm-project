@@ -116,6 +116,8 @@ GVNEnableSplitBackedgeInLoadPRE("enable-split-backedge-in-load-pre",
 static cl::opt<bool> GVNEnableMemDep("enable-gvn-memdep", cl::init(true));
 static cl::opt<bool> GVNEnableMemorySSA("enable-gvn-memoryssa",
                                         cl::init(false));
+static cl::opt<bool> GVNEnableBlockMerge("enable-gvn-block-merge",
+                                          cl::init(true), cl::Hidden);
 
 static cl::opt<uint32_t> MaxNumDeps(
     "gvn-max-num-deps", cl::Hidden, cl::init(100),
@@ -2852,6 +2854,8 @@ bool GVNPass::runImpl(Function &F, AssumptionCache &RunAC, DominatorTree &RunDT,
   // Merge unconditional branches, allowing PRE to catch more
   // optimization opportunities.
   for (BasicBlock &BB : make_early_inc_range(F)) {
+    if (!GVNEnableBlockMerge)
+      break;
     if (!DebugCounter::shouldExecute(GVNEliminate))
       continue;
     bool RemovedBlock = MergeBlockIntoPredecessor(&BB, &DTU, &LI, MSSAU, MD);
