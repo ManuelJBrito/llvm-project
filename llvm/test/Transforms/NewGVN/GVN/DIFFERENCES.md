@@ -13,7 +13,7 @@ and explanations.
 | Unreachable blocks | Replaces content with poison | Uses MemDep to handle unreachable paths |
 | Uninitialized alloca | Replaces with undef (via `-newgvn-enable-undef-alloca`) | Replaces with undef |
 | Assume propagation | Full (via `-newgvn-enable-assume-propagation`) | Full (negations, equality) |
-| Equality propagation | Limited | Propagates from trunc nuw, etc. |
+| Equality propagation | Propagates from trunc nuw (via `-newgvn-enable-trunc-equality`) | Propagates from trunc nuw, etc. |
 | Dead code elimination | Implicit DCE (removes unused instrs) | No implicit DCE |
 | PRE (scalar + load) | Supported (via `-newgvn-enable-pre`, `-newgvn-enable-load-pre`) | Supported via `-enable-pre`, `-enable-load-pre` |
 
@@ -153,24 +153,10 @@ bb2982.preheader:
 **NewGVN:** Hoists loop-invariant load to preheader using Load PRE (loop-invariant path).
 **Flag:** `-newgvn-enable-load-pre` (default true).
 
-### trunc-nuw-equality.ll
-**Difference:** Equality propagation from trunc nuw
-**Reproducer:**
-```llvm
-define void @test(ptr %p, i64 %v) {
-  %tr = trunc nuw i64 %v to i1
-  br i1 %tr, label %ret, label %store
-store:
-  store i64 %v, ptr %p
-  ret void
-ret:
-  store i64 %v, ptr %p
-  ret void
-}
-```
-**GVN:** Propagates: if trunc nuw is false→%v=0, if true→%v=1. Replaces stores.
-**NewGVN:** Does not propagate the equality from trunc nuw. Keeps `store i64 %v`.
-**Reason:** NewGVN does not implement trunc nuw equality propagation.
+### ~~trunc-nuw-equality.ll~~ (FIXED)
+**Difference:** ~~Equality propagation from trunc nuw~~ — Now matches GVN.
+**NewGVN:** Propagates trunc nuw equality via PredicateInfo constraints (ICMP_EQ 0 on false edge, ICMP_NE 0 on true edge). The ICMP_NE case is handled by detecting the trunc nuw source and deducing the value must be 1.
+**Flag:** `-newgvn-enable-trunc-equality` (default true).
 
 ### ~~assume.ll~~ (FIXED)
 **Difference:** ~~Partial assume propagation~~ — Now matches GVN.

@@ -192,6 +192,9 @@ static cl::opt<bool>
                              cl::Hidden);
 static cl::opt<bool> NewGVNEnableAssumePropagation(
     "newgvn-enable-assume-propagation", cl::init(true), cl::Hidden);
+static cl::opt<bool>
+    NewGVNEnableTruncEquality("newgvn-enable-trunc-equality", cl::init(true),
+                               cl::Hidden);
 
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
@@ -1706,6 +1709,23 @@ NewGVN::performSymbolicPredicateInfoEvaluation(BitCastInst *I) const {
       !cast<ConstantFP>(FirstOp)->isZero())
     return ExprResult::some(createConstantExpression(cast<Constant>(FirstOp)),
                             AdditionallyUsedValue, PI);
+
+  // Handle trunc nuw equality on the true edge.
+  // When we know %v != 0 from a trunc nuw to i1 constraint, the nuw flag
+  // guarantees %v fits in i1 (can only be 0 or 1), so %v must be 1.
+  if (NewGVNEnableTruncEquality && Predicate == CmpInst::ICMP_NE) {
+    auto *ConstOp = dyn_cast<Constant>(FirstOp);
+    if (!ConstOp || !ConstOp->isNullValue()) {
+      ConstOp = dyn_cast<Constant>(SecondOp);
+      std::swap(FirstOp, SecondOp);
+    }
+    if (ConstOp && ConstOp->isNullValue() &&
+        match(PI->Condition, m_NUWTrunc(m_Specific(CmpOp0))) &&
+        PI->Condition->getType()->isIntegerTy(1))
+      return ExprResult::some(
+          createConstantExpression(ConstantInt::get(CmpOp0->getType(), 1)),
+          AdditionallyUsedValue, PI);
+  }
 
   return ExprResult::none();
 }
