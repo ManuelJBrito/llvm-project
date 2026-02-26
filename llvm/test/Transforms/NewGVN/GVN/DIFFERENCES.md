@@ -167,42 +167,20 @@ bb2982.preheader:
 
 ## Tests Skipped (not copied)
 
-The following GVN tests were not copied because they require GVN-specific flags,
-additional passes, or special build configurations:
+The following GVN tests were not copied because they check GVN-specific
+optimization remarks or analysis preservation behavior that does not apply
+to NewGVN:
 
-- `condprop-memdep-invalidation.ll` — uses `-enable-gvn-memdep`
-- `load-constant-mem.ll` — uses `-passes=gvn,instcombine`
-- `masked-load-store-no-mem-dep.ll` — uses `-enable-gvn-memdep=false`
-- `no-mem-dep-info.ll` — uses `-enable-gvn-memdep=false`
-- `nonescaping-malloc.ll` — uses `-stats` (REQUIRES: asserts)
-- `opt-remark-assert-constant-uselistorder.ll` — uses `-pass-remarks-output` + GVN-specific remarks
-- `opt-remarks-multiple-users.ll` — uses `-pass-remarks-output` + GVN-specific remarks
-- `opt-remarks-non-dominating.ll` — uses `-pass-remarks-output` + GVN-specific remarks
-- `opt-remarks.ll` — uses `-pass-remarks=gvn` + GVN-specific remarks
-- `pr24426.ll` — uses `-passes=memcpyopt,mldst-motion,gvn`
-- `pr36063.ll` — uses `-passes=memcpyopt,mldst-motion,gvn`
-- `preserve-analysis.ll` — tests GVN-specific analysis preservation
-- `remarks-selfdomination.ll` — uses `-pass-remarks-analysis=gvn`
+- `opt-remark-assert-constant-uselistorder.ll` — checks GVN-specific YAML remark output (`Pass: gvn`, `Name: LoadClobbered`)
+- `opt-remarks-multiple-users.ll` — checks GVN-specific YAML remark output (`Pass: gvn`, `Name: LoadClobbered`)
+- `opt-remarks-non-dominating.ll` — checks GVN-specific YAML remark output (`Pass: gvn`, `Name: LoadClobbered`)
+- `opt-remarks.ll` — checks GVN-specific `-pass-remarks=gvn` text and YAML remarks (`Pass: gvn`, `Name: LoadElim/LoadClobbered`)
+- `preserve-analysis.ll` — tests that GVN preserves DomTree/LoopAnalysis for subsequent passes (pass-manager-level test, not an optimization test)
 
 ## Coverage Summary
 
 - **Total GVN tests (main dir):** 170
-- **Copied to NewGVN/GVN/:** 157 (92%)
-- **Skipped:** 13 (require GVN-specific flags/passes/build config)
-- **GVN/PRE/ subdirectory:** 36 of 48 copied to NewGVN/GVN/PRE/ (all 36 pass)
-- **PRE tests skipped:** 12 (require multi-pass pipelines or GVN-specific flags)
-
-### PRE Tests Skipped (not copied)
-
-- `atomic.ll` — uses `-passes=gvn,gvn` (double GVN)
-- `call.ll` — uses `-passes=gvn,bdce`
-- `invariant-load-pre.ll` — uses `-passes=licm,gvn`
-- `load-pre-licm.ll` — uses `-passes=licm,gvn`
-- `load-pre-nonlocal.ll` — uses `-enable-gvn-nonlocal-load-elim`
-- `phi-translate.ll` — uses `-passes=gvn,instcombine`
-- `phi-translate-2.ll` — uses `-passes=gvn,gvn` (double GVN)
-- `pre-basic-add.ll` — uses `-stats` (REQUIRES: asserts)
-- `pre-from-malloc.ll` — uses `-passes=gvn,bdce`
-- `pre-loop-load.ll` — uses `-enable-split-backedge-in-load-pre`
-- `rle.ll` — multi-run with `-basic-aa -gvn`
-- `volatile.ll` — uses `-passes=gvn,instcombine`
+- **Copied to NewGVN/GVN/:** 165 (97%)
+- **Skipped:** 5 (GVN-specific remarks/analysis preservation)
+- **GVN/PRE/ subdirectory:** 48 of 48 copied to NewGVN/GVN/PRE/ (100%)
+- **PRE tests skipped:** 0
