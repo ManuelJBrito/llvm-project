@@ -383,6 +383,8 @@ void PredicateInfoBuilder::processAssume(
       collectCmpOps(Cmp, Values);
     else if (match(Cond, m_NUWTrunc(m_Value(Op0))))
       Values.push_back(Op0);
+    else if (match(Cond, m_Not(m_Value(Op0))))
+      Values.push_back(Op0);
 
     for (Value *V : Values) {
       if (shouldRename(V)) {
@@ -430,6 +432,8 @@ void PredicateInfoBuilder::processBranch(
       if (auto *Cmp = dyn_cast<CmpInst>(Cond))
         collectCmpOps(Cmp, Values);
       else if (match(Cond, m_NUWTrunc(m_Value(Op0))))
+        Values.push_back(Op0);
+      else if (match(Cond, m_Not(m_Value(Op0))))
         Values.push_back(Op0);
 
       for (Value *V : Values) {
@@ -727,6 +731,13 @@ std::optional<PredicateConstraint> PredicateBase::getConstraint() const {
     if (match(Condition, m_NUWTrunc(m_Specific(RenamedOp)))) {
       return {{TrueEdge ? CmpInst::ICMP_NE : CmpInst::ICMP_EQ,
                ConstantInt::getNullValue(RenamedOp->getType())}};
+    }
+
+    if (match(Condition, m_Not(m_Specific(RenamedOp)))) {
+      // not(%v) == true → %v == false; not(%v) == false → %v == true
+      return {{CmpInst::ICMP_EQ,
+               TrueEdge ? ConstantInt::getFalse(RenamedOp->getType())
+                        : ConstantInt::getTrue(RenamedOp->getType())}};
     }
 
     CmpInst *Cmp = dyn_cast<CmpInst>(Condition);

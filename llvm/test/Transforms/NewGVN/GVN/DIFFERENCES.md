@@ -12,7 +12,7 @@ and explanations.
 | PHI translation | Supported for store-to-load (via `-newgvn-enable-phi-translation`) | Does PHI translation for load elimination |
 | Unreachable blocks | Replaces content with poison | Uses MemDep to handle unreachable paths |
 | Uninitialized alloca | Replaces with undef (via `-newgvn-enable-undef-alloca`) | Replaces with undef |
-| Assume propagation | Partial (direct uses only) | Full (negations, equality) |
+| Assume propagation | Full (via `-newgvn-enable-assume-propagation`) | Full (negations, equality) |
 | Equality propagation | Limited | Propagates from trunc nuw, etc. |
 | Dead code elimination | Implicit DCE (removes unused instrs) | No implicit DCE |
 | PRE (scalar + load) | Supported (via `-newgvn-enable-pre`, `-newgvn-enable-load-pre`) | Supported via `-enable-pre`, `-enable-load-pre` |
@@ -172,11 +172,10 @@ ret:
 **NewGVN:** Does not propagate the equality from trunc nuw. Keeps `store i64 %v`.
 **Reason:** NewGVN does not implement trunc nuw equality propagation.
 
-### assume.ll
-**Difference:** Partial assume propagation
-**GVN:** Full propagation — replaces `assume(false)` with `store poison`, propagates negations.
-**NewGVN:** Partial — replaces direct uses after `assume(%x)` with `true`, but does not propagate negations or convert `assume(false)` to unreachable.
-**Reason:** NewGVN has limited assume knowledge propagation compared to GVN.
+### ~~assume.ll~~ (FIXED)
+**Difference:** ~~Partial assume propagation~~ — Now matches GVN.
+**NewGVN:** Full assume propagation — converts `assume(false)` to `store poison, null`, propagates negations via PredicateInfo `m_Not` handling.
+**Flag:** `-newgvn-enable-assume-propagation` (default true).
 
 ---
 

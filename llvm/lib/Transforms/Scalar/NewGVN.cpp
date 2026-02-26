@@ -190,6 +190,8 @@ static cl::opt<bool>
 static cl::opt<bool>
     NewGVNEnableUndefAlloca("newgvn-enable-undef-alloca", cl::init(true),
                              cl::Hidden);
+static cl::opt<bool> NewGVNEnableAssumePropagation(
+    "newgvn-enable-assume-propagation", cl::init(true), cl::Hidden);
 
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
@@ -4676,6 +4678,39 @@ bool NewGVN::eliminateInstructions(Function &F) {
       auto *BB = BBPair.first;
       if (ReachablePredCount.lookup(BB) != PHI->getNumIncomingValues())
         ReplaceUnreachablePHIArgs(PHI, BB);
+    }
+  }
+
+  // Convert assume(false) to store i8 poison, ptr null + remove the assume.
+  // This matches GVN's behavior of marking code after assume(false) as
+  // unreachable by inserting a null store.
+  if (NewGVNEnableAssumePropagation) {
+    for (auto &BB : F) {
+      if (!ReachableBlocks.count(&BB))
+        continue;
+      for (auto &I : make_early_inc_range(BB)) {
+        auto *II = dyn_cast<IntrinsicInst>(&I);
+        if (!II || II->getIntrinsicID() != Intrinsic::assume)
+          continue;
+        Value *Cond = II->getArgOperand(0);
+        auto *CondConst = dyn_cast<ConstantInt>(Cond);
+        if (!CondConst)
+          CondConst =
+              dyn_cast_or_null<ConstantInt>(lookupOperandLeader(Cond));
+        if (CondConst && CondConst->isZero()) {
+          LLVM_DEBUG(dbgs() << "Converting assume(false) to unreachable "
+                               "marker: "
+                            << *II << "\n");
+          auto *PtrTy = PointerType::get(II->getContext(), 0);
+          auto *Int8Ty = Type::getInt8Ty(II->getContext());
+          new StoreInst(PoisonValue::get(Int8Ty),
+                        Constant::getNullValue(PtrTy), II->getIterator());
+          if (!II->hasOperandBundles()) {
+            markInstructionForDeletion(II);
+            AnythingReplaced = true;
+          }
+        }
+      }
     }
   }
 
