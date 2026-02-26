@@ -25,12 +25,12 @@ define i32 @pr23096_test0(i1 %arg, ptr %arg2) {
 ; CHECK-LABEL: define i32 @pr23096_test0(
 ; CHECK-SAME: i1 [[ARG:%.*]], ptr [[ARG2:%.*]]) {
 ; CHECK-NEXT:  [[ENTRY:.*:]]
+; CHECK-NEXT:    [[LOAD:%.*]] = load i32, ptr [[ARG2]], align 4
 ; CHECK-NEXT:    br label %[[BB0:.*]]
 ; CHECK:       [[BB1:.*]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br i1 [[ARG]], label %[[BB0]], label %[[BB1]]
 ; CHECK:       [[BB0]]:
-; CHECK-NEXT:    [[LOAD:%.*]] = load i32, ptr [[ARG2]], align 4
 ; CHECK-NEXT:    ret i32 [[LOAD]]
 ;
 entry:
@@ -51,12 +51,12 @@ define i32 @pr23096_test1(i1 %arg, ptr %arg2) {
 ; CHECK-LABEL: define i32 @pr23096_test1(
 ; CHECK-SAME: i1 [[ARG:%.*]], ptr [[ARG2:%.*]]) {
 ; CHECK-NEXT:  [[ENTRY:.*:]]
+; CHECK-NEXT:    [[LOAD:%.*]] = load i32, ptr [[ARG2]], align 4
 ; CHECK-NEXT:    br label %[[BB0:.*]]
 ; CHECK:       [[BB1:.*]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br i1 [[ARG]], label %[[BB0]], label %[[BB1]]
 ; CHECK:       [[BB0]]:
-; CHECK-NEXT:    [[LOAD:%.*]] = load i32, ptr [[ARG2]], align 4
 ; CHECK-NEXT:    ret i32 [[LOAD]]
 ;
 entry:

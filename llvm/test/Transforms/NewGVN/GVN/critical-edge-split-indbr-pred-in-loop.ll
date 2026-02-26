@@ -16,10 +16,13 @@ define i32 @foo(ptr %p1, ptr %p2, ptr %p3) {
 ; CHECK:       loop.latch1:
 ; CHECK-NEXT:    [[C:%.*]] = call i1 @cond()
 ; CHECK-NEXT:    br i1 [[C]], label [[LOOP_HEADER]], label [[LOOP_LATCH1_EXIT_CRIT_EDGE:%.*]]
+; CHECK:       loop.latch1.exit_crit_edge:
+; CHECK-NEXT:    [[X_PRE:%.*]] = load i32, ptr [[P3]], align 4
+; CHECK-NEXT:    br label [[EXIT:%.*]]
 ; CHECK:       loop.latch2:
-; CHECK-NEXT:    indirectbr ptr [[P2:%.*]], [label [[LOOP_HEADER]], label [[LOOP_LATCH1_EXIT_CRIT_EDGE]]]
+; CHECK-NEXT:    indirectbr ptr [[P2:%.*]], [label [[LOOP_HEADER]], label [[EXIT]]]
 ; CHECK:       exit:
-; CHECK-NEXT:    [[X:%.*]] = load i32, ptr [[P3]], align 4
+; CHECK-NEXT:    [[X:%.*]] = phi i32 [ 0, [[LOOP_LATCH2]] ], [ [[X_PRE]], [[LOOP_LATCH1_EXIT_CRIT_EDGE]] ]
 ; CHECK-NEXT:    ret i32 [[X]]
 ;
 bb:

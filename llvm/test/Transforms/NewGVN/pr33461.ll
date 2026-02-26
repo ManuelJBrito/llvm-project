@@ -7,12 +7,15 @@ define void @patatino() {
 ; CHECK-LABEL: @patatino(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    br i1 false, label [[FOR_COND1:%.*]], label [[FOR_INC:%.*]]
+; CHECK:       entry.for.inc_crit_edge:
+; CHECK-NEXT:    [[DOTPRE:%.*]] = load i16, ptr @b, align 2
+; CHECK-NEXT:    br label [[FOR_INC1:%.*]]
 ; CHECK:       for.cond1:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i16 [ poison, [[ENTRY:%.*]] ], [ [[INC:%.*]], [[FOR_INC]] ]
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i16 [ poison, [[ENTRY:%.*]] ], [ [[INC:%.*]], [[FOR_INC1]] ]
 ; CHECK-NEXT:    store i16 [[PHIOFOPS]], ptr @b, align 2
-; CHECK-NEXT:    br label [[FOR_INC]]
+; CHECK-NEXT:    br label [[FOR_INC1]]
 ; CHECK:       for.inc:
-; CHECK-NEXT:    [[TMP0:%.*]] = load i16, ptr @b, align 2
+; CHECK-NEXT:    [[TMP0:%.*]] = phi i16 [ [[PHIOFOPS]], [[FOR_COND1]] ], [ [[DOTPRE]], [[FOR_INC]] ]
 ; CHECK-NEXT:    [[INC]] = add i16 [[TMP0]], 1
 ; CHECK-NEXT:    store i16 [[INC]], ptr @b, align 2
 ; CHECK-NEXT:    br label [[FOR_COND1]]

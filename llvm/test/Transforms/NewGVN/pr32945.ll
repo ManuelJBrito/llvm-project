@@ -6,15 +6,18 @@
 define void @tinkywinky() {
 ; CHECK-LABEL: define void @tinkywinky() {
 ; CHECK-NEXT:    br i1 true, label [[LOR_LHS_FALSE:%.*]], label [[COND_TRUE:%.*]]
+; CHECK:       .cond.true_crit_edge:
+; CHECK-NEXT:    [[TMP2_PRE:%.*]] = load i32, ptr @d, align 4
+; CHECK-NEXT:    br label [[COND_TRUE1:%.*]]
 ; CHECK:       lor.lhs.false:
 ; CHECK-NEXT:    [[TMP:%.*]] = load i32, ptr @d, align 4
 ; CHECK-NEXT:    [[PATATINO:%.*]] = load i32, ptr null, align 4
 ; CHECK-NEXT:    [[OR:%.*]] = or i32 [[TMP]], [[PATATINO]]
 ; CHECK-NEXT:    store i32 [[OR]], ptr @d, align 4
-; CHECK-NEXT:    br label [[COND_TRUE]]
+; CHECK-NEXT:    br label [[COND_TRUE1]]
 ; CHECK:       cond.true:
+; CHECK-NEXT:    [[TMP2:%.*]] = phi i32 [ [[OR]], [[LOR_LHS_FALSE]] ], [ [[TMP2_PRE]], [[COND_TRUE]] ]
 ; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr @e, align 4
-; CHECK-NEXT:    [[TMP2:%.*]] = load i32, ptr @d, align 4
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq i32 [[TMP1]], [[TMP2]]
 ; CHECK-NEXT:    br i1 [[CMP]], label [[COND_TRUE6:%.*]], label [[COND_FALSE:%.*]]
 ; CHECK:       cond.true6:

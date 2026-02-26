@@ -7,13 +7,14 @@
 ; PR21625.
 define i32 @f(ptr %f) {
 ; CHECK-LABEL: define i32 @f(
-; CHECK-NEXT:  bb0:
-; CHECK-NEXT:    br label %bb2
-; CHECK:       bb1:
-; CHECK-NEXT:    store i8 poison, ptr null, align 1
-; CHECK-NEXT:    br i1 false, label %bb1, label %bb2
-; CHECK:       bb2:
+; CHECK-SAME: ptr [[F:%.*]]) {
+; CHECK-NEXT:  [[BB0:.*:]]
 ; CHECK-NEXT:    [[STOREMERGE:%.*]] = load i32, ptr null, align 4
+; CHECK-NEXT:    br label %[[BB2:.*]]
+; CHECK:       [[BB1:.*]]:
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
+; CHECK-NEXT:    br i1 false, label %[[BB1]], label %[[BB2]]
+; CHECK:       [[BB2]]:
 ; CHECK-NEXT:    ret i32 [[STOREMERGE]]
 ;
 bb0:

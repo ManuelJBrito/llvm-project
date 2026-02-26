@@ -15,7 +15,7 @@ and explanations.
 | Assume propagation | Partial (direct uses only) | Full (negations, equality) |
 | Equality propagation | Limited | Propagates from trunc nuw, etc. |
 | Dead code elimination | Implicit DCE (removes unused instrs) | No implicit DCE |
-| Load PRE | Not supported | Supported via -enable-load-pre |
+| PRE (scalar + load) | Supported (via `-newgvn-enable-pre`, `-newgvn-enable-load-pre`) | Supported via `-enable-pre`, `-enable-load-pre` |
 
 ---
 
@@ -152,8 +152,8 @@ bb2982.preheader:
 ### unreachable-predecessor.ll
 **Difference:** Unreachable predecessor handling in loops
 **GVN:** Detects unreachable predecessor, replaces %ptr2 with poison in PHI, adds critical edge split block, hoists loop-invariant load.
-**NewGVN:** Replaces %ptr2 with poison in PHI but does not split critical edges or hoist loop-invariant loads.
-**Reason:** NewGVN does not do critical edge splitting or PRE-style load hoisting.
+**NewGVN:** Replaces %ptr2 with poison in PHI. Now has PRE/Load PRE but the unreachable predecessor interaction differs.
+**Reason:** NewGVN handles unreachable predecessors differently, affecting the order of optimizations.
 
 ### pr32314.ll
 **Difference:** PHI-of-ops optimization
@@ -178,11 +178,10 @@ bb2982.preheader:
 **NewGVN:** Forwards `<2 x i32>` load through `inttoptr`+`store <2 x ptr>` via `performCrossTypeForwarding` (store-to-load path). `InstSimplifyFolder` simplifies `ptrtoint(inttoptr(%v2))` to `%v2`.
 **Flag:** `-newgvn-enable-cross-type-forwarding` (default true).
 
-### int_sideeffect.ll
-**Difference:** Loop-invariant load handling
-**GVN:** Hoists loop-invariant load to a preheader using PRE.
-**NewGVN:** Keeps the load inside the loop (no PRE).
-**Reason:** NewGVN does not implement PRE (Partial Redundancy Elimination).
+### ~~int_sideeffect.ll~~ (FIXED)
+**Difference:** ~~Loop-invariant load handling~~ — Now matches GVN.
+**NewGVN:** Hoists loop-invariant load to preheader using Load PRE (loop-invariant path).
+**Flag:** `-newgvn-enable-load-pre` (default true).
 
 ### trunc-nuw-equality.ll
 **Difference:** Equality propagation from trunc nuw
@@ -235,4 +234,20 @@ additional passes, or special build configurations:
 - **Total GVN tests (main dir):** 170
 - **Copied to NewGVN/GVN/:** 157 (92%)
 - **Skipped:** 13 (require GVN-specific flags/passes/build config)
-- **GVN/PRE/ subdirectory:** not yet covered (44 tests, all require PRE)
+- **GVN/PRE/ subdirectory:** 36 of 48 copied to NewGVN/GVN/PRE/ (all 36 pass)
+- **PRE tests skipped:** 12 (require multi-pass pipelines or GVN-specific flags)
+
+### PRE Tests Skipped (not copied)
+
+- `atomic.ll` — uses `-passes=gvn,gvn` (double GVN)
+- `call.ll` — uses `-passes=gvn,bdce`
+- `invariant-load-pre.ll` — uses `-passes=licm,gvn`
+- `load-pre-licm.ll` — uses `-passes=licm,gvn`
+- `load-pre-nonlocal.ll` — uses `-enable-gvn-nonlocal-load-elim`
+- `phi-translate.ll` — uses `-passes=gvn,instcombine`
+- `phi-translate-2.ll` — uses `-passes=gvn,gvn` (double GVN)
+- `pre-basic-add.ll` — uses `-stats` (REQUIRES: asserts)
+- `pre-from-malloc.ll` — uses `-passes=gvn,bdce`
+- `pre-loop-load.ll` — uses `-enable-split-backedge-in-load-pre`
+- `rle.ll` — multi-run with `-basic-aa -gvn`
+- `volatile.ll` — uses `-passes=gvn,instcombine`

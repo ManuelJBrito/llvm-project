@@ -149,6 +149,9 @@ STATISTIC(NumGVNPHIOfOpsCreated, "Number of PHI of ops created");
 STATISTIC(NumGVNPHIOfOpsEliminations,
           "Number of things eliminated using PHI of ops");
 STATISTIC(NumGVNBlocksMerged, "Number of blocks merged");
+STATISTIC(NumGVNPRELoadsInserted, "Number of loads PRE inserted");
+STATISTIC(NumGVNPREInstrInserted, "Number of scalar instructions PRE inserted");
+STATISTIC(NumGVNPREEdgesSplit, "Number of critical edges split for PRE");
 DEBUG_COUNTER(VNCounter, "newgvn-vn",
               "Controls which instructions are value numbered");
 DEBUG_COUNTER(PHIOfOpsCounter, "newgvn-phi",
@@ -175,6 +178,10 @@ static cl::opt<bool> NewGVNEnableBlockMerge("newgvn-enable-block-merge",
 static cl::opt<bool>
     NewGVNEnableCrossTypeForwarding("newgvn-enable-cross-type-forwarding",
                                     cl::init(true), cl::Hidden);
+static cl::opt<bool> NewGVNEnablePRE("newgvn-enable-pre", cl::init(true),
+                                      cl::Hidden);
+static cl::opt<bool> NewGVNEnableLoadPRE("newgvn-enable-load-pre",
+                                          cl::init(true), cl::Hidden);
 
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
@@ -869,6 +876,9 @@ private:
 
   bool eliminateInstructions(Function &);
   bool performCrossTypeForwarding();
+  bool performPRE(Function &);
+  bool performLoadPRE(LoadInst *);
+  bool performScalarPRE(Instruction *);
   void replaceInstruction(Instruction *, Value *);
   void markInstructionForDeletion(Instruction *);
   void deleteInstructionsInBlock(BasicBlock *);
@@ -3644,7 +3654,14 @@ bool NewGVN::runGVN() {
   // Cross-type load forwarding for non-constant values. This runs after
   // elimination because the coercion instructions cannot be represented
   // in NewGVN's congruence class framework during value numbering.
+  // Run before PRE so that loads handled by cross-type forwarding are
+  // not redundantly PRE'd.
   Changed |= performCrossTypeForwarding();
+
+  // PRE: insert partially redundant computations (including loads) on
+  // paths where they are missing, then merge via PHI.  This runs after
+  // elimination so we only consider surviving instructions.
+  Changed |= performPRE(F);
 
   // Delete all instructions marked for deletion.
   for (Instruction *ToErase : InstructionsToErase) {
@@ -4119,6 +4136,396 @@ bool NewGVN::performCrossTypeForwarding() {
   }
 
   return Changed;
+}
+
+//===----------------------------------------------------------------------===//
+//                    PRE (Partial Redundancy Elimination)
+//===----------------------------------------------------------------------===//
+
+bool NewGVN::performPRE(Function &F) {
+  if (!NewGVNEnablePRE)
+    return false;
+  bool Changed = false;
+
+  // Collect blocks upfront. We cannot iterate the DT lazily because
+  // SplitCriticalEdge (called from performScalarPRE / performLoadPRE) can
+  // modify the dominator tree, invalidating a lazy depth_first iterator.
+  SmallVector<BasicBlock *, 32> DTBlocks;
+  for (auto *DTN : depth_first(DT->getRootNode()))
+    DTBlocks.push_back(DTN->getBlock());
+
+  for (BasicBlock *BB : DTBlocks) {
+    if (!ReachableBlocks.count(BB))
+      continue;
+    if (BB == &F.getEntryBlock())
+      continue;
+    if (pred_size(BB) < 2)
+      continue;
+    if (BB->isEHPad())
+      continue;
+
+    for (Instruction &I : make_early_inc_range(*BB)) {
+      if (InstructionsToErase.count(&I))
+        continue;
+      if (auto *LI = dyn_cast<LoadInst>(&I)) {
+        if (NewGVNEnableLoadPRE)
+          Changed |= performLoadPRE(LI);
+      } else {
+        Changed |= performScalarPRE(&I);
+      }
+    }
+  }
+  return Changed;
+}
+
+bool NewGVN::performLoadPRE(LoadInst *Load) {
+  if (!Load->isSimple())
+    return false;
+
+  BasicBlock *LoadBB = Load->getParent();
+
+  MemoryAccess *MA = getMemoryAccess(Load);
+  if (!MA)
+    return false;
+
+  MemoryAccess *Clobber = MSSAWalker->getClobberingMemoryAccess(MA);
+
+  Value *LoadPtr = Load->getPointerOperand();
+
+  //===--------------------------------------------------------------------===//
+  // Path 1: Standard Load PRE – clobber is a MemoryPhi in LoadBB
+  //===--------------------------------------------------------------------===//
+  if (auto *MP = dyn_cast<MemoryPhi>(Clobber)) {
+    if (MP->getBlock() != LoadBB)
+      goto try_loop_pre;
+
+    MemoryLocation MemLoc = MemoryLocation::get(Load);
+
+    SmallVector<std::pair<BasicBlock *, Value *>, 4> AvailableValues;
+    BasicBlock *UnavailPred = nullptr;
+    unsigned NumUnavail = 0;
+
+    for (auto *PredBB : predecessors(LoadBB)) {
+      // Reject backedges for standard PRE.
+      if (isBackedge(PredBB, LoadBB))
+        goto try_loop_pre;
+
+      Value *AvailVal = nullptr;
+      MemoryAccess *IncomingMA = MP->getIncomingValueForBlock(PredBB);
+      MemoryAccess *PredClobber =
+          MSSAWalker->getClobberingMemoryAccess(IncomingMA, MemLoc);
+
+      if (!MSSA->isLiveOnEntryDef(PredClobber)) {
+        if (auto *MD = dyn_cast<MemoryDef>(PredClobber)) {
+          Instruction *DepInst = MD->getMemoryInst();
+          if (!ReachableBlocks.count(DepInst->getParent())) {
+            AvailVal = PoisonValue::get(Load->getType());
+          } else if (auto *SI = dyn_cast<StoreInst>(DepInst)) {
+            if (SI->getValueOperand()->getType() == Load->getType() &&
+                AA->isMustAlias(MemoryLocation::get(SI), MemLoc))
+              AvailVal = SI->getValueOperand();
+          } else if (auto *LI = dyn_cast<LoadInst>(DepInst)) {
+            if (LI->getType() == Load->getType() &&
+                AA->isMustAlias(MemoryLocation::get(LI), MemLoc))
+              AvailVal = LI;
+          }
+        }
+      }
+
+      // Verify the available value dominates the predecessor exit.
+      if (AvailVal) {
+        if (auto *AvailInst = dyn_cast<Instruction>(AvailVal)) {
+          if (!DT->dominates(AvailInst, PredBB->getTerminator()))
+            AvailVal = nullptr;
+        }
+      }
+
+      if (!AvailVal) {
+        ++NumUnavail;
+        UnavailPred = PredBB;
+      }
+      AvailableValues.push_back({PredBB, AvailVal});
+
+      if (NumUnavail > 1)
+        return false;
+    }
+
+    if (NumUnavail != 1)
+      return false;
+    assert(UnavailPred && "expected one unavailable predecessor");
+
+    // Reject terminators where critical-edge splitting is illegal.
+    if (isa<IndirectBrInst>(UnavailPred->getTerminator()) ||
+        isa<CallBrInst>(UnavailPred->getTerminator()))
+      return false;
+
+    // PHI-translate the load pointer for the insertion predecessor.
+    Value *PredPtr = LoadPtr;
+    if (auto *PtrPHI = dyn_cast<PHINode>(LoadPtr)) {
+      if (PtrPHI->getParent() == LoadBB)
+        PredPtr = PtrPHI->getIncomingValueForBlock(UnavailPred);
+    } else if (auto *PtrInst = dyn_cast<Instruction>(LoadPtr)) {
+      if (PtrInst->getParent() == LoadBB)
+        return false; // Non-PHI pointer defined in LoadBB – can't translate.
+    }
+    if (auto *PI = dyn_cast<Instruction>(PredPtr)) {
+      if (!DT->dominates(PI, UnavailPred->getTerminator()))
+        return false;
+    }
+
+    // Split critical edge if needed.
+    BasicBlock *InsertBB = UnavailPred;
+    if (UnavailPred->getTerminator()->getNumSuccessors() > 1) {
+      MemorySSAUpdater MSSAU(MSSA);
+      CriticalEdgeSplittingOptions Options(DT, /*LI=*/nullptr, &MSSAU);
+      Options.unsetPreserveLoopSimplify();
+      InsertBB = SplitCriticalEdge(UnavailPred, LoadBB, Options);
+      if (!InsertBB)
+        return false;
+      ++NumGVNPREEdgesSplit;
+      // Mark the new block reachable so post-processing doesn't delete it.
+      ReachableBlocks.insert(InsertBB);
+      for (auto &AV : AvailableValues)
+        if (AV.first == UnavailPred)
+          AV.first = InsertBB;
+    }
+
+    // Insert the new load.
+    LoadInst *NewLoad =
+        new LoadInst(Load->getType(), PredPtr, Load->getName() + ".pre",
+                     InsertBB->getTerminator()->getIterator());
+    NewLoad->setAlignment(Load->getAlign());
+    NewLoad->setOrdering(Load->getOrdering());
+    if (Load->hasMetadata())
+      NewLoad->copyMetadata(
+          *Load, {LLVMContext::MD_dbg, LLVMContext::MD_tbaa,
+                  LLVMContext::MD_alias_scope, LLVMContext::MD_noalias,
+                  LLVMContext::MD_access_group});
+
+    for (auto &AV : AvailableValues)
+      if (!AV.second)
+        AV.second = NewLoad;
+
+    // Build the PHI.
+    PHINode *PHI = PHINode::Create(Load->getType(), AvailableValues.size(),
+                                   Load->getName() + ".pre.phi");
+    PHI->insertBefore(LoadBB->begin());
+    for (auto &[Pred, Val] : AvailableValues)
+      PHI->addIncoming(Val, Pred);
+
+    Load->replaceAllUsesWith(PHI);
+    markInstructionForDeletion(Load);
+    ++NumGVNPRELoadsInserted;
+    LLVM_DEBUG(dbgs() << "Load PRE: inserted " << *NewLoad << " in "
+                      << getBlockName(InsertBB) << ", replaced with " << *PHI
+                      << "\n");
+    return true;
+  }
+
+try_loop_pre:
+  //===--------------------------------------------------------------------===//
+  // Path 2: Loop-invariant load PRE – load is in a loop header, clobber
+  //         is outside the loop → hoist to preheader.
+  //===--------------------------------------------------------------------===//
+  {
+    BasicBlock *Preheader = nullptr;
+    bool HasBackedge = false;
+
+    for (auto *PredBB : predecessors(LoadBB)) {
+      if (DT->dominates(LoadBB, PredBB)) {
+        HasBackedge = true;
+      } else {
+        if (Preheader)
+          return false; // Multiple entry edges.
+        Preheader = PredBB;
+      }
+    }
+    if (!HasBackedge || !Preheader)
+      return false;
+
+    // The pointer must be loop-invariant (dominate the loop header).
+    if (auto *PtrInst = dyn_cast<Instruction>(LoadPtr)) {
+      if (!DT->properlyDominates(PtrInst->getParent(), LoadBB))
+        return false;
+    }
+
+    // The clobber must be outside the loop.
+    if (MSSA->isLiveOnEntryDef(Clobber)) {
+      // OK – no store to this location at all.
+    } else if (auto *ClobberDef = dyn_cast<MemoryUseOrDef>(Clobber)) {
+      if (!DT->properlyDominates(ClobberDef->getBlock(), LoadBB))
+        return false;
+    } else if (auto *ClobberPhi = dyn_cast<MemoryPhi>(Clobber)) {
+      if (!DT->properlyDominates(ClobberPhi->getBlock(), LoadBB))
+        return false;
+    } else {
+      return false;
+    }
+
+    // Split critical edge if the preheader has multiple successors.
+    BasicBlock *InsertBB = Preheader;
+    if (Preheader->getTerminator()->getNumSuccessors() > 1) {
+      if (isa<IndirectBrInst>(Preheader->getTerminator()) ||
+          isa<CallBrInst>(Preheader->getTerminator()))
+        return false;
+      MemorySSAUpdater MSSAU(MSSA);
+      CriticalEdgeSplittingOptions Options(DT, /*LI=*/nullptr, &MSSAU);
+      Options.unsetPreserveLoopSimplify();
+      InsertBB = SplitCriticalEdge(Preheader, LoadBB, Options);
+      if (!InsertBB)
+        return false;
+      ++NumGVNPREEdgesSplit;
+      ReachableBlocks.insert(InsertBB);
+    }
+
+    LoadInst *NewLoad =
+        new LoadInst(Load->getType(), LoadPtr, Load->getName() + ".pre",
+                     InsertBB->getTerminator()->getIterator());
+    NewLoad->setAlignment(Load->getAlign());
+    NewLoad->setOrdering(Load->getOrdering());
+    if (Load->hasMetadata())
+      NewLoad->copyMetadata(
+          *Load, {LLVMContext::MD_dbg, LLVMContext::MD_tbaa,
+                  LLVMContext::MD_alias_scope, LLVMContext::MD_noalias,
+                  LLVMContext::MD_access_group});
+
+    Load->replaceAllUsesWith(NewLoad);
+    markInstructionForDeletion(Load);
+    ++NumGVNPRELoadsInserted;
+    LLVM_DEBUG(dbgs() << "Loop Load PRE: hoisted " << *Load << " to "
+                      << getBlockName(InsertBB) << "\n");
+    return true;
+  }
+}
+
+bool NewGVN::performScalarPRE(Instruction *I) {
+  // Filter instructions that cannot be PRE'd.
+  if (isa<PHINode>(I) || I->isTerminator() || I->getType()->isVoidTy() ||
+      I->mayReadFromMemory() || I->mayHaveSideEffects() ||
+      I->getType()->isTokenTy() || isa<TargetExtType>(I->getType()) ||
+      isa<AllocaInst>(I) || isa<CmpInst>(I) ||
+      isa<GetElementPtrInst>(I))
+    return false;
+  if (auto *CI = dyn_cast<CallInst>(I))
+    if (CI->isInlineAsm())
+      return false;
+
+  BasicBlock *BB = I->getParent();
+
+  // Use congruence classes to find values available in predecessors.
+  CongruenceClass *CC = ValueToClass.lookup(I);
+  if (!CC || CC->size() < 2)
+    return false; // Singleton class – no equivalent value exists anywhere.
+
+  SmallVector<std::pair<BasicBlock *, Value *>, 4> AvailableValues;
+  BasicBlock *UnavailPred = nullptr;
+  unsigned NumUnavail = 0;
+
+  for (auto *PredBB : predecessors(BB)) {
+    if (isBackedge(PredBB, BB))
+      return false;
+
+    Value *AvailVal = nullptr;
+    for (auto *Member : *CC) {
+      if (Member == I)
+        continue;
+      if (auto *MInst = dyn_cast<Instruction>(Member)) {
+        if (InstructionsToErase.count(MInst))
+          continue;
+        if (DT->dominates(MInst, PredBB->getTerminator())) {
+          AvailVal = MInst;
+          break;
+        }
+      } else {
+        // Constants / arguments are always available.
+        AvailVal = Member;
+        break;
+      }
+    }
+
+    if (!AvailVal) {
+      ++NumUnavail;
+      UnavailPred = PredBB;
+    }
+    AvailableValues.push_back({PredBB, AvailVal});
+    if (NumUnavail > 1)
+      return false;
+  }
+
+  if (NumUnavail != 1)
+    return false;
+  assert(UnavailPred);
+
+  // Reject terminators where critical-edge splitting is illegal.
+  if (isa<IndirectBrInst>(UnavailPred->getTerminator()) ||
+      isa<CallBrInst>(UnavailPred->getTerminator()))
+    return false;
+
+  // Clone the instruction, PHI-translating operands for the missing pred.
+  Instruction *Clone = I->clone();
+  bool AllOpsAvailable = true;
+  for (unsigned i = 0, e = Clone->getNumOperands(); i != e; ++i) {
+    Value *Op = Clone->getOperand(i);
+    if (auto *PHI = dyn_cast<PHINode>(Op)) {
+      if (PHI->getParent() == BB) {
+        Clone->setOperand(i, PHI->getIncomingValueForBlock(UnavailPred));
+        continue;
+      }
+    }
+    if (auto *OpInst = dyn_cast<Instruction>(Op)) {
+      if (!DT->dominates(OpInst, UnavailPred->getTerminator())) {
+        AllOpsAvailable = false;
+        break;
+      }
+    }
+  }
+  if (!AllOpsAvailable) {
+    Clone->deleteValue();
+    return false;
+  }
+
+  // Split critical edge if needed.
+  BasicBlock *InsertBB = UnavailPred;
+  if (UnavailPred->getTerminator()->getNumSuccessors() > 1) {
+    MemorySSAUpdater MSSAU(MSSA);
+    CriticalEdgeSplittingOptions Options(DT, /*LI=*/nullptr, &MSSAU);
+    Options.unsetPreserveLoopSimplify();
+    InsertBB = SplitCriticalEdge(UnavailPred, BB, Options);
+    if (!InsertBB) {
+      Clone->deleteValue();
+      return false;
+    }
+    ++NumGVNPREEdgesSplit;
+    ReachableBlocks.insert(InsertBB);
+    for (auto &AV : AvailableValues)
+      if (AV.first == UnavailPred)
+        AV.first = InsertBB;
+  }
+
+  Clone->insertBefore(InsertBB->getTerminator()->getIterator());
+  Clone->setName(I->getName() + ".pre");
+
+  // Drop poison-generating flags on the clone – the moved computation may
+  // execute with different operands than the original.
+  Clone->dropPoisonGeneratingFlags();
+
+  for (auto &AV : AvailableValues)
+    if (!AV.second)
+      AV.second = Clone;
+
+  PHINode *PHI =
+      PHINode::Create(I->getType(), AvailableValues.size(), "pre.phi");
+  PHI->insertBefore(BB->begin());
+  for (auto &[Pred, Val] : AvailableValues)
+    PHI->addIncoming(Val, Pred);
+
+  I->replaceAllUsesWith(PHI);
+  markInstructionForDeletion(I);
+  ++NumGVNPREInstrInserted;
+  LLVM_DEBUG(dbgs() << "Scalar PRE: inserted " << *Clone << " in "
+                    << getBlockName(InsertBB) << ", replaced with " << *PHI
+                    << "\n");
+  return true;
 }
 
 struct refinement_pair {
