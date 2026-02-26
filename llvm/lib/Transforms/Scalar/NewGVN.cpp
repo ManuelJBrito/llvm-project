@@ -109,6 +109,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar/GVNExpression.h"
 #include "llvm/Transforms/Utils/AssumeBundleBuilder.h"
+#include "llvm/Analysis/InstSimplifyFolder.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/PredicateInfo.h"
@@ -170,6 +172,9 @@ static cl::opt<bool> EnablePhiOfOps("enable-phi-of-ops", cl::init(true),
 static cl::opt<std::string> PairsFile("pairs-file", cl::init(""), cl::Hidden);
 static cl::opt<bool> NewGVNEnableBlockMerge("newgvn-enable-block-merge",
                                              cl::init(true), cl::Hidden);
+static cl::opt<bool>
+    NewGVNEnableCrossTypeForwarding("newgvn-enable-cross-type-forwarding",
+                                    cl::init(true), cl::Hidden);
 
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
@@ -811,11 +816,11 @@ private:
   // Symbolic evaluation.
   ExprResult checkExprResults(Expression *, Instruction *, Value *) const;
   ExprResult performSymbolicEvaluation(Instruction *,
-                                       SmallPtrSetImpl<Value *> &) const;
+                                       SmallPtrSetImpl<Value *> &);
   const Expression *performSymbolicLoadCoercion(Type *, Value *, LoadInst *,
                                                 Instruction *,
-                                                MemoryAccess *) const;
-  const Expression *performSymbolicLoadEvaluation(Instruction *) const;
+                                                MemoryAccess *);
+  const Expression *performSymbolicLoadEvaluation(Instruction *);
   const Expression *performSymbolicStoreEvaluation(Instruction *) const;
   ExprResult performSymbolicCallEvaluation(Instruction *) const;
   void sortPHIOps(MutableArrayRef<ValPair> Ops) const;
@@ -863,6 +868,7 @@ private:
                                     SmallVectorImpl<ValueDFS> &) const;
 
   bool eliminateInstructions(Function &);
+  bool performCrossTypeForwarding();
   void replaceInstruction(Instruction *, Value *);
   void markInstructionForDeletion(Instruction *);
   void deleteInstructionsInBlock(BasicBlock *);
@@ -1491,7 +1497,7 @@ const Expression *NewGVN::performSymbolicStoreEvaluation(Instruction *I) const {
 const Expression *
 NewGVN::performSymbolicLoadCoercion(Type *LoadType, Value *LoadPtr,
                                     LoadInst *LI, Instruction *DepInst,
-                                    MemoryAccess *DefiningAccess) const {
+                                    MemoryAccess *DefiningAccess) {
   assert((!LI || LI->isSimple()) && "Not a simple load");
   if (auto *DepSI = dyn_cast<StoreInst>(DepInst)) {
     // Can't forward from non-atomic to atomic without violating memory model.
@@ -1508,6 +1514,33 @@ NewGVN::performSymbolicLoadCoercion(Type *LoadType, Value *LoadPtr,
           LLVM_DEBUG(dbgs() << "Coercing load from store " << *DepSI
                             << " to constant " << *Res << "\n");
           return createConstantExpression(Res);
+        }
+      }
+    }
+    // Must-alias cross-type constant forwarding for types where
+    // analyzeLoadFromClobberingStore fails (e.g., non-byte-aligned loads
+    // like i1, i31). We use canCoerceMustAliasedValueToLoad directly.
+    if (Offset < 0 && NewGVNEnableCrossTypeForwarding) {
+      if (canCoerceMustAliasedValueToLoad(DepSI->getValueOperand(), LoadType,
+                                          &F)) {
+        Value *StorePtr = lookupOperandLeader(DepSI->getPointerOperand());
+        if (LoadPtr == StorePtr ||
+            AA->isMustAlias(LoadPtr, DepSI->getPointerOperand())) {
+          if (auto *C = dyn_cast<Constant>(
+                  lookupOperandLeader(DepSI->getValueOperand()))) {
+            IRBuilder<InstSimplifyFolder> Builder(
+                LI->getContext(), InstSimplifyFolder(DL));
+            Builder.SetInsertPoint(LI);
+            if (Value *Res =
+                    coerceAvailableValueToLoadType(C, LoadType, Builder, &F)) {
+              if (auto *ResC = dyn_cast<Constant>(Res)) {
+                LLVM_DEBUG(dbgs()
+                           << "Cross-type must-alias forwarding from store "
+                           << *DepSI << " to constant " << *ResC << "\n");
+                return createConstantExpression(ResC);
+              }
+            }
+          }
         }
       }
     }
@@ -1566,7 +1599,7 @@ NewGVN::performSymbolicLoadCoercion(Type *LoadType, Value *LoadPtr,
   return nullptr;
 }
 
-const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) const {
+const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) {
   auto *LI = cast<LoadInst>(I);
 
   // We can eliminate in favor of non-simple loads, but we won't be able to
@@ -1998,7 +2031,7 @@ NewGVN::ExprResult NewGVN::performSymbolicCmpEvaluation(Instruction *I) const {
 // Substitute and symbolize the instruction before value numbering.
 NewGVN::ExprResult
 NewGVN::performSymbolicEvaluation(Instruction *I,
-                                  SmallPtrSetImpl<Value *> &Visited) const {
+                                  SmallPtrSetImpl<Value *> &Visited) {
 
   const Expression *E = nullptr;
   // TODO: memory intrinsics.
@@ -3608,6 +3641,11 @@ bool NewGVN::runGVN() {
 
   Changed |= eliminateInstructions(F);
 
+  // Cross-type load forwarding for non-constant values. This runs after
+  // elimination because the coercion instructions cannot be represented
+  // in NewGVN's congruence class framework during value numbering.
+  Changed |= performCrossTypeForwarding();
+
   // Delete all instructions marked for deletion.
   for (Instruction *ToErase : InstructionsToErase) {
     if (!ToErase->use_empty())
@@ -3940,6 +3978,147 @@ Value *NewGVN::findPHIOfOpsLeader(const Expression *E,
       return Member;
   }
   return nullptr;
+}
+
+// Cross-type load forwarding: handle non-constant store-to-load and
+// load-to-load forwarding where the types differ. This runs after value
+// numbering as a separate pass since the coercion instructions cannot be
+// represented in NewGVN's expression/congruence class framework.
+bool NewGVN::performCrossTypeForwarding() {
+  if (!NewGVNEnableCrossTypeForwarding)
+    return false;
+  bool Changed = false;
+  for (auto &BB : F) {
+    if (!ReachableBlocks.count(&BB))
+      continue;
+    for (auto II = BB.begin(), IE = BB.end(); II != IE;) {
+      auto *LI = dyn_cast<LoadInst>(&*II);
+      ++II; // Advance before potential modification.
+      if (!LI || !LI->isSimple() || InstructionsToErase.count(LI))
+        continue;
+      MemoryAccess *OrigAccess = getMemoryAccess(LI);
+      if (!OrigAccess)
+        continue;
+      MemoryAccess *DefAccess =
+          MSSAWalker->getClobberingMemoryAccess(OrigAccess);
+      if (MSSA->isLiveOnEntryDef(DefAccess))
+        continue;
+      auto *MD = dyn_cast<MemoryDef>(DefAccess);
+      if (!MD)
+        continue;
+      Instruction *DepInst = MD->getMemoryInst();
+      if (!ReachableBlocks.count(DepInst->getParent()))
+        continue;
+
+      Type *LoadType = LI->getType();
+      Value *LoadPtr = LI->getPointerOperand();
+
+      Value *SrcVal = nullptr;
+      Value *SrcPtr = nullptr;
+      bool AtomicOk = true;
+
+      if (auto *DepSI = dyn_cast<StoreInst>(DepInst)) {
+        if (LI->isAtomic() > DepSI->isAtomic())
+          AtomicOk = false;
+        if (LoadType == DepSI->getValueOperand()->getType())
+          continue; // Same type handled by normal value numbering.
+        SrcVal = DepSI->getValueOperand();
+        SrcPtr = DepSI->getPointerOperand();
+      } else if (auto *DepLI = dyn_cast<LoadInst>(DepInst)) {
+        if (LI->isAtomic() > DepLI->isAtomic())
+          AtomicOk = false;
+        if (LoadType == DepLI->getType())
+          continue; // Same type handled by normal value numbering.
+        SrcVal = DepLI;
+        SrcPtr = DepLI->getPointerOperand();
+      }
+
+      if (!AtomicOk || !SrcVal || !SrcPtr)
+        continue;
+      if (isa<Constant>(SrcVal))
+        continue; // Constants are handled during value numbering.
+      if (!canCoerceMustAliasedValueToLoad(SrcVal, LoadType, &F))
+        continue;
+      if (LoadPtr != SrcPtr && !AA->isMustAlias(LoadPtr, SrcPtr))
+        continue;
+
+      // Use InstSimplifyFolder so trivial operations like lshr X, 0 are
+      // folded away during creation.
+      IRBuilder<InstSimplifyFolder> Builder(BB.getContext(),
+                                            InstSimplifyFolder(DL));
+      Builder.SetInsertPoint(LI);
+      if (Value *Res =
+              coerceAvailableValueToLoadType(SrcVal, LoadType, Builder, &F)) {
+        LLVM_DEBUG(dbgs() << "Cross-type forwarding: replacing " << *LI
+                          << " with " << *Res << "\n");
+        LI->replaceAllUsesWith(Res);
+        markInstructionForDeletion(LI);
+        Changed = true;
+      }
+    }
+  }
+
+  // Load-to-load cross-type forwarding: when two simple loads access the same
+  // address with different types and the same clobbering memory access, we can
+  // forward from the dominating load to the dominated one.
+  DenseMap<Value *, SmallVector<LoadInst *, 4>> PtrToLoads;
+  for (auto &BB : F) {
+    if (!ReachableBlocks.count(&BB))
+      continue;
+    for (auto &I : BB) {
+      auto *LI = dyn_cast<LoadInst>(&I);
+      if (!LI || !LI->isSimple() || InstructionsToErase.count(LI))
+        continue;
+      PtrToLoads[LI->getPointerOperand()].push_back(LI);
+    }
+  }
+  for (auto &[Ptr, Loads] : PtrToLoads) {
+    if (Loads.size() < 2)
+      continue;
+    for (size_t i = 0; i < Loads.size(); ++i) {
+      LoadInst *LI = Loads[i];
+      if (InstructionsToErase.count(LI))
+        continue;
+      for (size_t j = 0; j < i; ++j) {
+        LoadInst *DomLoad = Loads[j];
+        if (InstructionsToErase.count(DomLoad))
+          continue;
+        if (LI->getType() == DomLoad->getType())
+          continue;
+        if (!DT->dominates(DomLoad, LI))
+          continue;
+        if (!canCoerceMustAliasedValueToLoad(DomLoad, LI->getType(), &F))
+          continue;
+        // Verify both loads see the same memory state by checking their
+        // clobbering accesses are the same.
+        MemoryAccess *LIAccess = getMemoryAccess(LI);
+        MemoryAccess *DomAccess = getMemoryAccess(DomLoad);
+        if (!LIAccess || !DomAccess)
+          continue;
+        MemoryAccess *LIClobber =
+            MSSAWalker->getClobberingMemoryAccess(LIAccess);
+        MemoryAccess *DomClobber =
+            MSSAWalker->getClobberingMemoryAccess(DomAccess);
+        if (LIClobber != DomClobber)
+          continue;
+
+        IRBuilder<InstSimplifyFolder> Builder(
+            LI->getParent()->getContext(), InstSimplifyFolder(DL));
+        Builder.SetInsertPoint(LI);
+        if (Value *Res = coerceAvailableValueToLoadType(DomLoad, LI->getType(),
+                                                        Builder, &F)) {
+          LLVM_DEBUG(dbgs() << "Cross-type load-to-load forwarding: replacing "
+                            << *LI << " with " << *Res << "\n");
+          LI->replaceAllUsesWith(Res);
+          markInstructionForDeletion(LI);
+          Changed = true;
+          break; // Move to next load.
+        }
+      }
+    }
+  }
+
+  return Changed;
 }
 
 struct refinement_pair {

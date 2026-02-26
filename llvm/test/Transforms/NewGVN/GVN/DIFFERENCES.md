@@ -8,7 +8,7 @@ and explanations.
 
 | Category | NewGVN Behavior | GVN Behavior |
 |---|---|---|
-| Cross-type load forwarding | Does not forward | Forwards loads of different types from stores |
+| Cross-type load forwarding | Forwards (via `-newgvn-enable-cross-type-forwarding`) | Forwards loads of different types from stores |
 | PHI translation | Does not do PHI translation | Does PHI translation for load elimination |
 | Unreachable blocks | Replaces content with poison | Uses MemDep to handle unreachable paths |
 | Uninitialized alloca | Keeps load | Replaces with undef |
@@ -39,55 +39,20 @@ entry:
 **NewGVN:** Keeps the load from uninitialized alloca.
 **Reason:** NewGVN does not use MemDep and doesn't have the "load from uninitialized alloca → undef" optimization.
 
-### pr10820.ll
-**Difference:** Cross-type load forwarding (store i32, load i31)
-**Reproducer:**
-```llvm
-@g = external global i31
-define void @main() {
-  store i32 402662078, ptr @g, align 8
-  %0 = load i31, ptr @g, align 8
-  store i31 %0, ptr undef, align 1
-  unreachable
-}
-```
-**GVN:** Forwards the i32 store value to the i31 load (truncating the constant).
-**NewGVN:** Keeps the i31 load as-is.
-**Reason:** NewGVN does not do cross-type load forwarding from prior stores.
+### ~~pr10820.ll~~ (FIXED)
+**Difference:** ~~Cross-type load forwarding (store i32, load i31)~~ — Now matches GVN.
+**NewGVN:** Forwards the i32 store constant to the i31 load via `canCoerceMustAliasedValueToLoad` + `coerceAvailableValueToLoadType` (constant path in `performSymbolicLoadCoercion`).
+**Flag:** `-newgvn-enable-cross-type-forwarding` (default true).
 
-### pr24397.ll
-**Difference:** Cross-type load forwarding (ptr → i64) + unreachable block handling
-**Reproducer:**
-```llvm
-define i64 @foo(ptr %arrayidx) {
-entry:
-  %p = load ptr, ptr %arrayidx, align 8
-  br label %BB2
-entry2:                          ; No predecessors!
-  br label %BB2
-BB2:
-  %load = load i64, ptr %arrayidx, align 8
-  ret i64 %load
-}
-```
-**GVN:** Forwards ptr→i64 via ptrtoint, replaces entry2 content.
-**NewGVN:** Replaces unreachable entry2 with poison store, keeps the i64 load.
-**Reason:** NewGVN does not do cross-type load forwarding; also handles unreachable blocks differently.
+### ~~pr24397.ll~~ (FIXED)
+**Difference:** ~~Cross-type load forwarding (ptr → i64)~~ — Now matches GVN (cross-type part).
+**NewGVN:** Forwards ptr→i64 via `ptrtoint` in `performCrossTypeForwarding` (load-to-load path). Still handles unreachable entry2 with poison store (cosmetic difference from GVN).
+**Flag:** `-newgvn-enable-cross-type-forwarding` (default true).
 
-### big-endian.ll
-**Difference:** Cross-type load forwarding (store i8, load i1 on big-endian)
-**Reproducer:**
-```llvm
-target datalayout = "E-m:e-i64:64-n32:64"
-define i1 @test2(i8 %V, ptr %P) {
-  store i8 %V, ptr %P
-  %A = load i1, ptr %P
-  ret i1 %A
-}
-```
-**GVN:** Forwards the i8 store to the i1 load via `trunc i8 %V to i1`.
-**NewGVN:** Keeps the i1 load as-is.
-**Reason:** NewGVN does not do cross-type store-to-load forwarding.
+### ~~big-endian.ll~~ (FIXED)
+**Difference:** ~~Cross-type load forwarding (store i8, load i1 on big-endian)~~ — Now matches GVN.
+**NewGVN:** Forwards the i8 store to the i1 load via `trunc i8 %V to i1` in `performCrossTypeForwarding` (store-to-load path). Uses `InstSimplifyFolder` to fold trivial `lshr X, 0` on big-endian.
+**Flag:** `-newgvn-enable-cross-type-forwarding` (default true).
 
 ### load-from-unreachable-predecessor.ll
 **Difference:** Unreachable block handling
@@ -208,11 +173,10 @@ bb2982.preheader:
 **NewGVN:** Removes all masked loads and the or, keeping only the scalar load before unreachable.
 **Reason:** NewGVN more aggressively eliminates unused code before unreachable terminators.
 
-### pr14166.ll
-**Difference:** Store-through-type-change load forwarding
-**GVN (MemDep):** Forwards load through inttoptr+store (bitcast-like forwarding).
-**GVN (MemorySSA) / NewGVN:** Does not forward because the store changes interpretation.
-**Reason:** NewGVN uses MemorySSA which is more conservative about type-punning stores.
+### ~~pr14166.ll~~ (FIXED)
+**Difference:** ~~Store-through-type-change load forwarding~~ — Now matches GVN MemDep behavior.
+**NewGVN:** Forwards `<2 x i32>` load through `inttoptr`+`store <2 x ptr>` via `performCrossTypeForwarding` (store-to-load path). `InstSimplifyFolder` simplifies `ptrtoint(inttoptr(%v2))` to `%v2`.
+**Flag:** `-newgvn-enable-cross-type-forwarding` (default true).
 
 ### int_sideeffect.ll
 **Difference:** Loop-invariant load handling

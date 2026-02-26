@@ -1,6 +1,5 @@
-; XFAIL: *
 ; RUN: opt -disable-basic-aa -passes=newgvn -S < %s | FileCheck %s
-; NewGVN fails this due to missing load coercion
+; NewGVN now handles cross-type load forwarding (store <2 x ptr>, load <2 x i32>).
 target datalayout = "e-p:32:32:32"
 target triple = "i386-pc-linux-gnu"
 define <2 x i32> @test1() {
