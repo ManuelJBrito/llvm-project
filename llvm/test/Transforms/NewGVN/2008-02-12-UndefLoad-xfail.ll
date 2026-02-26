@@ -1,4 +1,3 @@
-; XFAIL: *
 ; RUN: opt < %s -passes=newgvn -S | FileCheck %s
 ; PR1996
 

@@ -1,21 +1,17 @@
 ; RUN: opt < %s -passes=newgvn -S | FileCheck %s
 ; PR1996
-; NewGVN does not replace loads from uninitialized alloca with undef
-; (unlike GVN which uses MemDep to detect this case).
+; NewGVN detects loads from uninitialized allocas and replaces with undef
+; (matching GVN behavior via -newgvn-enable-undef-alloca).
 
 %struct.anon = type { i32, i8, i8, i8, i8 }
 
 define i32 @a() {
-; CHECK-LABEL: @a(
-; CHECK:         %tmp2 = load i32, ptr %tmp1, align 4
-; CHECK-NEXT:    %tmp3 = or i32 %tmp2, 11
-; CHECK-NEXT:    %tmp4 = and i32 %tmp3, -21
-; CHECK-NEXT:    store i32 %tmp4, ptr %tmp1, align 4
 entry:
         %c = alloca %struct.anon                ; <ptr> [#uses=2]
         %tmp = getelementptr %struct.anon, ptr %c, i32 0, i32 0             ; <ptr> [#uses=1]
         %tmp1 = getelementptr i32, ptr %tmp, i32 1          ; <ptr> [#uses=2]
         %tmp2 = load i32, ptr %tmp1, align 4                ; <i32> [#uses=1]
+; CHECK-NOT: load
         %tmp3 = or i32 %tmp2, 11                ; <i32> [#uses=1]
         %tmp4 = and i32 %tmp3, -21              ; <i32> [#uses=1]
         store i32 %tmp4, ptr %tmp1, align 4

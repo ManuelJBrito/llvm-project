@@ -187,6 +187,9 @@ static cl::opt<bool> NewGVNEnableLoadPRE("newgvn-enable-load-pre",
 static cl::opt<bool>
     NewGVNEnablePHITranslation("newgvn-enable-phi-translation", cl::init(true),
                                 cl::Hidden);
+static cl::opt<bool>
+    NewGVNEnableUndefAlloca("newgvn-enable-undef-alloca", cl::init(true),
+                             cl::Hidden);
 
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
@@ -1645,6 +1648,15 @@ const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) {
                                           DefiningInst, DefiningAccess))
         return CoercionResult;
     }
+  }
+
+  // If the clobbering access is liveOnEntry and the load pointer derives from
+  // an alloca, the memory was never initialized. Replace with undef.
+  if (NewGVNEnableUndefAlloca && MSSA->isLiveOnEntryDef(DefiningAccess)) {
+    Value *LoadPtr = LI->getPointerOperand();
+    const Value *UO = getUnderlyingObject(LoadPtr);
+    if (isa<AllocaInst>(UO))
+      return createConstantExpression(UndefValue::get(LI->getType()));
   }
 
   const auto *LE = createLoadExpression(LI->getType(), LoadAddressLeader, LI,

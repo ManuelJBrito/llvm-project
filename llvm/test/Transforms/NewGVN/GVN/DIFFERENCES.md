@@ -11,7 +11,7 @@ and explanations.
 | Cross-type load forwarding | Forwards (via `-newgvn-enable-cross-type-forwarding`) | Forwards loads of different types from stores |
 | PHI translation | Supported for store-to-load (via `-newgvn-enable-phi-translation`) | Does PHI translation for load elimination |
 | Unreachable blocks | Replaces content with poison | Uses MemDep to handle unreachable paths |
-| Uninitialized alloca | Keeps load | Replaces with undef |
+| Uninitialized alloca | Replaces with undef (via `-newgvn-enable-undef-alloca`) | Replaces with undef |
 | Assume propagation | Partial (direct uses only) | Full (negations, equality) |
 | Equality propagation | Limited | Propagates from trunc nuw, etc. |
 | Dead code elimination | Implicit DCE (removes unused instrs) | No implicit DCE |
@@ -21,23 +21,10 @@ and explanations.
 
 ## Individual Test Differences
 
-### 2008-02-12-UndefLoad.ll
-**Difference:** Uninitialized alloca load elimination
-**Reproducer:**
-```llvm
-%struct.anon = type { i32, i8, i8, i8, i8 }
-define i32 @a() {
-entry:
-  %c = alloca %struct.anon
-  %tmp1 = getelementptr i32, ptr %c, i32 1
-  %tmp2 = load i32, ptr %tmp1, align 4  ; load from uninitialized alloca
-  %tmp3 = or i32 %tmp2, 11
-  ...
-}
-```
-**GVN:** Uses MemDep to detect the load reads from uninitialized alloca, eliminates the load (CHECK-NOT: load).
-**NewGVN:** Keeps the load from uninitialized alloca.
-**Reason:** NewGVN does not use MemDep and doesn't have the "load from uninitialized alloca → undef" optimization.
+### ~~2008-02-12-UndefLoad.ll~~ (FIXED)
+**Difference:** ~~Uninitialized alloca load elimination~~ — Now matches GVN.
+**NewGVN:** Detects loads from uninitialized allocas via MemorySSA (liveOnEntry + getUnderlyingObject) and replaces with undef.
+**Flag:** `-newgvn-enable-undef-alloca` (default true).
 
 ### ~~pr10820.ll~~ (FIXED)
 **Difference:** ~~Cross-type load forwarding (store i32, load i31)~~ — Now matches GVN.
