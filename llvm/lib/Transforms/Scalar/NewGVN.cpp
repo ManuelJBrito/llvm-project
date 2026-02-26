@@ -152,6 +152,8 @@ STATISTIC(NumGVNBlocksMerged, "Number of blocks merged");
 STATISTIC(NumGVNPRELoadsInserted, "Number of loads PRE inserted");
 STATISTIC(NumGVNPREInstrInserted, "Number of scalar instructions PRE inserted");
 STATISTIC(NumGVNPREEdgesSplit, "Number of critical edges split for PRE");
+STATISTIC(NumGVNPHITranslations,
+          "Number of loads eliminated via PHI translation");
 DEBUG_COUNTER(VNCounter, "newgvn-vn",
               "Controls which instructions are value numbered");
 DEBUG_COUNTER(PHIOfOpsCounter, "newgvn-phi",
@@ -182,6 +184,9 @@ static cl::opt<bool> NewGVNEnablePRE("newgvn-enable-pre", cl::init(true),
                                       cl::Hidden);
 static cl::opt<bool> NewGVNEnableLoadPRE("newgvn-enable-load-pre",
                                           cl::init(true), cl::Hidden);
+static cl::opt<bool>
+    NewGVNEnablePHITranslation("newgvn-enable-phi-translation", cl::init(true),
+                                cl::Hidden);
 
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
@@ -2807,6 +2812,21 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
       return nullptr;
   }
 
+  // PHI translation: when a load's pointer is a PHI in the load's block,
+  // we can translate the pointer through each predecessor and find available
+  // values using per-predecessor memory locations.
+  PHINode *LoadPtrPHI = nullptr;
+  MemoryPhi *PHITransMemPhi = nullptr;
+  if (NewGVNEnablePHITranslation && MemAccess && isa<LoadInst>(I)) {
+    auto *LI = cast<LoadInst>(I);
+    if (auto *PN = dyn_cast<PHINode>(LI->getPointerOperand())) {
+      if (PN->getParent() == I->getParent()) {
+        LoadPtrPHI = PN;
+        PHITransMemPhi = getMemoryAccess(I->getParent()); // may be null
+      }
+    }
+  }
+
   // Convert op of phis to phi of ops
   SmallPtrSet<const Value *, 10> VisitedOps;
   SmallVector<Value *, 4> Ops(I->operand_values());
@@ -2838,13 +2858,13 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
       return nullptr;
   }
 
-  if (!OpPHI && !MemPhiOp)
+  if (!OpPHI && !MemPhiOp && !LoadPtrPHI)
     return nullptr;
 
   SmallVector<ValPair, 4> PHIOps;
   BasicBlock *PHIBlock = nullptr;
 
-  if (OpPHI) {
+  if (OpPHI && !LoadPtrPHI) {
     // Existing path: phi-of-ops driven by a scalar PHI operand.
     SmallPtrSet<Value *, 4> Deps;
     PHIBlock = getBlockForValue(OpPHI);
@@ -2917,10 +2937,18 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
     for (auto *Dep : Deps)
       addAdditionalUsers(Dep, I);
   } else {
-    // MemoryPhi-driven phi-of-ops for loads: the pointer doesn't change
-    // across predecessors, only the memory state does.
+    // MemoryPhi-driven phi-of-ops for loads.  When LoadPtrPHI is set, the
+    // load's pointer is a PHI in PHIBlock and we translate it per-predecessor
+    // so that memory lookups use the correct (translated) address.
     auto *LI = cast<LoadInst>(I);
-    PHIBlock = MemPhiOp->getBlock();
+    MemoryPhi *TheMemPhi;
+    if (LoadPtrPHI) {
+      PHIBlock = LoadPtrPHI->getParent();
+      TheMemPhi = PHITransMemPhi; // may be null when block has no MemoryPhi
+    } else {
+      TheMemPhi = MemPhiOp;
+      PHIBlock = TheMemPhi->getBlock();
+    }
     RevisitOnReachabilityChange[PHIBlock].reset(InstrToDFSNum(I));
     if (pred_size(PHIBlock) < 2)
       return nullptr;
@@ -2931,11 +2959,25 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
     for (auto *PredBB : predecessors(PHIBlock)) {
       Value *FoundVal = nullptr;
       if (ReachableEdges.count({PredBB, PHIBlock})) {
-        // Walk from the MemoryPhi incoming value to find the clobber for this
-        // load's memory location in this predecessor.
-        MemoryAccess *IncomingMA = MemPhiOp->getIncomingValueForBlock(PredBB);
+        // PHI-translate the pointer for this predecessor if needed.
+        Value *PredAddr = LoadAddr;
+        MemoryLocation PredMemLoc = MemLoc;
+        if (LoadPtrPHI) {
+          Value *IncomingPtr =
+              LoadPtrPHI->getIncomingValueForBlock(PredBB);
+          PredAddr = lookupOperandLeader(IncomingPtr);
+          PredMemLoc = MemLoc.getWithNewPtr(PredAddr);
+          addAdditionalUsers(IncomingPtr, I);
+        }
+
+        // Walk from the MemoryPhi incoming value (or the load's defining
+        // access when no MemoryPhi exists) to find the clobber for this
+        // load's (possibly PHI-translated) memory location.
+        MemoryAccess *IncomingMA =
+            TheMemPhi ? TheMemPhi->getIncomingValueForBlock(PredBB)
+                      : MemAccess->getDefiningAccess();
         MemoryAccess *PredClobber =
-            MSSAWalker->getClobberingMemoryAccess(IncomingMA, MemLoc);
+            MSSAWalker->getClobberingMemoryAccess(IncomingMA, PredMemLoc);
 
         if (!MSSA->isLiveOnEntryDef(PredClobber)) {
           if (auto *MD = dyn_cast<MemoryDef>(PredClobber)) {
@@ -2945,7 +2987,7 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
             } else {
               // Try constant coercion from the clobbering instruction.
               if (const auto *CoercionExpr = performSymbolicLoadCoercion(
-                      LI->getType(), LoadAddr, LI, DefInst, PredClobber))
+                      LI->getType(), PredAddr, LI, DefInst, PredClobber))
                 FoundVal = findPHIOfOpsLeader(CoercionExpr, I, PredBB);
             }
           }
@@ -2956,7 +2998,7 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
           // equalsLoadStoreHelper when the store is in the same congruence
           // class.
           auto *LE =
-              createLoadExpression(LI->getType(), LoadAddr, LI, PredClobber);
+              createLoadExpression(LI->getType(), PredAddr, LI, PredClobber);
           FoundVal = findPHIOfOpsLeader(LE, I, PredBB);
           if (!FoundVal) {
             // No leader yet. Track the memory dependency so we revisit when
@@ -2979,6 +3021,8 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
       LLVM_DEBUG(dbgs() << "Found phi of ops operand " << *FoundVal << " in "
                         << getBlockName(PredBB) << "\n");
     }
+    if (LoadPtrPHI)
+      ++NumGVNPHITranslations;
   }
   sortPHIOps(PHIOps);
   auto *E = performSymbolicPHIEvaluation(PHIOps, I, PHIBlock);

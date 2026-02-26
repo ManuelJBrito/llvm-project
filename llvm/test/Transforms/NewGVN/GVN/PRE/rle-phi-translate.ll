@@ -21,10 +21,10 @@ define i32 @test1(ptr %b, ptr %c) nounwind {
 ; CHECK-NEXT:    store i32 [[T6]], ptr [[G]], align 4
 ; CHECK-NEXT:    br label %[[BB2]]
 ; CHECK:       [[BB2]]:
+; CHECK-NEXT:    [[CV:%.*]] = phi i32 [ [[T6]], %[[BB1]] ], [ [[T2]], %[[BB]] ]
+; CHECK-NEXT:    [[BV:%.*]] = phi i32 [ [[T5]], %[[BB1]] ], [ [[T3]], %[[BB]] ]
 ; CHECK-NEXT:    [[C_ADDR_0:%.*]] = phi ptr [ [[G]], %[[BB1]] ], [ [[C]], %[[BB]] ]
 ; CHECK-NEXT:    [[B_ADDR_0:%.*]] = phi ptr [ [[B]], %[[BB1]] ], [ [[G]], %[[BB]] ]
-; CHECK-NEXT:    [[CV:%.*]] = load i32, ptr [[C_ADDR_0]], align 4
-; CHECK-NEXT:    [[BV:%.*]] = load i32, ptr [[B_ADDR_0]], align 4
 ; CHECK-NEXT:    [[RET:%.*]] = add i32 [[CV]], [[BV]]
 ; CHECK-NEXT:    ret i32 [[RET]]
 ;
@@ -66,8 +66,8 @@ define i8 @test2(i1 %cond, ptr %b, ptr %c) nounwind {
 ; CHECK-NEXT:    store i8 92, ptr [[C]], align 1
 ; CHECK-NEXT:    br label %[[BB2]]
 ; CHECK:       [[BB2]]:
+; CHECK-NEXT:    [[DV:%.*]] = phi i8 [ 92, %[[BB1]] ], [ 4, %[[BB]] ]
 ; CHECK-NEXT:    [[D:%.*]] = phi ptr [ [[C]], %[[BB1]] ], [ [[B]], %[[BB]] ]
-; CHECK-NEXT:    [[DV:%.*]] = load i8, ptr [[D]], align 1
 ; CHECK-NEXT:    ret i8 [[DV]]
 ;
 entry:

@@ -9,7 +9,7 @@ and explanations.
 | Category | NewGVN Behavior | GVN Behavior |
 |---|---|---|
 | Cross-type load forwarding | Forwards (via `-newgvn-enable-cross-type-forwarding`) | Forwards loads of different types from stores |
-| PHI translation | Does not do PHI translation | Does PHI translation for load elimination |
+| PHI translation | Supported for store-to-load (via `-newgvn-enable-phi-translation`) | Does PHI translation for load elimination |
 | Unreachable blocks | Replaces content with poison | Uses MemDep to handle unreachable paths |
 | Uninitialized alloca | Keeps load | Replaces with undef |
 | Assume propagation | Partial (direct uses only) | Full (negations, equality) |
@@ -100,27 +100,10 @@ merge:
 **NewGVN:** Replaces unreachable %if content with poison but does not do the full load forwarding chain. Returns `ret i64 %v2` (load).
 **Reason:** NewGVN does not do the same inter-dependent load forwarding chain as GVN.
 
-### rle-no-phi-translate.ll
-**Difference:** PHI translation for load elimination
-**Reproducer:**
-```llvm
-define i32 @g(ptr %b, ptr %c) {
-entry:
-  store i32 1, ptr %b
-  store i32 2, ptr %c
-  %t1 = icmp eq ptr %b, null
-  br i1 %t1, label %bb, label %bb2
-bb:
-  br label %bb2
-bb2:
-  %c_addr.0 = phi ptr [ %b, %entry ], [ %c, %bb ]
-  %cv = load i32, ptr %c_addr.0, align 4
-  ret i32 %cv
-}
-```
-**GVN:** Also XFAIL (cannot do PHI translation here).
-**NewGVN:** Keeps the load through the PHI (same result, both can't optimize this).
-**Reason:** Neither GVN nor NewGVN can do path-sensitive PHI translation here. The original GVN test is marked XFAIL.
+### ~~rle-no-phi-translate.ll~~ (PARTIALLY FIXED)
+**Difference:** PHI translation for load elimination — store-to-load case now matches GVN.
+**NewGVN:** Eliminates loads through PHI pointers when each predecessor's translated pointer resolves to a noalias store (e.g., allocas). The may-alias case (`@g`) correctly keeps the load (same as GVN XFAIL). Load-to-load forwarding through PHI pointers is not yet supported.
+**Flag:** `-newgvn-enable-phi-translation` (default true).
 
 ### 2007-07-26-PhiErasure.ll
 **Difference:** Unreachable block handling in loops
