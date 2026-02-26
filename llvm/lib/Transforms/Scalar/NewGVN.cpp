@@ -72,11 +72,13 @@
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/CFGPrinter.h"
 #include "llvm/Analysis/ConstantFolding.h"
+#include "llvm/Analysis/DomTreeUpdater.h"
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Analysis/MemorySSA.h"
+#include "llvm/Analysis/MemorySSAUpdater.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Argument.h"
@@ -107,6 +109,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar/GVNExpression.h"
 #include "llvm/Transforms/Utils/AssumeBundleBuilder.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/PredicateInfo.h"
 #include "llvm/Transforms/Utils/VNCoercion.h"
@@ -143,6 +146,7 @@ STATISTIC(NumGVNDeadStores, "Number of redundant/dead stores eliminated");
 STATISTIC(NumGVNPHIOfOpsCreated, "Number of PHI of ops created");
 STATISTIC(NumGVNPHIOfOpsEliminations,
           "Number of things eliminated using PHI of ops");
+STATISTIC(NumGVNBlocksMerged, "Number of blocks merged");
 DEBUG_COUNTER(VNCounter, "newgvn-vn",
               "Controls which instructions are value numbered");
 DEBUG_COUNTER(PHIOfOpsCounter, "newgvn-phi",
@@ -163,7 +167,9 @@ static cl::opt<bool> EnableStoreRefinement("enable-store-refinement",
 /// Currently, the generation "phi of ops" can result in correctness issues.
 static cl::opt<bool> EnablePhiOfOps("enable-phi-of-ops", cl::init(true),
                                     cl::Hidden);
-static cl::opt<std::string> PairsFile("pairs-file", cl::init(""), cl::Hidden); 
+static cl::opt<std::string> PairsFile("pairs-file", cl::init(""), cl::Hidden);
+static cl::opt<bool> NewGVNEnableBlockMerge("newgvn-enable-block-merge",
+                                             cl::init(true), cl::Hidden);
 
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
@@ -4437,6 +4443,20 @@ PreservedAnalyses NewGVNPass::run(Function &F, AnalysisManager<Function> &AM) {
   bool Changed =
       NewGVN(F, &DT, &AC, &TLI, &AA, &MSSA, F.getDataLayout())
           .runGVN();
+
+  // Merge single-predecessor/single-successor blocks, similar to GVN.
+  if (NewGVNEnableBlockMerge) {
+    DomTreeUpdater DTU(&DT, DomTreeUpdater::UpdateStrategy::Lazy);
+    MemorySSAUpdater MSSAU(&MSSA);
+    for (BasicBlock &BB : make_early_inc_range(F)) {
+      if (MergeBlockIntoPredecessor(&BB, &DTU, /*LI=*/nullptr, &MSSAU)) {
+        ++NumGVNBlocksMerged;
+        Changed = true;
+      }
+    }
+    DTU.flush();
+  }
+
   if (!Changed)
     return PreservedAnalyses::all();
   PreservedAnalyses PA;

@@ -8,7 +8,6 @@ and explanations.
 
 | Category | NewGVN Behavior | GVN Behavior |
 |---|---|---|
-| Block merging | Does not merge blocks | Merges single-pred/single-succ blocks |
 | Cross-type load forwarding | Does not forward | Forwards loads of different types from stores |
 | PHI translation | Does not do PHI translation | Does PHI translation for load elimination |
 | Unreachable blocks | Replaces content with poison | Uses MemDep to handle unreachable paths |
@@ -21,41 +20,6 @@ and explanations.
 ---
 
 ## Individual Test Differences
-
-### basic.ll
-**Difference:** Block merging
-**Reproducer:**
-```llvm
-define i32 @main() {
-block1:
-  %z1 = bitcast i32 0 to i32
-  br label %block2
-block2:
-  %z2 = bitcast i32 0 to i32
-  ret i32 %z2
-}
-```
-**GVN:** Merges block1 and block2 into a single block, returns `ret i32 0`.
-**NewGVN:** Eliminates the redundant bitcast but keeps both blocks.
-**Reason:** NewGVN does not perform block merging (SimplifyCFG-like optimization).
-
-### addrspacecast.ll
-**Difference:** Block merging
-**Reproducer:**
-```llvm
-define ptr addrspace(1) @addrspacecast(ptr %ptr) {
-block1:
-  %z1 = addrspacecast ptr %ptr to ptr addrspace(1)
-  store ptr addrspace(1) %z1, ptr undef
-  br label %block2
-block2:
-  %z2 = addrspacecast ptr %ptr to ptr addrspace(1)
-  ret ptr addrspace(1) %z2
-}
-```
-**GVN:** Merges blocks, eliminates %z2, uses %z1 directly.
-**NewGVN:** Eliminates %z2 (uses %z1) but keeps the block structure.
-**Reason:** Same as basic.ll — NewGVN does not merge blocks.
 
 ### 2008-02-12-UndefLoad.ll
 **Difference:** Uninitialized alloca load elimination
