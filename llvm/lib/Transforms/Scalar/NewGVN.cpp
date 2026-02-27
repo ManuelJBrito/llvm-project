@@ -3034,10 +3034,15 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
           auto *LE =
               createLoadExpression(LI->getType(), PredAddr, LI, PredClobber);
           FoundVal = findPHIOfOpsLeader(LE, I, PredBB);
+          // Track the memory dependency so we revisit when
+          // the clobbering access's congruence class changes.
+          // Use PredClobber directly (not its memory leader) because
+          // markMemoryUsersTouched keys on the access itself.
+          addMemoryUsers(PredClobber, MemAccess);
           if (!FoundVal) {
-            // No leader yet. Track the memory dependency so we revisit when
-            // the clobbering access's memory class changes.
-            addMemoryUsers(lookupMemoryLeader(PredClobber), MemAccess);
+            // Register so we revisit when a leader for this
+            // expression appears (via markPhiOfOpsChanged).
+            ExpressionToPhiOfOps[LE].insert(I);
             return nullptr;
           }
         }
