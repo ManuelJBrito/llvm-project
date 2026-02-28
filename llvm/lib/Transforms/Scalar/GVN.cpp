@@ -88,7 +88,7 @@ using namespace PatternMatch;
 
 #define DEBUG_TYPE "gvn"
 
-STATISTIC(NumGVNInstr, "Number of instructions deleted");
+STATISTIC(NumGVNInstr, "Number of redundant instructions deleted");
 STATISTIC(NumGVNLoad, "Number of loads deleted");
 STATISTIC(NumGVNPRE, "Number of instructions PRE'd");
 STATISTIC(NumGVNBlocks, "Number of blocks merged");
@@ -1659,6 +1659,7 @@ void GVNPass::eliminatePartiallyRedundantLoad(
            << "load eliminated by PRE";
   });
   salvageAndRemoveInstruction(Load);
+  ++NumGVNInstr;
 }
 
 bool GVNPass::PerformLoadPRE(LoadInst *Load, AvailValInBlkVect &ValuesPerBlock,
@@ -2086,6 +2087,7 @@ bool GVNPass::processNonLocalLoad(LoadInst *Load) {
         I->setDebugLoc(Load->getDebugLoc());
     if (V->getType()->isPtrOrPtrVectorTy())
       MD->invalidateCachedPointerInfo(V);
+    ++NumGVNInstr;
     ++NumGVNLoad;
     reportLoadElim(Load, V, ORE);
     salvageAndRemoveInstruction(Load);
@@ -2220,6 +2222,7 @@ bool GVNPass::processLoad(LoadInst *L) {
   L->replaceAllUsesWith(AvailableValue);
   if (MSSAU)
     MSSAU->removeMemoryAccess(L);
+  ++NumGVNInstr;
   ++NumGVNLoad;
   reportLoadElim(L, AvailableValue, ORE);
   salvageAndRemoveInstruction(L);
@@ -2258,6 +2261,7 @@ bool GVNPass::processMaskedLoad(IntrinsicInst *I) {
   ICF->removeUsersOf(I);
   I->replaceAllUsesWith(OpToForward);
   salvageAndRemoveInstruction(I);
+  ++NumGVNInstr;
   ++NumGVNLoad;
   return true;
 }
@@ -2707,6 +2711,7 @@ bool GVNPass::processInstruction(Instruction *I) {
     if (Changed) {
       if (MD && V->getType()->isPtrOrPtrVectorTy())
         MD->invalidateCachedPointerInfo(V);
+      ++NumGVNInstr;
       ++NumGVNSimpl;
       return true;
     }
@@ -2825,6 +2830,7 @@ bool GVNPass::processInstruction(Instruction *I) {
   if (MD && Repl->getType()->isPtrOrPtrVectorTy())
     MD->invalidateCachedPointerInfo(Repl);
   salvageAndRemoveInstruction(I);
+  ++NumGVNInstr;
   return true;
 }
 
