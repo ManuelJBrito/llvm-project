@@ -134,7 +134,9 @@ using namespace llvm::PatternMatch;
 
 #define DEBUG_TYPE "newgvn"
 
-STATISTIC(NumGVNInstrDeleted, "Number of instructions deleted");
+STATISTIC(NumGVNInstrDeleted, "Number of redundant instructions deleted");
+STATISTIC(NumGVNInstrUnreachDeleted,
+          "Number of instructions deleted in unreachable blocks");
 STATISTIC(NumGVNBlocksDeleted, "Number of blocks deleted");
 STATISTIC(NumGVNOpsSimplified, "Number of Expressions simplified");
 STATISTIC(NumGVNPhisAllSame, "Number of PHIs whos arguments are all the same");
@@ -195,6 +197,9 @@ static cl::opt<bool> NewGVNEnableAssumePropagation(
 static cl::opt<bool>
     NewGVNEnableTruncEquality("newgvn-enable-trunc-equality", cl::init(true),
                                cl::Hidden);
+static cl::opt<std::string> NewGVNAssumption(
+    "newgvn-assumption", cl::init("optimistic"), cl::Hidden,
+    cl::desc("Assumption model: optimistic, balanced, or pessimistic"));
 
 //===----------------------------------------------------------------------===//
 //                                GVN Pass
@@ -1098,6 +1103,7 @@ PHIExpression *NewGVN::createPHIExpression(ArrayRef<ValPair> PHIOperands,
   E->setOpcode(Instruction::PHI);
 
   // Filter out unreachable phi operands.
+  bool IsOptimistic = NewGVNAssumption == "optimistic";
   auto Filtered = make_filter_range(PHIOperands, [&](const ValPair &P) {
     auto *BB = P.second;
     if (auto *PHIOp = dyn_cast<PHINode>(I))
@@ -1105,14 +1111,25 @@ PHIExpression *NewGVN::createPHIExpression(ArrayRef<ValPair> PHIOperands,
         return false;
     if (!ReachableEdges.count({BB, PHIBlock}))
       return false;
-    // Things in TOPClass are equivalent to everything.
-    if (ValueToClass.lookup(P.first) == TOPClass)
+    // In optimistic mode, things in TOPClass are equivalent to everything.
+    if (IsOptimistic && ValueToClass.lookup(P.first) == TOPClass)
       return false;
     OriginalOpsConstant = OriginalOpsConstant && isa<Constant>(P.first);
     HasBackedge = HasBackedge || isBackedge(BB, PHIBlock);
+    // In balanced/pessimistic mode, use SSA identity (not class membership) to
+    // detect self-copy operands. lookupOperandLeader depends on class
+    // membership which changes during the single RPO pass, making the filter
+    // unstable between the iteration and verification.
+    if (!IsOptimistic)
+      return P.first != I;
     return lookupOperandLeader(P.first) != I;
   });
   llvm::transform(Filtered, op_inserter(E), [&](const ValPair &P) -> Value * {
+    // In balanced/pessimistic mode, use original values for all phi operands.
+    // This makes phi expressions depend only on SSA identity (not on class
+    // membership), ensuring convergence in a single iteration.
+    if (!IsOptimistic)
+      return P.first;
     return lookupOperandLeader(P.first);
   });
   return E;
@@ -1386,6 +1403,8 @@ bool NewGVN::someEquivalentDominates(const Instruction *Inst,
   // any of these siblings.
   if (!CC)
     return false;
+  if (CC == TOPClass)
+    return false;
   if (alwaysAvailable(CC->getLeader()))
     return true;
   if (DT->dominates(cast<Instruction>(CC->getLeader()), U))
@@ -1407,8 +1426,14 @@ Value *NewGVN::lookupOperandLeader(Value *V) const {
     // Everything in TOP is represented by poison, as it can be any value.
     // We do have to make sure we get the type right though, so we can't set the
     // RepLeader to poison.
-    if (CC == TOPClass)
+    if (CC == TOPClass) {
+      // In balanced/pessimistic mode, TOP members are unresolved values that
+      // should be treated as distinct (not as poison). Return the value itself
+      // so that expressions are stable across iterations.
+      if (NewGVNAssumption != "optimistic")
+        return V;
       return PoisonValue::get(V->getType());
+    }
     return CC->getStoredValue() ? CC->getStoredValue() : CC->getLeader();
   }
 
@@ -1420,6 +1445,10 @@ const MemoryAccess *NewGVN::lookupMemoryLeader(const MemoryAccess *MA) const {
   assert(CC->getMemoryLeader() &&
          "Every MemoryAccess should be mapped to a congruence class with a "
          "representative memory access");
+  // In balanced/pessimistic, TOP memory accesses are unprocessed ("future")
+  // values. Return the original access to keep expressions stable.
+  if (CC == TOPClass && NewGVNAssumption != "optimistic")
+    return MA;
   return CC->getMemoryLeader();
 }
 
@@ -2783,6 +2812,19 @@ Value *NewGVN::findLeaderForInst(Instruction *TransInst,
                                  MemoryAccess *MemAccess, Instruction *OrigInst,
                                  BasicBlock *PredBB) {
   unsigned IDFSNum = InstrToDFSNum(OrigInst);
+
+  // In balanced/pessimistic, bail out if any operand of the translated
+  // instruction hasn't been processed yet (higher DFS number). Unprocessed
+  // operands are still in TOPClass; their leaders will change after processing,
+  // making the expression here unstable between the main pass and verification.
+  if (NewGVNAssumption != "optimistic") {
+    for (auto &Op : TransInst->operands()) {
+      if (auto *OpI = dyn_cast<Instruction>(Op))
+        if (InstrToDFSNum(OpI) > IDFSNum)
+          return nullptr;
+    }
+  }
+
   // Make sure it's marked as a temporary instruction.
   AllTempInstructions.insert(TransInst);
   // and make sure anything that tries to add it's DFS number is
@@ -2902,6 +2944,14 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
     // Existing path: phi-of-ops driven by a scalar PHI operand.
     SmallPtrSet<Value *, 4> Deps;
     PHIBlock = getBlockForValue(OpPHI);
+    // In balanced/pessimistic, skip phi-of-ops when any predecessor is a
+    // back-edge. Back-edge operands haven't been processed in a single RPO
+    // pass, so expressions that depend on them are unstable.
+    if (NewGVNAssumption != "optimistic") {
+      for (unsigned i = 0; i < OpPHI->getNumOperands(); ++i)
+        if (isBackedge(OpPHI->getIncomingBlock(i), PHIBlock))
+          return nullptr;
+    }
     RevisitOnReachabilityChange[PHIBlock].reset(InstrToDFSNum(I));
     for (unsigned PredNum = 0; PredNum < OpPHI->getNumOperands(); ++PredNum) {
       auto *PredBB = OpPHI->getIncomingBlock(PredNum);
@@ -2982,6 +3032,14 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
     } else {
       TheMemPhi = MemPhiOp;
       PHIBlock = TheMemPhi->getBlock();
+    }
+    // In balanced/pessimistic, skip phi-of-ops when any predecessor is a
+    // back-edge. Back-edge operands haven't been processed in a single RPO
+    // pass, so expressions that depend on them are unstable.
+    if (NewGVNAssumption != "optimistic") {
+      for (auto *PredBB : predecessors(PHIBlock))
+        if (isBackedge(PredBB, PHIBlock))
+          return nullptr;
     }
     RevisitOnReachabilityChange[PHIBlock].reset(InstrToDFSNum(I));
     if (pred_size(PHIBlock) < 2)
@@ -3164,8 +3222,16 @@ void NewGVN::initializeCongruenceClasses(Function &F) {
       // them, and they just end up sitting in TOP.
       if (I.isTerminator() && I.getType()->isVoidTy())
         continue;
-      TOPClass->insert(&I);
-      ValueToClass[&I] = TOPClass;
+      if (NewGVNAssumption == "pessimistic") {
+        // Pessimistic: each instruction starts in its own singleton class.
+        auto *CC = createSingletonCongruenceClass(&I);
+        if (isa<StoreInst>(&I))
+          CC->incStoreCount();
+      } else {
+        // Optimistic/Balanced: all instructions start in TOPClass.
+        TOPClass->insert(&I);
+        ValueToClass[&I] = TOPClass;
+      }
     }
   }
 
@@ -3278,9 +3344,13 @@ void NewGVN::valueNumberMemoryPhi(MemoryPhi *MP) {
   // TODO: We could do cycle-checking on the memory phis to allow valueizing for
   // self-phi checking.
   const BasicBlock *PHIBlock = MP->getBlock();
+  bool IsOptimistic = NewGVNAssumption == "optimistic";
   auto Filtered = make_filter_range(MP->operands(), [&](const Use &U) {
     return cast<MemoryAccess>(U) != MP &&
-           !isMemoryAccessTOP(cast<MemoryAccess>(U)) &&
+           // In optimistic mode, TOP memory accesses are equivalent to
+           // everything and should be filtered. In balanced/pessimistic,
+           // they are unprocessed values that must be kept for stability.
+           (IsOptimistic ? !isMemoryAccessTOP(cast<MemoryAccess>(U)) : true) &&
            ReachableEdges.count({MP->getIncomingBlock(U), PHIBlock});
   });
   // If all that is left is nothing, our memoryphi is poison. We keep it as
@@ -3661,6 +3731,13 @@ void NewGVN::iterateTouchedInstructions() {
       }
       updateProcessedCount(V);
     }
+    // Balanced/pessimistic converge in a single iteration — all blocks and
+    // edges are reachable from the start, and phi expressions use original
+    // SSA values (not leaders). Any residual touched bits are confirmation
+    // work that cannot change the result. Break and let
+    // verifyIterationSettled confirm correctness.
+    if (NewGVNAssumption != "optimistic")
+      break;
   }
   NumGVNMaxIterations = std::max(NumGVNMaxIterations.getValue(), Iterations);
 }
@@ -3718,12 +3795,26 @@ bool NewGVN::runGVN() {
   // instruction.
   ExpressionToClass.reserve(ICount);
 
-  // Initialize the touched instructions to include the entry block.
-  const auto &InstRange = BlockInstRange.lookup(&F.getEntryBlock());
-  TouchedInstructions.set(InstRange.first, InstRange.second);
-  LLVM_DEBUG(dbgs() << "Block " << getBlockName(&F.getEntryBlock())
-                    << " marked reachable\n");
-  ReachableBlocks.insert(&F.getEntryBlock());
+  if (NewGVNAssumption == "pessimistic" || NewGVNAssumption == "balanced") {
+    // Pessimistic/Balanced: all blocks and edges are reachable from the start.
+    for (auto *DTN : depth_first(DT->getRootNode())) {
+      BasicBlock *BB = DTN->getBlock();
+      ReachableBlocks.insert(BB);
+      LLVM_DEBUG(dbgs() << "Block " << getBlockName(BB)
+                        << " marked reachable\n");
+      const auto &Range = BlockInstRange.lookup(BB);
+      TouchedInstructions.set(Range.first, Range.second);
+      for (BasicBlock *Succ : successors(BB))
+        ReachableEdges.insert({BB, Succ});
+    }
+  } else {
+    // Optimistic: only the entry block is initially reachable.
+    const auto &InstRange = BlockInstRange.lookup(&F.getEntryBlock());
+    TouchedInstructions.set(InstRange.first, InstRange.second);
+    LLVM_DEBUG(dbgs() << "Block " << getBlockName(&F.getEntryBlock())
+                      << " marked reachable\n");
+    ReachableBlocks.insert(&F.getEntryBlock());
+  }
   // Use index corresponding to entry block.
   CacheIdx = 0;
 
@@ -3973,7 +4064,7 @@ void NewGVN::deleteInstructionsInBlock(BasicBlock *BB) {
     salvageKnowledge(&Inst, AC);
 
     Inst.eraseFromParent();
-    ++NumGVNInstrDeleted;
+    ++NumGVNInstrUnreachDeleted;
   }
   // Now insert something that simplifycfg will turn into an unreachable.
   Type *Int8Ty = Type::getInt8Ty(BB->getContext());
@@ -4066,6 +4157,33 @@ Value *NewGVN::findPHIOfOpsLeader(const Expression *E,
     return nullptr;
   if (alwaysAvailable(CC->getLeader()))
     return CC->getLeader();
+
+  // In balanced/pessimistic mode, pick the dominating member with the lowest
+  // DFS number for determinism. SmallPtrSet iteration order is non-deterministic,
+  // which can cause phi-of-ops to pick different (but equivalent) leaders between
+  // the main iteration and verification, leading to spurious assertion failures.
+  if (NewGVNAssumption != "optimistic") {
+    Value *BestMember = nullptr;
+    unsigned BestDFS = ~0u;
+    unsigned OrigDFS = InstrToDFSNum(OrigInst);
+    for (auto *Member : *CC) {
+      auto *MemberInst = dyn_cast<Instruction>(Member);
+      if (MemberInst == OrigInst)
+        continue;
+      if (!MemberInst)
+        return Member;
+      unsigned MemberDFS = InstrToDFSNum(MemberInst);
+      // Skip future values whose expressions haven't settled.
+      if (MemberDFS > OrigDFS)
+        continue;
+      if (MemberDFS < BestDFS &&
+          DT->dominates(getBlockForValue(MemberInst), BB)) {
+        BestMember = Member;
+        BestDFS = MemberDFS;
+      }
+    }
+    return BestMember;
+  }
 
   for (auto *Member : *CC) {
     auto *MemberInst = dyn_cast<Instruction>(Member);
@@ -4271,30 +4389,35 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
   if (!MA)
     return false;
 
-  MemoryAccess *Clobber = MSSAWalker->getClobberingMemoryAccess(MA);
-
   Value *LoadPtr = Load->getPointerOperand();
+  MemoryLocation MemLoc = MemoryLocation::get(Load);
 
   //===--------------------------------------------------------------------===//
-  // Path 1: Standard Load PRE – clobber is a MemoryPhi in LoadBB
+  // Path 1: Standard Load PRE – load is partially redundant across
+  // predecessors. Find the available value per predecessor using MemorySSA.
   //===--------------------------------------------------------------------===//
-  if (auto *MP = dyn_cast<MemoryPhi>(Clobber)) {
-    if (MP->getBlock() != LoadBB)
-      goto try_loop_pre;
-
-    MemoryLocation MemLoc = MemoryLocation::get(Load);
+  {
+    // Use the block's MemoryPhi for per-predecessor memory state when
+    // available; otherwise fall back to the load's own defining access
+    // (which is the same on all paths when there is no MemoryPhi).
+    MemoryPhi *MP = MSSA->getMemoryAccess(LoadBB);
+    MemoryAccess *LoadDefMA = cast<MemoryUseOrDef>(MA)->getDefiningAccess();
 
     SmallVector<std::pair<BasicBlock *, Value *>, 4> AvailableValues;
     BasicBlock *UnavailPred = nullptr;
     unsigned NumUnavail = 0;
+    bool HasBackedge = false;
 
     for (auto *PredBB : predecessors(LoadBB)) {
       // Reject backedges for standard PRE.
-      if (isBackedge(PredBB, LoadBB))
-        goto try_loop_pre;
+      if (isBackedge(PredBB, LoadBB)) {
+        HasBackedge = true;
+        break;
+      }
 
       Value *AvailVal = nullptr;
-      MemoryAccess *IncomingMA = MP->getIncomingValueForBlock(PredBB);
+      MemoryAccess *IncomingMA =
+          MP ? MP->getIncomingValueForBlock(PredBB) : LoadDefMA;
       MemoryAccess *PredClobber =
           MSSAWalker->getClobberingMemoryAccess(IncomingMA, MemLoc);
 
@@ -4315,6 +4438,34 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
         }
       }
 
+      // Fallback: scan for a dominating load of the same address whose
+      // clobbering access matches PredClobber (i.e. it reads from the same
+      // memory state, so no intervening clobber invalidates its value).
+      if (!AvailVal && LoadPtr->hasUseList()) {
+        for (User *U : LoadPtr->users()) {
+          auto *LI = dyn_cast<LoadInst>(U);
+          if (!LI || LI == Load || LI->getType() != Load->getType())
+            continue;
+          if (LI->getFunction() != Load->getFunction())
+            continue;
+          if (!DT->dominates(LI, PredBB->getTerminator()))
+            continue;
+          if (!AA->isMustAlias(MemoryLocation::get(LI), MemLoc))
+            continue;
+          // Verify LI reads from the same memory state as a hypothetical
+          // load at the end of PredBB (both see PredClobber).
+          MemoryAccess *LI_MA = getMemoryAccess(LI);
+          if (!LI_MA)
+            continue;
+          MemoryAccess *LI_Clobber =
+              MSSAWalker->getClobberingMemoryAccess(LI_MA);
+          if (LI_Clobber == PredClobber) {
+            AvailVal = LI;
+            break;
+          }
+        }
+      }
+
       // Verify the available value dominates the predecessor exit.
       if (AvailVal) {
         if (auto *AvailInst = dyn_cast<Instruction>(AvailVal)) {
@@ -4330,8 +4481,11 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
       AvailableValues.push_back({PredBB, AvailVal});
 
       if (NumUnavail > 1)
-        return false;
+        goto try_loop_pre;
     }
+
+    if (HasBackedge)
+      goto try_loop_pre;
 
     if (NumUnavail != 1)
       return false;
@@ -4411,6 +4565,7 @@ try_loop_pre:
   //         is outside the loop → hoist to preheader.
   //===--------------------------------------------------------------------===//
   {
+    MemoryAccess *Clobber = MSSAWalker->getClobberingMemoryAccess(MA);
     BasicBlock *Preheader = nullptr;
     bool HasBackedge = false;
 
@@ -4807,6 +4962,8 @@ bool NewGVN::eliminateInstructions(Function &F) {
         auto *I = cast<Instruction>(Member);
         assert(Leader != I && "About to accidentally remove our leader");
         replaceInstruction(I, Leader);
+        if (!PredInfo->getPredicateInfoFor(I))
+          ++NumGVNInstrDeleted;
         AnythingReplaced = true;
 
       
@@ -4921,6 +5078,8 @@ bool NewGVN::eliminateInstructions(Function &F) {
                   DVR->replaceVariableLocationOp(DefI, DominatingLeader);
 
                 markInstructionForDeletion(DefI);
+                if (!PredInfo->getPredicateInfoFor(DefI))
+                  ++NumGVNInstrDeleted;
               }
             }
             continue;
@@ -5002,8 +5161,10 @@ bool NewGVN::eliminateInstructions(Function &F) {
     // At this point, anything still in the ProbablyDead set is actually dead if
     // would be trivially dead.
     for (auto *I : ProbablyDead)
-      if (wouldInstructionBeTriviallyDead(I))
+      if (wouldInstructionBeTriviallyDead(I)) {
         markInstructionForDeletion(I);
+        ++NumGVNInstrDeleted;
+      }
 
     // Cleanup the congruence class.
     CongruenceClass::MemberSet MembersLeft;
