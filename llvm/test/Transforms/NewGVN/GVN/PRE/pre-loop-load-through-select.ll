@@ -429,13 +429,12 @@ define i32 @test_pointer_phi_select_same_object_store_2(ptr %ptr, ptr %end)  {
 ; CHECK-SAME: ptr [[PTR:%.*]], ptr [[END:%.*]]) {
 ; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    [[START_PTR:%.*]] = getelementptr inbounds i32, ptr [[PTR]], i64 1
-; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ 3, %[[LOOP]] ], [ [[L_2_PRE]], %[[ENTRY]] ]
 ; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
+; CHECK-NEXT:    [[L_2:%.*]] = load i32, ptr [[MIN_PTR]], align 4
 ; CHECK-NEXT:    store i32 3, ptr [[MIN_PTR]], align 4
 ; CHECK-NEXT:    [[CMP_I_I_I:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_I_I_I]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
@@ -473,13 +472,12 @@ define i32 @test_pointer_phi_select_same_object_store_3(ptr %ptr, ptr %end)  {
 ; CHECK-SAME: ptr [[PTR:%.*]], ptr [[END:%.*]]) {
 ; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    [[START_PTR:%.*]] = getelementptr inbounds i32, ptr [[PTR]], i64 1
-; CHECK-NEXT:    [[L_2_PRE:%.*]] = load i32, ptr [[PTR]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[L_2:%.*]] = phi i32 [ 3, %[[LOOP]] ], [ [[L_2_PRE]], %[[ENTRY]] ]
 ; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[START_PTR]], %[[ENTRY]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[MIN_PTR:%.*]] = phi ptr [ [[PTR]], %[[ENTRY]] ], [ [[MIN_SELECT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[L_1:%.*]] = load i32, ptr [[PTR_IV]], align 4
+; CHECK-NEXT:    [[L_2:%.*]] = load i32, ptr [[MIN_PTR]], align 4
 ; CHECK-NEXT:    [[CMP_I_I_I:%.*]] = icmp ult i32 [[L_1]], [[L_2]]
 ; CHECK-NEXT:    [[MIN_SELECT]] = select i1 [[CMP_I_I_I]], ptr [[PTR_IV]], ptr [[MIN_PTR]]
 ; CHECK-NEXT:    [[PTR_IV_NEXT]] = getelementptr inbounds i32, ptr [[PTR_IV]], i64 1

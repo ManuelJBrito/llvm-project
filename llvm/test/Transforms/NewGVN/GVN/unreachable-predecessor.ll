@@ -10,10 +10,11 @@ define void @test1(ptr %ptr1, ptr %ptr2) {
 ; CHECK-SAME: ptr [[PTR1:%.*]], ptr [[PTR2:%.*]]) {
 ; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    [[GEP1:%.*]] = getelementptr inbounds i32, ptr [[PTR1]], i64 1
+; CHECK-NEXT:    [[VAL1_PRE:%.*]] = load i32, ptr [[GEP1]], align 4
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[PHI1:%.*]] = phi ptr [ [[GEP1]], %[[ENTRY]] ], [ [[PHI2:%.*]], %[[LOOP_THEN:.*]] ]
-; CHECK-NEXT:    [[VAL1:%.*]] = load i32, ptr [[PHI1]], align 4
+; CHECK-NEXT:    [[VAL1:%.*]] = phi i32 [ [[VAL1]], %[[LOOP_THEN:.*]] ], [ [[VAL1_PRE]], %[[ENTRY]] ]
+; CHECK-NEXT:    [[PHI1:%.*]] = phi ptr [ [[GEP1]], %[[ENTRY]] ], [ [[PHI2:%.*]], %[[LOOP_THEN]] ]
 ; CHECK-NEXT:    br i1 false, label %[[LOOP_THEN]], label %[[LOOP_IF:.*]]
 ; CHECK:       [[LOOP_IF]]:
 ; CHECK-NEXT:    [[GEP2:%.*]] = getelementptr inbounds i32, ptr [[GEP1]], i64 1

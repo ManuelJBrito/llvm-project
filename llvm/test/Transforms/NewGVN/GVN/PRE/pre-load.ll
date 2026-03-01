@@ -39,13 +39,14 @@ define i32 @test2(ptr %p, ptr %q, i1 %C) {
 ; CHECK-NEXT:  block1:
 ; CHECK-NEXT:    br i1 [[C:%.*]], label [[BLOCK2:%.*]], label [[BLOCK3:%.*]]
 ; CHECK:       block2:
+; CHECK-NEXT:    [[PRE_PRE:%.*]] = load i32, ptr [[Q:%.*]], align 4
 ; CHECK-NEXT:    br label [[BLOCK4:%.*]]
 ; CHECK:       block3:
 ; CHECK-NEXT:    store i32 0, ptr [[P:%.*]], align 4
 ; CHECK-NEXT:    br label [[BLOCK4]]
 ; CHECK:       block4:
-; CHECK-NEXT:    [[P2:%.*]] = phi ptr [ [[P]], [[BLOCK3]] ], [ [[Q:%.*]], [[BLOCK2]] ]
-; CHECK-NEXT:    [[PRE:%.*]] = load i32, ptr [[P2]], align 4
+; CHECK-NEXT:    [[PRE:%.*]] = phi i32 [ 0, [[BLOCK3]] ], [ [[PRE_PRE]], [[BLOCK2]] ]
+; CHECK-NEXT:    [[P2:%.*]] = phi ptr [ [[P]], [[BLOCK3]] ], [ [[Q]], [[BLOCK2]] ]
 ; CHECK-NEXT:    ret i32 [[PRE]]
 ;
 block1:

@@ -4421,12 +4421,27 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
     BasicBlock *UnavailPred = nullptr;
     unsigned NumUnavail = 0;
 
+    // When the load pointer is a PHI defined in LoadBB, phi-translate it
+    // per-predecessor so MSSA queries use the concrete pointer (AA can
+    // resolve the concrete pointer but not the PHI).
+    auto *LoadPtrPHI = dyn_cast<PHINode>(LoadPtr);
+    bool PhiTranslatePtr = LoadPtrPHI && LoadPtrPHI->getParent() == LoadBB;
+
     for (auto *PredBB : predecessors(LoadBB)) {
       Value *AvailVal = nullptr;
+
+      // PHI-translate the load pointer for this predecessor.
+      Value *PredLoadPtr = LoadPtr;
+      MemoryLocation PredMemLoc = MemLoc;
+      if (PhiTranslatePtr) {
+        PredLoadPtr = LoadPtrPHI->getIncomingValueForBlock(PredBB);
+        PredMemLoc = MemoryLocation(PredLoadPtr, MemLoc.Size, MemLoc.AATags);
+      }
+
       MemoryAccess *IncomingMA =
           MP ? MP->getIncomingValueForBlock(PredBB) : LoadDefMA;
       MemoryAccess *PredClobber =
-          MSSAWalker->getClobberingMemoryAccess(IncomingMA, MemLoc);
+          MSSAWalker->getClobberingMemoryAccess(IncomingMA, PredMemLoc);
 
       LLVM_DEBUG(dbgs() << "  Load PRE: pred " << PredBB->getName()
                         << " IncomingMA=" << *IncomingMA
@@ -4443,11 +4458,11 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
             // predecessor is treated as unavailable.
           } else if (auto *SI = dyn_cast<StoreInst>(DepInst)) {
             if (SI->getValueOperand()->getType() == Load->getType() &&
-                AA->isMustAlias(MemoryLocation::get(SI), MemLoc))
+                AA->isMustAlias(MemoryLocation::get(SI), PredMemLoc))
               AvailVal = SI->getValueOperand();
           } else if (auto *LI = dyn_cast<LoadInst>(DepInst)) {
             if (LI->getType() == Load->getType() &&
-                AA->isMustAlias(MemoryLocation::get(LI), MemLoc))
+                AA->isMustAlias(MemoryLocation::get(LI), PredMemLoc))
               AvailVal = LI;
           }
         }

@@ -13,17 +13,37 @@ target triple = "i386-apple-darwin7"
 define i32 @g(ptr %b, ptr %c) nounwind {
 ; CHECK-LABEL: define i32 @g(
 ; CHECK-SAME: ptr [[B:%.*]], ptr [[C:%.*]]) #[[ATTR0:[0-9]+]] {
-; CHECK-NEXT:  entry:
+; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    store i32 1, ptr [[B]], align 4
 ; CHECK-NEXT:    store i32 2, ptr [[C]], align 4
 ; CHECK-NEXT:    [[T1:%.*]] = icmp eq ptr [[B]], null
-; CHECK-NEXT:    br i1 [[T1]], label %bb, label %bb2
-; CHECK:       bb:
-; CHECK-NEXT:    br label %bb2
-; CHECK:       bb2:
-; CHECK-NEXT:    [[C_ADDR_0:%.*]] = phi ptr [ [[B]], %entry ], [ [[C]], %bb ]
-; CHECK-NEXT:    [[CV:%.*]] = load i32, ptr [[C_ADDR_0]], align 4
+; CHECK-NEXT:    br i1 [[T1]], label %[[BB:.*]], label %[[ENTRY_BB2_CRIT_EDGE:.*]]
+; CHECK:       [[ENTRY_BB2_CRIT_EDGE]]:
+; CHECK-NEXT:    [[CV_PRE:%.*]] = load i32, ptr [[B]], align 4
+; CHECK-NEXT:    br label %[[BB2:.*]]
+; CHECK:       [[BB]]:
+; CHECK-NEXT:    br label %[[BB2]]
+; CHECK:       [[BB2]]:
+; CHECK-NEXT:    [[CV:%.*]] = phi i32 [ 2, %[[BB]] ], [ [[CV_PRE]], %[[ENTRY_BB2_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[C_ADDR_0:%.*]] = phi ptr [ [[B]], %[[ENTRY_BB2_CRIT_EDGE]] ], [ [[C]], %[[BB]] ]
 ; CHECK-NEXT:    ret i32 [[CV]]
+;
+; NOPHITRANS-LABEL: define i32 @g(
+; NOPHITRANS-SAME: ptr [[B:%.*]], ptr [[C:%.*]]) #[[ATTR0:[0-9]+]] {
+; NOPHITRANS-NEXT:  [[ENTRY:.*:]]
+; NOPHITRANS-NEXT:    store i32 1, ptr [[B]], align 4
+; NOPHITRANS-NEXT:    store i32 2, ptr [[C]], align 4
+; NOPHITRANS-NEXT:    [[T1:%.*]] = icmp eq ptr [[B]], null
+; NOPHITRANS-NEXT:    br i1 [[T1]], label %[[BB:.*]], label %[[ENTRY_BB2_CRIT_EDGE:.*]]
+; NOPHITRANS:       [[ENTRY_BB2_CRIT_EDGE]]:
+; NOPHITRANS-NEXT:    [[CV_PRE:%.*]] = load i32, ptr [[B]], align 4
+; NOPHITRANS-NEXT:    br label %[[BB2:.*]]
+; NOPHITRANS:       [[BB]]:
+; NOPHITRANS-NEXT:    br label %[[BB2]]
+; NOPHITRANS:       [[BB2]]:
+; NOPHITRANS-NEXT:    [[CV_PRE_PHI:%.*]] = phi i32 [ 2, %[[BB]] ], [ [[CV_PRE]], %[[ENTRY_BB2_CRIT_EDGE]] ]
+; NOPHITRANS-NEXT:    [[C_ADDR_0:%.*]] = phi ptr [ [[B]], %[[ENTRY_BB2_CRIT_EDGE]] ], [ [[C]], %[[BB]] ]
+; NOPHITRANS-NEXT:    ret i32 [[CV_PRE_PHI]]
 ;
 entry:
   store i32 1, ptr %b
@@ -45,20 +65,37 @@ bb2:		; preds = %bb1, %bb
 define i32 @phi_trans_alloca(i1 %cond) {
 ; CHECK-LABEL: define i32 @phi_trans_alloca(
 ; CHECK-SAME: i1 [[COND:%.*]]) {
-; CHECK-NEXT:  entry:
+; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    [[A:%.*]] = alloca i32, align 4
 ; CHECK-NEXT:    [[B:%.*]] = alloca i32, align 4
 ; CHECK-NEXT:    store i32 42, ptr [[A]], align 4
 ; CHECK-NEXT:    store i32 97, ptr [[B]], align 4
-; CHECK-NEXT:    br i1 [[COND]], label %then, label %else
-; CHECK:       then:
-; CHECK-NEXT:    br label %merge
-; CHECK:       else:
-; CHECK-NEXT:    br label %merge
-; CHECK:       merge:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 97, %else ], [ 42, %then ]
-; CHECK-NEXT:    [[PTR:%.*]] = phi ptr [ [[A]], %then ], [ [[B]], %else ]
+; CHECK-NEXT:    br i1 [[COND]], label %[[THEN:.*]], label %[[ELSE:.*]]
+; CHECK:       [[THEN]]:
+; CHECK-NEXT:    br label %[[MERGE:.*]]
+; CHECK:       [[ELSE]]:
+; CHECK-NEXT:    br label %[[MERGE]]
+; CHECK:       [[MERGE]]:
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 97, %[[ELSE]] ], [ 42, %[[THEN]] ]
+; CHECK-NEXT:    [[PTR:%.*]] = phi ptr [ [[A]], %[[THEN]] ], [ [[B]], %[[ELSE]] ]
 ; CHECK-NEXT:    ret i32 [[PHIOFOPS]]
+;
+; NOPHITRANS-LABEL: define i32 @phi_trans_alloca(
+; NOPHITRANS-SAME: i1 [[COND:%.*]]) {
+; NOPHITRANS-NEXT:  [[ENTRY:.*:]]
+; NOPHITRANS-NEXT:    [[A:%.*]] = alloca i32, align 4
+; NOPHITRANS-NEXT:    [[B:%.*]] = alloca i32, align 4
+; NOPHITRANS-NEXT:    store i32 42, ptr [[A]], align 4
+; NOPHITRANS-NEXT:    store i32 97, ptr [[B]], align 4
+; NOPHITRANS-NEXT:    br i1 [[COND]], label %[[THEN:.*]], label %[[ELSE:.*]]
+; NOPHITRANS:       [[THEN]]:
+; NOPHITRANS-NEXT:    br label %[[MERGE:.*]]
+; NOPHITRANS:       [[ELSE]]:
+; NOPHITRANS-NEXT:    br label %[[MERGE]]
+; NOPHITRANS:       [[MERGE]]:
+; NOPHITRANS-NEXT:    [[PTR:%.*]] = phi ptr [ [[A]], %[[THEN]] ], [ [[B]], %[[ELSE]] ]
+; NOPHITRANS-NEXT:    [[VAL:%.*]] = load i32, ptr [[PTR]], align 4
+; NOPHITRANS-NEXT:    ret i32 [[VAL]]
 ;
 entry:
   %a = alloca i32
@@ -83,20 +120,37 @@ merge:
 ; RUN: opt < %s -passes=newgvn -newgvn-enable-phi-translation=false -S | FileCheck %s --check-prefix=NOPHITRANS
 
 define i32 @phi_trans_disabled(i1 %cond) {
+; CHECK-LABEL: define i32 @phi_trans_disabled(
+; CHECK-SAME: i1 [[COND:%.*]]) {
+; CHECK-NEXT:  [[ENTRY:.*:]]
+; CHECK-NEXT:    [[A:%.*]] = alloca i32, align 4
+; CHECK-NEXT:    [[B:%.*]] = alloca i32, align 4
+; CHECK-NEXT:    store i32 42, ptr [[A]], align 4
+; CHECK-NEXT:    store i32 97, ptr [[B]], align 4
+; CHECK-NEXT:    br i1 [[COND]], label %[[THEN:.*]], label %[[ELSE:.*]]
+; CHECK:       [[THEN]]:
+; CHECK-NEXT:    br label %[[MERGE:.*]]
+; CHECK:       [[ELSE]]:
+; CHECK-NEXT:    br label %[[MERGE]]
+; CHECK:       [[MERGE]]:
+; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 97, %[[ELSE]] ], [ 42, %[[THEN]] ]
+; CHECK-NEXT:    [[PTR:%.*]] = phi ptr [ [[A]], %[[THEN]] ], [ [[B]], %[[ELSE]] ]
+; CHECK-NEXT:    ret i32 [[PHIOFOPS]]
+;
 ; NOPHITRANS-LABEL: define i32 @phi_trans_disabled(
 ; NOPHITRANS-SAME: i1 [[COND:%.*]]) {
-; NOPHITRANS-NEXT:  entry:
+; NOPHITRANS-NEXT:  [[ENTRY:.*:]]
 ; NOPHITRANS-NEXT:    [[A:%.*]] = alloca i32, align 4
 ; NOPHITRANS-NEXT:    [[B:%.*]] = alloca i32, align 4
 ; NOPHITRANS-NEXT:    store i32 42, ptr [[A]], align 4
 ; NOPHITRANS-NEXT:    store i32 97, ptr [[B]], align 4
-; NOPHITRANS-NEXT:    br i1 [[COND]], label %then, label %else
-; NOPHITRANS:       then:
-; NOPHITRANS-NEXT:    br label %merge
-; NOPHITRANS:       else:
-; NOPHITRANS-NEXT:    br label %merge
-; NOPHITRANS:       merge:
-; NOPHITRANS-NEXT:    [[PTR:%.*]] = phi ptr [ [[A]], %then ], [ [[B]], %else ]
+; NOPHITRANS-NEXT:    br i1 [[COND]], label %[[THEN:.*]], label %[[ELSE:.*]]
+; NOPHITRANS:       [[THEN]]:
+; NOPHITRANS-NEXT:    br label %[[MERGE:.*]]
+; NOPHITRANS:       [[ELSE]]:
+; NOPHITRANS-NEXT:    br label %[[MERGE]]
+; NOPHITRANS:       [[MERGE]]:
+; NOPHITRANS-NEXT:    [[PTR:%.*]] = phi ptr [ [[A]], %[[THEN]] ], [ [[B]], %[[ELSE]] ]
 ; NOPHITRANS-NEXT:    [[VAL:%.*]] = load i32, ptr [[PTR]], align 4
 ; NOPHITRANS-NEXT:    ret i32 [[VAL]]
 ;

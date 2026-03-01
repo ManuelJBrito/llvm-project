@@ -62,14 +62,15 @@ define i32 @test_guard_01(ptr %p, ptr %q, i1 %C, i1 %G) {
 ; CHECK-NEXT:  [[BLOCK1:.*:]]
 ; CHECK-NEXT:    br i1 [[C]], label %[[BLOCK2:.*]], label %[[BLOCK3:.*]]
 ; CHECK:       [[BLOCK2]]:
+; CHECK-NEXT:    [[PRE_PRE:%.*]] = load i32, ptr [[Q]], align 4
 ; CHECK-NEXT:    br label %[[BLOCK4:.*]]
 ; CHECK:       [[BLOCK3]]:
 ; CHECK-NEXT:    store i32 0, ptr [[P]], align 4
 ; CHECK-NEXT:    br label %[[BLOCK4]]
 ; CHECK:       [[BLOCK4]]:
+; CHECK-NEXT:    [[PRE:%.*]] = phi i32 [ 0, %[[BLOCK3]] ], [ [[PRE_PRE]], %[[BLOCK2]] ]
 ; CHECK-NEXT:    [[P2:%.*]] = phi ptr [ [[P]], %[[BLOCK3]] ], [ [[Q]], %[[BLOCK2]] ]
 ; CHECK-NEXT:    call void (i1, ...) @llvm.experimental.guard(i1 [[G]]) [ "deopt"() ]
-; CHECK-NEXT:    [[PRE:%.*]] = load i32, ptr [[P2]], align 4
 ; CHECK-NEXT:    ret i32 [[PRE]]
 ;
 block1:
@@ -100,13 +101,14 @@ define i32 @test_guard_02(ptr %p, ptr %q, i1 %C, i1 %G) {
 ; CHECK-NEXT:  [[BLOCK1:.*:]]
 ; CHECK-NEXT:    br i1 [[C]], label %[[BLOCK2:.*]], label %[[BLOCK3:.*]]
 ; CHECK:       [[BLOCK2]]:
+; CHECK-NEXT:    [[PRE_PRE:%.*]] = load i32, ptr [[Q]], align 4
 ; CHECK-NEXT:    br label %[[BLOCK4:.*]]
 ; CHECK:       [[BLOCK3]]:
 ; CHECK-NEXT:    store i32 0, ptr [[P]], align 4
 ; CHECK-NEXT:    br label %[[BLOCK4]]
 ; CHECK:       [[BLOCK4]]:
+; CHECK-NEXT:    [[PRE:%.*]] = phi i32 [ 0, %[[BLOCK3]] ], [ [[PRE_PRE]], %[[BLOCK2]] ]
 ; CHECK-NEXT:    [[P2:%.*]] = phi ptr [ [[P]], %[[BLOCK3]] ], [ [[Q]], %[[BLOCK2]] ]
-; CHECK-NEXT:    [[PRE:%.*]] = load i32, ptr [[P2]], align 4
 ; CHECK-NEXT:    call void (i1, ...) @llvm.experimental.guard(i1 [[G]]) [ "deopt"() ]
 ; CHECK-NEXT:    ret i32 [[PRE]]
 ;
