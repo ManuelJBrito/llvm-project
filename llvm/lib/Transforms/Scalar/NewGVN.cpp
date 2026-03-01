@@ -3835,7 +3835,11 @@ bool NewGVN::runGVN() {
   // PRE: insert partially redundant computations (including loads) on
   // paths where they are missing, then merge via PHI.  This runs after
   // elimination so we only consider surviving instructions.
-  Changed |= performPRE(F);
+  // Iterate PRE to a fixpoint: each round may insert loads that expose
+  // new PRE opportunities (cascading PRE, e.g. loop header loads where
+  // the backedge reload is itself partially redundant).
+  while (performPRE(F))
+    Changed = true;
 
   // Delete all instructions marked for deletion.
   for (Instruction *ToErase : InstructionsToErase) {
@@ -4449,7 +4453,7 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
         }
       }
 
-      // Fallback: scan the load's congruence class for a member that
+      // Fallback 1: scan the load's congruence class for a member that
       // dominates the predecessor.  Class members are loads (or stores)
       // that NewGVN has determined produce the same value — this naturally
       // handles aliased pointers (e.g. congruent GEPs) without needing
@@ -4469,6 +4473,65 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
                               << *LI << " for pred "
                               << PredBB->getName() << "\n");
             break;
+          }
+        }
+      }
+
+      // Fallback 2: cascading PRE — when the MSSA walker returns a
+      // MemoryPhi (can't resolve per-path), look for a value that
+      // represents `*LoadPtr` and dominates PredBB.  Two patterns:
+      //  (a) This load has a PHI user from a prior PRE round.
+      //  (b) Another load from LoadPtr was PRE'd earlier; its
+      //      replacement (a PHI or the load itself) dominates PredBB.
+      if (!AvailVal && isa<MemoryPhi>(PredClobber)) {
+        // (a) PHI user of this load.
+        for (User *U : Load->users()) {
+          auto *PHI = dyn_cast<PHINode>(U);
+          if (!PHI)
+            continue;
+          if (!DT->dominates(PHI, PredBB->getTerminator()))
+            continue;
+          AvailVal = PHI;
+          LLVM_DEBUG(dbgs() << "  Load PRE: found PHI user "
+                            << *PHI << " for pred "
+                            << PredBB->getName() << "\n");
+          break;
+        }
+        // (b) Another load from same pointer, or its PRE replacement.
+        if (!AvailVal && !isa<ConstantData>(LoadPtr)) {
+          for (User *U : LoadPtr->users()) {
+            auto *LI = dyn_cast<LoadInst>(U);
+            if (!LI || LI == Load || LI->getType() != Load->getType())
+              continue;
+            if (!AA->isMustAlias(MemoryLocation::get(LI), MemLoc))
+              continue;
+            // If this load dominates PredBB and is live, use it.
+            if (!InstructionsToErase.count(LI) &&
+                DT->dominates(LI, PredBB->getTerminator())) {
+              AvailVal = LI;
+              break;
+            }
+            // If this load was PRE'd (marked for deletion), check if
+            // its replacement PHI dominates PredBB.
+            if (InstructionsToErase.count(LI) && LI->use_empty()) {
+              // The load was RAUW'd — find the PHI in its block.
+              for (auto &Inst : *LI->getParent()) {
+                auto *PHI = dyn_cast<PHINode>(&Inst);
+                if (!PHI)
+                  break; // PHIs are at the start.
+                if (PHI->getType() != Load->getType())
+                  continue;
+                if (!DT->dominates(PHI, PredBB->getTerminator()))
+                  continue;
+                AvailVal = PHI;
+                LLVM_DEBUG(dbgs() << "  Load PRE: found PRE'd load's PHI "
+                                  << *PHI << " for pred "
+                                  << PredBB->getName() << "\n");
+                break;
+              }
+              if (AvailVal)
+                break;
+            }
           }
         }
       }
@@ -4588,6 +4651,15 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
                   LLVMContext::MD_alias_scope, LLVMContext::MD_noalias,
                   LLVMContext::MD_access_group});
 
+    // Register the new load in MemorySSA so subsequent PRE iterations
+    // can discover it (cascading PRE).
+    {
+      MemorySSAUpdater MSSAU(MSSA);
+      MemoryAccess *NewMA = MSSAU.createMemoryAccessInBB(
+          NewLoad, nullptr, InsertBB, MemorySSA::End);
+      MSSAU.insertUse(cast<MemoryUse>(NewMA));
+    }
+
     for (auto &AV : AvailableValues)
       if (!AV.second)
         AV.second = NewLoad;
@@ -4675,6 +4747,14 @@ try_loop_pre:
           *Load, {LLVMContext::MD_dbg, LLVMContext::MD_tbaa,
                   LLVMContext::MD_alias_scope, LLVMContext::MD_noalias,
                   LLVMContext::MD_access_group});
+
+    // Register in MemorySSA for cascading PRE.
+    {
+      MemorySSAUpdater MSSAU(MSSA);
+      MemoryAccess *NewMA = MSSAU.createMemoryAccessInBB(
+          NewLoad, nullptr, InsertBB, MemorySSA::End);
+      MSSAU.insertUse(cast<MemoryUse>(NewMA));
+    }
 
     Load->replaceAllUsesWith(NewLoad);
     markInstructionForDeletion(Load);

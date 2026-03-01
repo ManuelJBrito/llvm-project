@@ -41,7 +41,7 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK:       [[_PREHEADER_PREHEADER:.*:]]
 ; CHECK-NEXT:    br [[DOTPREHEADER:label %.*]]
 ; CHECK:       [[TMP6]]:
-; CHECK-NEXT:    [[TMP7:%.*]] = tail call ptr @__ctype_b_loc() #[[ATTR4:[0-9]+]]
+; CHECK-NEXT:    [[TMP7:%.*]] = tail call ptr @__ctype_b_loc() #[[ATTR1:[0-9]+]]
 ; CHECK-NEXT:    [[TMP8:%.*]] = load ptr, ptr [[TMP7]], align 8, !tbaa [[ANYPTR_TBAA6:![0-9]+]]
 ; CHECK-NEXT:    [[TMP9:%.*]] = sext i8 [[TMP4]] to i64
 ; CHECK-NEXT:    [[TMP10:%.*]] = getelementptr inbounds i16, ptr [[TMP8]], i64 [[TMP9]]
@@ -51,10 +51,10 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK-NEXT:    br i1 [[TMP13]], label %[[BB2]], label %[[TMP14]]
 ; CHECK:       [[TMP14]]:
 ; CHECK-NEXT:    [[TMP15:%.*]] = sext i8 [[TMP4]] to i32
-; CHECK-NEXT:    [[TMP16:%.*]] = tail call i32 @tolower(i32 [[TMP15]]) #[[ATTR5:[0-9]+]]
+; CHECK-NEXT:    [[TMP16:%.*]] = tail call i32 @tolower(i32 [[TMP15]]) #[[ATTR4:[0-9]+]]
 ; CHECK-NEXT:    [[TMP17:%.*]] = add nsw i32 [[TMP16]], -97
 ; CHECK-NEXT:    [[TMP18:%.*]] = sext i32 [[TMP17]] to i64
-; CHECK-NEXT:    [[TMP19:%.*]] = getelementptr inbounds [26 x %struct.Letter], ptr @alPhrase, i64 0, i64 [[TMP18]], i32 0
+; CHECK-NEXT:    [[TMP19:%.*]] = getelementptr inbounds [26 x [[STRUCT_LETTER:%.*]]], ptr @alPhrase, i64 0, i64 [[TMP18]], i32 0
 ; CHECK-NEXT:    [[TMP20:%.*]] = load i32, ptr [[TMP19]], align 16, !tbaa [[INT_TBAA10:![0-9]+]]
 ; CHECK-NEXT:    [[TMP21:%.*]] = add i32 [[TMP20]], 1
 ; CHECK-NEXT:    store i32 [[TMP21]], ptr [[TMP19]], align 16, !tbaa [[INT_TBAA10]]
@@ -64,15 +64,15 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK-NEXT:    [[INDVARS_IV:%.*]] = phi i64 [ 0, %[[DOTPREHEADER_PREHEADER]] ], [ [[INDVARS_IV_NEXT:%.*]], %[[TMP57:.*]] ]
 ; CHECK-NEXT:    [[DOT04961:%.*]] = phi i32 [ [[DOT2:%.*]], %[[TMP57]] ], [ 0, %[[DOTPREHEADER_PREHEADER]] ]
 ; CHECK-NEXT:    [[DOT05160:%.*]] = phi i32 [ [[DOT253:%.*]], %[[TMP57]] ], [ 0, %[[DOTPREHEADER_PREHEADER]] ]
-; CHECK-NEXT:    [[TMP23:%.*]] = getelementptr inbounds [26 x %struct.Letter], ptr @alPhrase, i64 0, i64 [[INDVARS_IV]], i32 0
+; CHECK-NEXT:    [[TMP23:%.*]] = getelementptr inbounds [26 x [[STRUCT_LETTER]]], ptr @alPhrase, i64 0, i64 [[INDVARS_IV]], i32 0
 ; CHECK-NEXT:    [[TMP24:%.*]] = load i32, ptr [[TMP23]], align 16, !tbaa [[INT_TBAA10]]
 ; CHECK-NEXT:    [[TMP25:%.*]] = icmp eq i32 [[TMP24]], 0
 ; CHECK-NEXT:    [[TMP26:%.*]] = getelementptr inbounds [26 x i32], ptr @auGlobalFrequency, i64 0, i64 [[INDVARS_IV]]
-; CHECK-NEXT:    br i1 [[TMP25]], label %[[TMP27:.*]], label %[[TMP28:.*]]
-; CHECK:       [[TMP27]]:
+; CHECK-NEXT:    br i1 [[TMP25]], label %[[BB27:.*]], label %[[BB28:.*]]
+; CHECK:       [[BB27]]:
 ; CHECK-NEXT:    store i32 -1, ptr [[TMP26]], align 4, !tbaa [[INT_TBAA1]]
 ; CHECK-NEXT:    br label %[[TMP57]]
-; CHECK:       [[TMP28]]:
+; CHECK:       [[BB28]]:
 ; CHECK-NEXT:    store i32 0, ptr [[TMP26]], align 4, !tbaa [[INT_TBAA1]]
 ; CHECK-NEXT:    [[TMP29:%.*]] = zext i32 [[TMP24]] to i64
 ; CHECK-NEXT:    br i1 false, label %[[DOT_CRIT_EDGE:.*]], label %[[DOTLR_PH_PREHEADER:.*]]
@@ -88,24 +88,26 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK:       [[__CRIT_EDGE_LOOPEXIT:.*:]]
 ; CHECK-NEXT:    br label %[[DOT_CRIT_EDGE]]
 ; CHECK:       [[__CRIT_EDGE:.*:]]
-; CHECK-NEXT:    [[DOT048_LCSSA:%.*]] = phi i32 [ poison, %[[TMP28]] ], [ [[TMP30]], %[[DOT_CRIT_EDGE_LOOPEXIT]] ]
-; CHECK-NEXT:    [[DOT046_LCSSA:%.*]] = phi i64 [ poison, %[[TMP28]] ], [ [[TMP31]], %[[DOT_CRIT_EDGE_LOOPEXIT]] ]
+; CHECK-NEXT:    [[DOT048_LCSSA:%.*]] = phi i32 [ poison, %[[BB28]] ], [ [[TMP30]], %[[DOT_CRIT_EDGE_LOOPEXIT]] ]
+; CHECK-NEXT:    [[DOT046_LCSSA:%.*]] = phi i64 [ poison, %[[BB28]] ], [ [[TMP31]], %[[DOT_CRIT_EDGE_LOOPEXIT]] ]
 ; CHECK-NEXT:    [[TMP33:%.*]] = add nsw i32 [[DOT048_LCSSA]], [[DOT04961]]
 ; CHECK-NEXT:    [[TMP34:%.*]] = icmp ugt i32 [[TMP33]], 64
-; CHECK-NEXT:    br i1 [[TMP34]], label %[[TMP35:.*]], label %[[TMP39:.*]]
-; CHECK:       [[TMP35]]:
+; CHECK-NEXT:    br i1 [[TMP34]], label %[[BB35:.*]], label %[[BB39:.*]]
+; CHECK:       [[BB35]]:
 ; CHECK-NEXT:    [[TMP36:%.*]] = add i32 [[DOT05160]], 1
 ; CHECK-NEXT:    [[TMP37:%.*]] = icmp ugt i32 [[TMP36]], 1
-; CHECK-NEXT:    br i1 [[TMP37]], label %[[TMP38:.*]], label %[[TMP39]]
-; CHECK:       [[TMP38]]:
+; CHECK-NEXT:    br i1 [[TMP37]], label %[[BB38:.*]], label %[[BB39]]
+; CHECK:       [[BB38]]:
 ; CHECK-NEXT:    tail call void @Fatal(ptr @.str.7, i32 0)
-; CHECK-NEXT:    br label %[[TMP39]]
-; CHECK:       [[TMP39]]:
-; CHECK-NEXT:    [[DOT152:%.*]] = phi i32 [ [[DOT05160]], %[[DOT_CRIT_EDGE]] ], [ [[TMP36]], %[[TMP38]] ], [ [[TMP36]], %[[TMP35]] ]
-; CHECK-NEXT:    [[DOT150:%.*]] = phi i32 [ [[DOT04961]], %[[DOT_CRIT_EDGE]] ], [ 0, %[[TMP38]] ], [ 0, %[[TMP35]] ]
+; CHECK-NEXT:    [[DOTPRE:%.*]] = load i32, ptr [[TMP23]], align 16, !tbaa [[INT_TBAA10]]
+; CHECK-NEXT:    br label %[[BB39]]
+; CHECK:       [[BB39]]:
+; CHECK-NEXT:    [[TMP48:%.*]] = phi i32 [ [[DOTPRE]], %[[BB38]] ], [ [[TMP24]], %[[BB35]] ], [ [[TMP24]], %[[DOT_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[DOT152:%.*]] = phi i32 [ [[DOT05160]], %[[DOT_CRIT_EDGE]] ], [ [[TMP36]], %[[BB38]] ], [ [[TMP36]], %[[BB35]] ]
+; CHECK-NEXT:    [[DOT150:%.*]] = phi i32 [ [[DOT04961]], %[[DOT_CRIT_EDGE]] ], [ 0, %[[BB38]] ], [ 0, %[[BB35]] ]
 ; CHECK-NEXT:    [[TMP40:%.*]] = add i64 [[DOT046_LCSSA]], 4294967295
 ; CHECK-NEXT:    [[TMP41:%.*]] = trunc i64 [[TMP40]] to i32
-; CHECK-NEXT:    [[TMP42:%.*]] = getelementptr inbounds [26 x %struct.Letter], ptr @alPhrase, i64 0, i64 [[INDVARS_IV]], i32 2
+; CHECK-NEXT:    [[TMP42:%.*]] = getelementptr inbounds [26 x [[STRUCT_LETTER]]], ptr @alPhrase, i64 0, i64 [[INDVARS_IV]], i32 2
 ; CHECK-NEXT:    store i32 [[TMP41]], ptr [[TMP42]], align 8, !tbaa [[INT_TBAA12:![0-9]+]]
 ; CHECK-NEXT:    [[TMP43:%.*]] = zext i32 [[DOT150]] to i64
 ; CHECK-NEXT:    [[DOT046_:%.*]] = shl i64 [[DOT046_LCSSA]], [[TMP43]]
@@ -114,26 +116,25 @@ define void @BuildMask(ptr nocapture readonly) local_unnamed_addr #0 {
 ; CHECK-NEXT:    [[TMP46:%.*]] = load i64, ptr [[TMP45]], align 8, !tbaa [[LONG_TBAA13:![0-9]+]]
 ; CHECK-NEXT:    [[TMP47:%.*]] = or i64 [[TMP46]], [[DOT046_]]
 ; CHECK-NEXT:    store i64 [[TMP47]], ptr [[TMP45]], align 8, !tbaa [[LONG_TBAA13]]
-; CHECK-NEXT:    [[TMP48:%.*]] = load i32, ptr [[TMP23]], align 16, !tbaa [[INT_TBAA10]]
 ; CHECK-NEXT:    [[TMP49:%.*]] = zext i32 [[TMP48]] to i64
 ; CHECK-NEXT:    [[TMP50:%.*]] = shl i64 [[TMP49]], [[TMP43]]
 ; CHECK-NEXT:    [[TMP51:%.*]] = getelementptr inbounds [2 x i64], ptr @aqMainMask, i64 0, i64 [[TMP44]]
 ; CHECK-NEXT:    [[TMP52:%.*]] = load i64, ptr [[TMP51]], align 8, !tbaa [[LONG_TBAA13]]
 ; CHECK-NEXT:    [[TMP53:%.*]] = or i64 [[TMP50]], [[TMP52]]
 ; CHECK-NEXT:    store i64 [[TMP53]], ptr [[TMP51]], align 8, !tbaa [[LONG_TBAA13]]
-; CHECK-NEXT:    [[TMP54:%.*]] = getelementptr inbounds [26 x %struct.Letter], ptr @alPhrase, i64 0, i64 [[INDVARS_IV]], i32 1
-; CHECK-NEXT:    store i32 [[DOT150]], ptr [[TMP54]], align 4, !tbaa [[INT_TBAA15:![0-9]+]]
-; CHECK-NEXT:    [[TMP55:%.*]] = getelementptr inbounds [26 x %struct.Letter], ptr @alPhrase, i64 0, i64 [[INDVARS_IV]], i32 3
-; CHECK-NEXT:    store i32 [[DOT152]], ptr [[TMP55]], align 4, !tbaa [[INT_TBAA16:![0-9]+]]
+; CHECK-NEXT:    [[TMP55:%.*]] = getelementptr inbounds [26 x [[STRUCT_LETTER]]], ptr @alPhrase, i64 0, i64 [[INDVARS_IV]], i32 1
+; CHECK-NEXT:    store i32 [[DOT150]], ptr [[TMP55]], align 4, !tbaa [[INT_TBAA15:![0-9]+]]
+; CHECK-NEXT:    [[TMP54:%.*]] = getelementptr inbounds [26 x [[STRUCT_LETTER]]], ptr @alPhrase, i64 0, i64 [[INDVARS_IV]], i32 3
+; CHECK-NEXT:    store i32 [[DOT152]], ptr [[TMP54]], align 4, !tbaa [[INT_TBAA16:![0-9]+]]
 ; CHECK-NEXT:    [[TMP56:%.*]] = add nsw i32 [[DOT150]], [[DOT048_LCSSA]]
 ; CHECK-NEXT:    br label %[[TMP57]]
 ; CHECK:       [[TMP57]]:
-; CHECK-NEXT:    [[DOT253]] = phi i32 [ [[DOT05160]], %[[TMP27]] ], [ [[DOT152]], %[[TMP39]] ]
-; CHECK-NEXT:    [[DOT2]] = phi i32 [ [[DOT04961]], %[[TMP27]] ], [ [[TMP56]], %[[TMP39]] ]
+; CHECK-NEXT:    [[DOT253]] = phi i32 [ [[DOT05160]], %[[BB27]] ], [ [[DOT152]], %[[BB39]] ]
+; CHECK-NEXT:    [[DOT2]] = phi i32 [ [[DOT04961]], %[[BB27]] ], [ [[TMP56]], %[[BB39]] ]
 ; CHECK-NEXT:    [[INDVARS_IV_NEXT]] = add nuw nsw i64 [[INDVARS_IV]], 1
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp ne i64 [[INDVARS_IV_NEXT]], 26
-; CHECK-NEXT:    br i1 [[EXITCOND]], [[DOTPREHEADER]], label %[[BB58:.*]]
-; CHECK:       [[BB58]]:
+; CHECK-NEXT:    br i1 [[EXITCOND]], [[DOTPREHEADER]], label %[[BB57:.*]]
+; CHECK:       [[BB57]]:
 ; CHECK-NEXT:    ret void
 ;
   tail call void @llvm.memset.p0.i64(ptr align 16 @alPhrase, i8 0, i64 416, i1 false)
