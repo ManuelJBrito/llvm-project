@@ -4,11 +4,13 @@
 ; Load PRE where a predecessor's incoming MemoryAccess is a MemoryPhi
 ; that the MSSA walker cannot resolve through.  The walker returns the
 ; MemoryPhi as the "clobber", and NewGVN cannot extract an available
-; value from it — even though the underlying value is the same on all
-; paths through the MemoryPhi.
+; value from it.
 ;
-; GVN's memdep walks each predecessor path independently and can find
-; the available value through the merge.
+; Neither GVN nor NewGVN can handle this: the loop header load has
+; 2 unavailable predecessors (preheader via unresolvable MemoryPhi +
+; backedge via call clobber), exceeding the NumUnavail <= 1 limit.
+; Fixing this would require recursive/nested PRE across the MemoryPhi
+; diamond.
 
 ; The preheader feeds through a MemoryPhi (from a diamond where one
 ; path calls an opaque function).  The call doesn't actually clobber %p
@@ -17,9 +19,8 @@
 ; MemoryPhi — leaving the preheader predecessor "unavailable" even
 ; though the entry store dominates all paths to it.
 ;
-; With two unavailable predecessors (preheader + backedge), NewGVN's
-; standard PRE gives up (NumUnavail > 1).  GVN can still PRE because
-; it resolves the preheader value independently.
+; With two unavailable predecessors (preheader + backedge), both
+; GVN and NewGVN give up (NumUnavail > 1).
 
 ; CHECK-LABEL: @memphi_preheader(
 ; CHECK:      body:
