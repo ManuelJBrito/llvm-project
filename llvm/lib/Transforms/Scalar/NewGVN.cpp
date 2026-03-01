@@ -4392,6 +4392,9 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
   Value *LoadPtr = Load->getPointerOperand();
   MemoryLocation MemLoc = MemoryLocation::get(Load);
 
+  LLVM_DEBUG(dbgs() << "Load PRE candidate: " << *Load << " in "
+                    << LoadBB->getName() << "\n");
+
   //===--------------------------------------------------------------------===//
   // Path 1: Standard Load PRE – load is partially redundant across
   // predecessors. Find the available value per predecessor using MemorySSA.
@@ -4402,6 +4405,13 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
     // (which is the same on all paths when there is no MemoryPhi).
     MemoryPhi *MP = MSSA->getMemoryAccess(LoadBB);
     MemoryAccess *LoadDefMA = cast<MemoryUseOrDef>(MA)->getDefiningAccess();
+
+    // If the load's defining access is a MemoryDef in the same block,
+    // the load depends on a within-block memory operation (e.g. a store)
+    // and is not partially redundant across predecessors.
+    if (auto *DefMD = dyn_cast<MemoryDef>(LoadDefMA))
+      if (DefMD->getBlock() == LoadBB)
+        return false;
 
     SmallVector<std::pair<BasicBlock *, Value *>, 4> AvailableValues;
     BasicBlock *UnavailPred = nullptr;
@@ -4421,11 +4431,19 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
       MemoryAccess *PredClobber =
           MSSAWalker->getClobberingMemoryAccess(IncomingMA, MemLoc);
 
+      LLVM_DEBUG(dbgs() << "  Load PRE: pred " << PredBB->getName()
+                        << " IncomingMA=" << *IncomingMA
+                        << " PredClobber=" << *PredClobber << "\n");
+
       if (!MSSA->isLiveOnEntryDef(PredClobber)) {
         if (auto *MD = dyn_cast<MemoryDef>(PredClobber)) {
           Instruction *DepInst = MD->getMemoryInst();
           if (!ReachableBlocks.count(DepInst->getParent())) {
-            AvailVal = PoisonValue::get(Load->getType());
+            // Clobber is in a block NewGVN considers unreachable.
+            // Unlike non-local load elimination (where the load itself
+            // would be unreachable), in load PRE the predecessor path
+            // is reachable at runtime.  Leave AvailVal as null so this
+            // predecessor is treated as unavailable.
           } else if (auto *SI = dyn_cast<StoreInst>(DepInst)) {
             if (SI->getValueOperand()->getType() == Load->getType() &&
                 AA->isMustAlias(MemoryLocation::get(SI), MemLoc))
@@ -4445,6 +4463,8 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
         for (User *U : LoadPtr->users()) {
           auto *LI = dyn_cast<LoadInst>(U);
           if (!LI || LI == Load || LI->getType() != Load->getType())
+            continue;
+          if (InstructionsToErase.count(LI))
             continue;
           if (LI->getFunction() != Load->getFunction())
             continue;
@@ -4473,6 +4493,10 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
             AvailVal = nullptr;
         }
       }
+
+      LLVM_DEBUG(dbgs() << "  Load PRE: pred " << PredBB->getName()
+                        << " AvailVal="
+                        << (AvailVal ? AvailVal->getName() : "null") << "\n");
 
       if (!AvailVal) {
         ++NumUnavail;
