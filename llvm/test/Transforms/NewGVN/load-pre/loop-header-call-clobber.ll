@@ -1,23 +1,18 @@
 ; RUN: opt -S -passes=newgvn -newgvn-enable-pre=true -newgvn-enable-load-pre=true < %s | FileCheck %s
-; XFAIL: *
 ;
 ; Loop header load where the loop body contains a call that may clobber the
 ; loaded pointer.  The value is available from the preheader (via a store)
 ; and unavailable from the backedge (call may write).
 ;
-; GVN handles this in its standard PRE path (backedges are not rejected).
-; It inserts a reload after the call on the backedge and creates a PHI
-; in the header.
-;
-; NewGVN rejects backedges in standard PRE and its loop-invariant PRE
-; only handles clobbers *outside* the loop.
+; Standard PRE inserts a reload after the call on the backedge and creates
+; a PHI in the header.
 
 ; CHECK-LABEL: @simple(
+; CHECK:      loop:
+; CHECK-NEXT:   {{%.*}} = phi i64 [ [[RELOAD:%.*]], %body ], [ %init, %entry ]
 ; CHECK:      body:
 ; CHECK:        call void @may_write(ptr %p)
-; CHECK-NEXT:   [[RELOAD:%.*]] = load i64, ptr %p
-; CHECK:      loop:
-; CHECK-NEXT:   {{%.*}} = phi i64 [ [[RELOAD]], %body ], [ %init, %entry ]
+; CHECK-NEXT:   [[RELOAD]] = load i64, ptr %p
 
 define i64 @simple(ptr %p, i64 %init) {
 entry:
@@ -41,11 +36,11 @@ exit:
 ; it is in a grandparent block.  The value must still flow through.
 
 ; CHECK-LABEL: @store_in_grandparent(
+; CHECK:      loop:
+; CHECK-NEXT:   {{%.*}} = phi i64 [ [[RELOAD2:%.*]], %body ], [ %init, %preheader ]
 ; CHECK:      body:
 ; CHECK:        call void @may_write(ptr %p)
-; CHECK-NEXT:   [[RELOAD2:%.*]] = load i64, ptr %p
-; CHECK:      loop:
-; CHECK-NEXT:   {{%.*}} = phi i64 [ [[RELOAD2]], %body ], [ %init, %preheader ]
+; CHECK-NEXT:   [[RELOAD2]] = load i64, ptr %p
 
 define i64 @store_in_grandparent(ptr %p, i64 %init, i1 %c) {
 entry:

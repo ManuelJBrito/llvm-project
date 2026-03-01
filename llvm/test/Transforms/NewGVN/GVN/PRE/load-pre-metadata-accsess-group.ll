@@ -59,11 +59,12 @@ define dso_local void @test2(ptr nocapture readonly %aa, ptr nocapture %bb) loca
 ; CHECK-NEXT:    [[IDX2:%.*]] = getelementptr inbounds i32, ptr [[AA]], i64 1
 ; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr [[IDX2]], align 4
 ; CHECK-NEXT:    store i32 [[TMP0]], ptr [[IDX]], align 4
+; CHECK-NEXT:    [[DOTPRE:%.*]] = load i32, ptr [[AA]], align 4, !llvm.access.group [[ACC_GRP1:![0-9]+]]
 ; CHECK-NEXT:    br label %[[FOR_BODY2:.*]]
 ; CHECK:       [[FOR_BODY2]]:
-; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr [[AA]], align 4, !llvm.access.group [[ACC_GRP1:![0-9]+]]
+; CHECK-NEXT:    [[TMP1:%.*]] = phi i32 [ [[MUL:%.*]], %[[FOR_BODY2]] ], [ [[DOTPRE]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[TMP2:%.*]] = load i32, ptr [[IDX]], align 4, !llvm.access.group [[ACC_GRP1]]
-; CHECK-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP2]], [[TMP1]]
+; CHECK-NEXT:    [[MUL]] = mul nsw i32 [[TMP2]], [[TMP1]]
 ; CHECK-NEXT:    store i32 [[MUL]], ptr [[AA]], align 4, !llvm.access.group [[ACC_GRP1]]
 ; CHECK-NEXT:    br i1 true, label %[[FOR_BODY2]], label %[[FOR_END:.*]]
 ; CHECK:       [[FOR_END]]:

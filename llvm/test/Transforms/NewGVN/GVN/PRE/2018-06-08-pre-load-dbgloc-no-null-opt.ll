@@ -33,16 +33,19 @@ target datalayout = "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128"
 define i32 @test_no_null_opt(ptr readonly %desc) local_unnamed_addr #0 !dbg !4 {
 ; CHECK-LABEL: define i32 @test_no_null_opt(
 ; CHECK-SAME: ptr readonly [[DESC:%.*]]) local_unnamed_addr #[[ATTR0:[0-9]+]] !dbg [[DBG4:![0-9]+]] {
-; CHECK-NEXT:  [[ENTRY:.*]]:
+; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq ptr [[DESC]], null
-; CHECK-NEXT:    br i1 [[TOBOOL]], label %[[COND_END:.*]], label %[[COND_FALSE:.*]], !dbg [[DBG9:![0-9]+]]
+; CHECK-NEXT:    br i1 [[TOBOOL]], label %[[ENTRY_COND_END_CRIT_EDGE:.*]], label %[[COND_FALSE:.*]], !dbg [[DBG9:![0-9]+]]
+; CHECK:       [[ENTRY_COND_END_CRIT_EDGE]]:
+; CHECK-NEXT:    [[DOTPRE:%.*]] = load ptr, ptr [[DESC]], align 8, !dbg [[DBG10:![0-9]+]]
+; CHECK-NEXT:    br label %[[COND_END:.*]], !dbg [[DBG9]]
 ; CHECK:       [[COND_FALSE]]:
-; CHECK-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[DESC]], align 8, !dbg [[DBG10:![0-9]+]]
+; CHECK-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[DESC]], align 8, !dbg [[DBG11:![0-9]+]]
 ; CHECK-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[TMP0]], align 8
 ; CHECK-NEXT:    br label %[[COND_END]], !dbg [[DBG9]]
 ; CHECK:       [[COND_END]]:
-; CHECK-NEXT:    [[TMP2:%.*]] = phi ptr [ [[TMP1]], %[[COND_FALSE]] ], [ null, %[[ENTRY]] ], !dbg [[DBG9]]
-; CHECK-NEXT:    [[TMP3:%.*]] = load ptr, ptr [[DESC]], align 8, !dbg [[DBG11:![0-9]+]]
+; CHECK-NEXT:    [[TMP3:%.*]] = phi ptr [ [[TMP0]], %[[COND_FALSE]] ], [ [[DOTPRE]], %[[ENTRY_COND_END_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[TMP2:%.*]] = phi ptr [ [[TMP1]], %[[COND_FALSE]] ], [ null, %[[ENTRY_COND_END_CRIT_EDGE]] ], !dbg [[DBG9]]
 ; CHECK-NEXT:    [[DESCS:%.*]] = getelementptr inbounds [[STRUCT_NODE:%.*]], ptr [[TMP3]], i64 0, i32 1
 ; CHECK-NEXT:    [[TMP4:%.*]] = load ptr, ptr [[DESCS]], align 8
 ; CHECK-NEXT:    [[CALL:%.*]] = tail call i32 @bar(ptr [[TMP2]], ptr [[TMP4]])
@@ -101,6 +104,6 @@ declare i32 @bar(ptr, ptr) local_unnamed_addr #1
 ; CHECK: [[META7]] = !DIBasicType(name: "int", size: 32, encoding: DW_ATE_signed)
 ; CHECK: [[META8]] = !{}
 ; CHECK: [[DBG9]] = !DILocation(line: 15, column: 6, scope: [[DBG4]])
-; CHECK: [[DBG10]] = !DILocation(line: 15, column: 34, scope: [[DBG4]])
-; CHECK: [[DBG11]] = !DILocation(line: 16, column: 13, scope: [[DBG4]])
+; CHECK: [[DBG10]] = !DILocation(line: 16, column: 13, scope: [[DBG4]])
+; CHECK: [[DBG11]] = !DILocation(line: 15, column: 34, scope: [[DBG4]])
 ;.

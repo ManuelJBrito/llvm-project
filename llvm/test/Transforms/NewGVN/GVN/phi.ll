@@ -147,8 +147,6 @@ define i64 @test6(i1 %c, i64 %a) {
 ; CHECK:       taken:
 ; CHECK-NEXT:    [[ASSUMPTION:%.*]] = icmp eq i64 [[A:%.*]], 0
 ; CHECK-NEXT:    call void @llvm.assume(i1 [[ASSUMPTION]])
-; CHECK-NEXT:    br label [[MERGE:%.*]]
-; CHECK:       next:
 ; CHECK-NEXT:    br label [[MERGE1:%.*]]
 ; CHECK:       untaken:
 ; CHECK-NEXT:    br label [[MERGE1]]
@@ -180,8 +178,6 @@ define i64 @test7(i1 %c, i64 %a) {
 ; CHECK:       untaken:
 ; CHECK-NEXT:    br label [[MERGE]]
 ; CHECK:       merge:
-; CHECK-NEXT:    br label [[NEXT:%.*]]
-; CHECK:       next:
 ; CHECK-NEXT:    ret i64 [[A]]
 ;
   br i1 %c, label %taken, label %untaken

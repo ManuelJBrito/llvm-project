@@ -29,8 +29,6 @@ define i32 @test(i32 %g, ptr %P) nounwind  {
 ; CHECK-NEXT:    br label %[[BB27]]
 ; CHECK:       [[BB27]]:
 ; CHECK-NEXT:    [[TMP_0:%.*]] = phi i32 [ 11, %[[BB26]] ], [ [[TMP18]], %[[BB24]] ], [ [[TMP8]], %[[BB14]] ], [ [[G]], %[[BB]] ]
-; CHECK-NEXT:    br label %[[RETURN:.*]]
-; CHECK:       [[RETURN]]:
 ; CHECK-NEXT:    ret i32 [[TMP_0]]
 ;
 entry:

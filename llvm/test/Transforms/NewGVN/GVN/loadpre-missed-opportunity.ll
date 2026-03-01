@@ -6,8 +6,6 @@ define i32 @loadpre_opportunity(ptr %arg, i1 %arg1, i1 %arg2, i1 %arg3) {
 ; PRE-LABEL: @loadpre_opportunity(
 ; PRE-NEXT:  bb:
 ; PRE-NEXT:    [[I:%.*]] = load ptr, ptr [[ARG:%.*]], align 8
-; PRE-NEXT:    br label [[BB:%.*]]
-; PRE:       bb5:
 ; PRE-NEXT:    [[I6:%.*]] = call i32 @use(ptr [[I]])
 ; PRE-NEXT:    br label [[BB11:%.*]]
 ; PRE:       bb7:
@@ -15,7 +13,7 @@ define i32 @loadpre_opportunity(ptr %arg, i1 %arg1, i1 %arg2, i1 %arg3) {
 ; PRE-NEXT:    [[I10:%.*]] = call i32 @use(ptr [[I8]])
 ; PRE-NEXT:    br label [[BB11]]
 ; PRE:       bb11:
-; PRE-NEXT:    [[I12:%.*]] = phi i32 [ [[I6]], [[BB]] ], [ [[I10]], [[BB7:%.*]] ]
+; PRE-NEXT:    [[I12:%.*]] = phi i32 [ [[I6]], [[BB:%.*]] ], [ [[I10]], [[BB7:%.*]] ]
 ; PRE-NEXT:    br i1 [[ARG1:%.*]], label [[BB7]], label [[BB13:%.*]]
 ; PRE:       bb13:
 ; PRE-NEXT:    call void @somecall()
@@ -35,8 +33,6 @@ define i32 @loadpre_opportunity(ptr %arg, i1 %arg1, i1 %arg2, i1 %arg3) {
 ; CHECK-LABEL: @loadpre_opportunity(
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    [[I:%.*]] = load ptr, ptr [[ARG:%.*]], align 8
-; CHECK-NEXT:    br label [[BB:%.*]]
-; CHECK:       bb5:
 ; CHECK-NEXT:    [[I6:%.*]] = call i32 @use(ptr [[I]])
 ; CHECK-NEXT:    br label [[BB11:%.*]]
 ; CHECK:       bb7:
@@ -44,7 +40,7 @@ define i32 @loadpre_opportunity(ptr %arg, i1 %arg1, i1 %arg2, i1 %arg3) {
 ; CHECK-NEXT:    [[I10:%.*]] = call i32 @use(ptr [[I8]])
 ; CHECK-NEXT:    br label [[BB11]]
 ; CHECK:       bb11:
-; CHECK-NEXT:    [[I12:%.*]] = phi i32 [ [[I6]], [[BB]] ], [ [[I10]], [[BB7:%.*]] ]
+; CHECK-NEXT:    [[I12:%.*]] = phi i32 [ [[I6]], [[BB:%.*]] ], [ [[I10]], [[BB7:%.*]] ]
 ; CHECK-NEXT:    br i1 [[ARG1:%.*]], label [[BB7]], label [[BB13:%.*]]
 ; CHECK:       bb13:
 ; CHECK-NEXT:    call void @somecall()

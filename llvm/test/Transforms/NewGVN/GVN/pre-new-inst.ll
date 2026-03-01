@@ -13,9 +13,7 @@ define i8 @foo(i64 %in, ptr %arr, i1 %arg) {
 ; CHECK-NEXT:    br label %[[NEXT]]
 ; CHECK:       [[NEXT]]:
 ; CHECK-NEXT:    store i64 [[IN]], ptr [[ADDR]], align 4
-; CHECK-NEXT:    br label %[[FINAL:.*]]
-; CHECK:       [[FINAL]]:
-; CHECK-NEXT:    [[DEAD:%.*]] = load i32, ptr [[ADDR]], align 4
+; CHECK-NEXT:    [[DEAD:%.*]] = trunc i64 [[IN]] to i32
 ; CHECK-NEXT:    [[RESPTR:%.*]] = getelementptr i8, ptr [[ARR]], i32 [[DEAD]]
 ; CHECK-NEXT:    [[RES:%.*]] = load i8, ptr [[RESPTR]], align 1
 ; CHECK-NEXT:    ret i8 [[RES]]

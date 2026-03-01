@@ -22,8 +22,6 @@ define i32 @NextRootMove(i32 %wtm, i32 %x, i32 %y, i32 %z) {
 ; CHECK:       cond_true145:
 ; CHECK-NEXT:    br i1 false, label [[BB98_BACKEDGE]], label [[RETURN_LOOPEXIT]]
 ; CHECK:       return.loopexit:
-; CHECK-NEXT:    br label [[RETURN:%.*]]
-; CHECK:       return:
 ; CHECK-NEXT:    ret i32 0
 ;
 entry:

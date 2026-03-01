@@ -4416,15 +4416,8 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
     SmallVector<std::pair<BasicBlock *, Value *>, 4> AvailableValues;
     BasicBlock *UnavailPred = nullptr;
     unsigned NumUnavail = 0;
-    bool HasBackedge = false;
 
     for (auto *PredBB : predecessors(LoadBB)) {
-      // Reject backedges for standard PRE.
-      if (isBackedge(PredBB, LoadBB)) {
-        HasBackedge = true;
-        break;
-      }
-
       Value *AvailVal = nullptr;
       MemoryAccess *IncomingMA =
           MP ? MP->getIncomingValueForBlock(PredBB) : LoadDefMA;
@@ -4456,31 +4449,25 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
         }
       }
 
-      // Fallback: scan for a dominating load of the same address whose
-      // clobbering access matches PredClobber (i.e. it reads from the same
-      // memory state, so no intervening clobber invalidates its value).
-      if (!AvailVal && LoadPtr->hasUseList()) {
-        for (User *U : LoadPtr->users()) {
-          auto *LI = dyn_cast<LoadInst>(U);
-          if (!LI || LI == Load || LI->getType() != Load->getType())
-            continue;
-          if (InstructionsToErase.count(LI))
-            continue;
-          if (LI->getFunction() != Load->getFunction())
-            continue;
-          if (!DT->dominates(LI, PredBB->getTerminator()))
-            continue;
-          if (!AA->isMustAlias(MemoryLocation::get(LI), MemLoc))
-            continue;
-          // Verify LI reads from the same memory state as a hypothetical
-          // load at the end of PredBB (both see PredClobber).
-          MemoryAccess *LI_MA = getMemoryAccess(LI);
-          if (!LI_MA)
-            continue;
-          MemoryAccess *LI_Clobber =
-              MSSAWalker->getClobberingMemoryAccess(LI_MA);
-          if (LI_Clobber == PredClobber) {
+      // Fallback: scan the load's congruence class for a member that
+      // dominates the predecessor.  Class members are loads (or stores)
+      // that NewGVN has determined produce the same value — this naturally
+      // handles aliased pointers (e.g. congruent GEPs) without needing
+      // explicit phi-translation.
+      if (!AvailVal) {
+        if (CongruenceClass *CC = ValueToClass.lookup(Load)) {
+          for (Value *Member : *CC) {
+            auto *LI = dyn_cast<LoadInst>(Member);
+            if (!LI || LI == Load)
+              continue;
+            if (InstructionsToErase.count(LI))
+              continue;
+            if (!DT->dominates(LI, PredBB->getTerminator()))
+              continue;
             AvailVal = LI;
+            LLVM_DEBUG(dbgs() << "  Load PRE: found class member "
+                              << *LI << " for pred "
+                              << PredBB->getName() << "\n");
             break;
           }
         }
@@ -4508,9 +4495,6 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
         goto try_loop_pre;
     }
 
-    if (HasBackedge)
-      goto try_loop_pre;
-
     if (NumUnavail != 1)
       return false;
     assert(UnavailPred && "expected one unavailable predecessor");
@@ -4522,21 +4506,54 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
 
     // PHI-translate the load pointer for the insertion predecessor.
     Value *PredPtr = LoadPtr;
+    bool NeedGEPClone = false;
     if (auto *PtrPHI = dyn_cast<PHINode>(LoadPtr)) {
       if (PtrPHI->getParent() == LoadBB)
         PredPtr = PtrPHI->getIncomingValueForBlock(UnavailPred);
+    } else if (auto *GEP = dyn_cast<GetElementPtrInst>(LoadPtr)) {
+      // Rematerialize the GEP in the unavailable predecessor if all its
+      // operands dominate UnavailPred (matching GVN's phi-translation).
+      if (GEP->getParent() == LoadBB) {
+        for (Value *Op : GEP->operands()) {
+          if (auto *OpI = dyn_cast<Instruction>(Op)) {
+            if (!DT->dominates(OpI, UnavailPred->getTerminator())) {
+              LLVM_DEBUG(dbgs() << "  Load PRE: GEP op " << *OpI
+                                << " doesn't dominate " << UnavailPred->getName()
+                                << "\n");
+              return false;
+            }
+          }
+        }
+        NeedGEPClone = true;
+        LLVM_DEBUG(dbgs() << "  Load PRE: will rematerialize GEP " << *GEP
+                          << " in " << UnavailPred->getName() << "\n");
+      }
     } else if (auto *PtrInst = dyn_cast<Instruction>(LoadPtr)) {
-      if (PtrInst->getParent() == LoadBB)
-        return false; // Non-PHI pointer defined in LoadBB – can't translate.
+      if (PtrInst->getParent() == LoadBB) {
+        LLVM_DEBUG(dbgs() << "  Load PRE: non-GEP ptr in LoadBB, rejected\n");
+        return false; // Non-PHI, non-GEP pointer defined in LoadBB.
+      }
     }
-    if (auto *PI = dyn_cast<Instruction>(PredPtr)) {
-      if (!DT->dominates(PI, UnavailPred->getTerminator()))
-        return false;
+    if (!NeedGEPClone) {
+      if (auto *PI = dyn_cast<Instruction>(PredPtr))
+        if (!DT->dominates(PI, UnavailPred->getTerminator()))
+          return false;
     }
 
-    // Split critical edge if needed.
+    // Split critical edge if needed.  Reject critical backedges — splitting
+    // them would break canonical loop form.
     BasicBlock *InsertBB = UnavailPred;
     if (UnavailPred->getTerminator()->getNumSuccessors() > 1) {
+      // A natural loop backedge has the header (LoadBB) dominating the
+      // latch (UnavailPred).  Only reject those — splitting them would
+      // break canonical loop form.  The RPO-based isBackedge() gives
+      // false positives for forward edges inside loop bodies.
+      if (DT->dominates(LoadBB, UnavailPred)) {
+        LLVM_DEBUG(dbgs() << "  Load PRE: critical backedge "
+                          << UnavailPred->getName() << " -> "
+                          << LoadBB->getName() << ", falling through\n");
+        goto try_loop_pre;
+      }
       MemorySSAUpdater MSSAU(MSSA);
       CriticalEdgeSplittingOptions Options(DT, /*LI=*/nullptr, &MSSAU);
       Options.unsetPreserveLoopSimplify();
@@ -4549,6 +4566,14 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
       for (auto &AV : AvailableValues)
         if (AV.first == UnavailPred)
           AV.first = InsertBB;
+    }
+
+    // Rematerialize GEP if needed.
+    if (NeedGEPClone) {
+      auto *ClonedGEP = cast<GetElementPtrInst>(LoadPtr)->clone();
+      ClonedGEP->setName(LoadPtr->getName() + ".phi.trans.insert");
+      ClonedGEP->insertBefore(InsertBB->getTerminator()->getIterator());
+      PredPtr = ClonedGEP;
     }
 
     // Insert the new load.

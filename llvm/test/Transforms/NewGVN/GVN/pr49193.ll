@@ -14,8 +14,6 @@ define i64 @k() local_unnamed_addr {
 ; CHECK:       [[BB10_PREHEADER]]:
 ; CHECK-NEXT:    br label %[[BB13:.*]]
 ; CHECK:       [[BB3]]:
-; CHECK-NEXT:    br label %[[BB7:.*]]
-; CHECK:       [[BB7]]:
 ; CHECK-NEXT:    [[I8:%.*]] = tail call ptr @j()
 ; CHECK-NEXT:    br label %[[BB37:.*]]
 ; CHECK:       [[BB13]]:
@@ -24,12 +22,8 @@ define i64 @k() local_unnamed_addr {
 ; CHECK-NEXT:    [[I17:%.*]] = tail call ptr @j()
 ; CHECK-NEXT:    br i1 undef, label %[[BB22THREAD_PRE_SPLIT:.*]], label %[[BB37_LOOPEXIT:.*]]
 ; CHECK:       [[BB22THREAD_PRE_SPLIT]]:
-; CHECK-NEXT:    br label %[[BB27:.*]]
-; CHECK:       [[BB27]]:
 ; CHECK-NEXT:    br i1 undef, label %[[BB30THREAD_PRE_SPLIT]], label %[[BB37_LOOPEXIT]]
 ; CHECK:       [[BB30THREAD_PRE_SPLIT]]:
-; CHECK-NEXT:    br label %[[BB34:.*]]
-; CHECK:       [[BB34]]:
 ; CHECK-NEXT:    br i1 undef, label %[[BB37_LOOPEXIT]], label %[[BB13]]
 ; CHECK:       [[BB37_LOOPEXIT]]:
 ; CHECK-NEXT:    br label %[[BB37]]

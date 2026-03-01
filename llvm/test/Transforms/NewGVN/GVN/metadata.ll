@@ -170,9 +170,9 @@ define void @load_ptr_nonnull_to_i64(ptr %p) {
 ; CHECK-SAME: (ptr [[P:%.*]]) {
 ; CHECK-NEXT:    [[VAL:%.*]] = load ptr, ptr [[P]], align 8, !nonnull [[META6]]
 ; CHECK-NEXT:    [[VAL_INT:%.*]] = ptrtoint ptr [[VAL]] to i64
-; CHECK-NEXT:    [[VAL2:%.*]] = load i64, ptr [[P]], align 8
+; CHECK-NEXT:    [[TMP1:%.*]] = ptrtoint ptr [[VAL]] to i64
 ; CHECK-NEXT:    call void @use.i64(i64 [[VAL_INT]])
-; CHECK-NEXT:    call void @use.i64(i64 [[VAL2]])
+; CHECK-NEXT:    call void @use.i64(i64 [[TMP1]])
 ; CHECK-NEXT:    ret void
 ;
   %val = load ptr, ptr %p, align 8, !nonnull !{}
@@ -188,9 +188,9 @@ define void @load_ptr_nonnull_noundef_to_i64(ptr %p) {
 ; CHECK-SAME: (ptr [[P:%.*]]) {
 ; CHECK-NEXT:    [[VAL:%.*]] = load ptr, ptr [[P]], align 8, !nonnull [[META6]], !noundef [[META6]]
 ; CHECK-NEXT:    [[VAL_INT:%.*]] = ptrtoint ptr [[VAL]] to i64
-; CHECK-NEXT:    [[VAL2:%.*]] = load i64, ptr [[P]], align 8
+; CHECK-NEXT:    [[TMP1:%.*]] = ptrtoint ptr [[VAL]] to i64
 ; CHECK-NEXT:    call void @use.i64(i64 [[VAL_INT]])
-; CHECK-NEXT:    call void @use.i64(i64 [[VAL2]])
+; CHECK-NEXT:    call void @use.i64(i64 [[TMP1]])
 ; CHECK-NEXT:    ret void
 ;
   %val = load ptr, ptr %p, align 8, !nonnull !{}, !noundef !{}
@@ -206,9 +206,9 @@ define void @load_ptr_invariant_load_to_i64(ptr %p) {
 ; CHECK-SAME: (ptr [[P:%.*]]) {
 ; CHECK-NEXT:    [[VAL:%.*]] = load ptr, ptr [[P]], align 8, !invariant.load [[META6]]
 ; CHECK-NEXT:    [[VAL_INT:%.*]] = ptrtoint ptr [[VAL]] to i64
-; CHECK-NEXT:    [[VAL2:%.*]] = load i64, ptr [[P]], align 8
+; CHECK-NEXT:    [[TMP1:%.*]] = ptrtoint ptr [[VAL]] to i64
 ; CHECK-NEXT:    call void @use.i64(i64 [[VAL_INT]])
-; CHECK-NEXT:    call void @use.i64(i64 [[VAL2]])
+; CHECK-NEXT:    call void @use.i64(i64 [[TMP1]])
 ; CHECK-NEXT:    ret void
 ;
   %val = load ptr, ptr %p, align 8, !invariant.load !{}
@@ -224,9 +224,9 @@ define void @load_ptr_dereferenceable_to_i64(ptr %p) {
 ; CHECK-SAME: (ptr [[P:%.*]]) {
 ; CHECK-NEXT:    [[VAL:%.*]] = load ptr, ptr [[P]], align 8, !dereferenceable [[META7]]
 ; CHECK-NEXT:    [[VAL_INT:%.*]] = ptrtoint ptr [[VAL]] to i64
-; CHECK-NEXT:    [[VAL2:%.*]] = load i64, ptr [[P]], align 8
+; CHECK-NEXT:    [[TMP1:%.*]] = ptrtoint ptr [[VAL]] to i64
 ; CHECK-NEXT:    call void @use.i64(i64 [[VAL_INT]])
-; CHECK-NEXT:    call void @use.i64(i64 [[VAL2]])
+; CHECK-NEXT:    call void @use.i64(i64 [[TMP1]])
 ; CHECK-NEXT:    ret void
 ;
   %val = load ptr, ptr %p, align 8, !dereferenceable !{i64 10}
@@ -242,9 +242,9 @@ define void @load_ptr_dereferenceable_or_null_to_i64(ptr %p) {
 ; CHECK-SAME: (ptr [[P:%.*]]) {
 ; CHECK-NEXT:    [[VAL:%.*]] = load ptr, ptr [[P]], align 8, !dereferenceable_or_null [[META7]]
 ; CHECK-NEXT:    [[VAL_INT:%.*]] = ptrtoint ptr [[VAL]] to i64
-; CHECK-NEXT:    [[VAL2:%.*]] = load i64, ptr [[P]], align 8
+; CHECK-NEXT:    [[TMP1:%.*]] = ptrtoint ptr [[VAL]] to i64
 ; CHECK-NEXT:    call void @use.i64(i64 [[VAL_INT]])
-; CHECK-NEXT:    call void @use.i64(i64 [[VAL2]])
+; CHECK-NEXT:    call void @use.i64(i64 [[TMP1]])
 ; CHECK-NEXT:    ret void
 ;
   %val = load ptr, ptr %p, align 8, !dereferenceable_or_null !{i64 10}
@@ -260,9 +260,10 @@ define void @load_ptr_nonnull_to_i32(ptr %p) {
 ; CHECK-SAME: (ptr [[P:%.*]]) {
 ; CHECK-NEXT:    [[VAL:%.*]] = load ptr, ptr [[P]], align 8, !nonnull [[META6]]
 ; CHECK-NEXT:    [[VAL_INT:%.*]] = ptrtoint ptr [[VAL]] to i64
-; CHECK-NEXT:    [[VAL2:%.*]] = load i32, ptr [[P]], align 8
+; CHECK-NEXT:    [[TMP1:%.*]] = ptrtoint ptr [[VAL]] to i64
+; CHECK-NEXT:    [[TMP2:%.*]] = trunc i64 [[TMP1]] to i32
 ; CHECK-NEXT:    call void @use.i64(i64 [[VAL_INT]])
-; CHECK-NEXT:    call void @use.i32(i32 [[VAL2]])
+; CHECK-NEXT:    call void @use.i32(i32 [[TMP2]])
 ; CHECK-NEXT:    ret void
 ;
   %val = load ptr, ptr %p, align 8, !nonnull !{}
@@ -277,9 +278,9 @@ define void @load_i64_range_to_i32_range(ptr %p) {
 ; CHECK-LABEL: define void @load_i64_range_to_i32_range
 ; CHECK-SAME: (ptr [[P:%.*]]) {
 ; CHECK-NEXT:    [[VAL:%.*]] = load i64, ptr [[P]], align 8, !range [[RNG8:![0-9]+]]
-; CHECK-NEXT:    [[VAL2:%.*]] = load i32, ptr [[P]], align 8, !range [[RNG9:![0-9]+]]
+; CHECK-NEXT:    [[TMP1:%.*]] = trunc i64 [[VAL]] to i32
 ; CHECK-NEXT:    call void @use.i64(i64 [[VAL]])
-; CHECK-NEXT:    call void @use.i32(i32 [[VAL2]])
+; CHECK-NEXT:    call void @use.i32(i32 [[TMP1]])
 ; CHECK-NEXT:    ret void
 ;
   %val = load i64, ptr %p, align 8, !range !{i64 0, i64 10}
@@ -305,7 +306,7 @@ define i64 @load_is_stored(ptr %p, ptr %p2) {
 define void @non_local_dominating(i1 %c, ptr %p) {
 ; CHECK-LABEL: define void @non_local_dominating
 ; CHECK-SAME: (i1 [[C:%.*]], ptr [[P:%.*]]) {
-; CHECK-NEXT:    [[V1:%.*]] = load i64, ptr [[P]], align 4, !range [[RNG10:![0-9]+]]
+; CHECK-NEXT:    [[V1:%.*]] = load i64, ptr [[P]], align 4, !range [[RNG9:![0-9]+]]
 ; CHECK-NEXT:    br i1 [[C]], label [[IF:%.*]], label [[JOIN:%.*]]
 ; CHECK:       if:
 ; CHECK-NEXT:    br label [[JOIN]]
@@ -336,11 +337,11 @@ define void @non_local_non_dominating(i1 %c, ptr %p) {
 ; CHECK-NEXT:    call void @use.i64(i64 [[V1]])
 ; CHECK-NEXT:    br label [[JOIN:%.*]]
 ; CHECK:       else:
-; CHECK-NEXT:    [[V2:%.*]] = load i64, ptr [[P]], align 4, !range [[RNG11:![0-9]+]]
+; CHECK-NEXT:    [[V2:%.*]] = load i64, ptr [[P]], align 4, !range [[RNG10:![0-9]+]]
 ; CHECK-NEXT:    call void @use.i64(i64 [[V2]])
 ; CHECK-NEXT:    br label [[JOIN]]
 ; CHECK:       join:
-; CHECK-NEXT:    [[V3:%.*]] = load i64, ptr [[P]], align 4, !range [[RNG12:![0-9]+]]
+; CHECK-NEXT:    [[V3:%.*]] = load i64, ptr [[P]], align 4, !range [[RNG11:![0-9]+]]
 ; CHECK-NEXT:    call void @use.i64(i64 [[V3]])
 ; CHECK-NEXT:    ret void
 ;
@@ -371,9 +372,9 @@ define void @non_local_coerced(i1 %c, ptr %p) {
 ; CHECK:       if:
 ; CHECK-NEXT:    br label [[JOIN]]
 ; CHECK:       join:
-; CHECK-NEXT:    [[V2:%.*]] = load i64, ptr [[P]], align 4, !range [[RNG12]]
+; CHECK-NEXT:    [[TMP1:%.*]] = ptrtoint ptr [[V1_PTR]] to i64
 ; CHECK-NEXT:    call void @use.i64(i64 [[V1]])
-; CHECK-NEXT:    call void @use.i64(i64 [[V2]])
+; CHECK-NEXT:    call void @use.i64(i64 [[TMP1]])
 ; CHECK-NEXT:    ret void
 ;
   %v1.ptr = load ptr, ptr %p, !nonnull !{}
@@ -393,14 +394,17 @@ join:
 define void @non_local_pre(i1 %c, ptr %p) {
 ; CHECK-LABEL: define void @non_local_pre
 ; CHECK-SAME: (i1 [[C:%.*]], ptr [[P:%.*]]) {
-; CHECK-NEXT:    br i1 [[C]], label [[IF:%.*]], label [[JOIN:%.*]]
+; CHECK-NEXT:    br i1 [[C]], label [[IF:%.*]], label [[DOTJOIN_CRIT_EDGE:%.*]]
+; CHECK:       .join_crit_edge:
+; CHECK-NEXT:    [[V2_PRE:%.*]] = load i64, ptr [[P]], align 4
+; CHECK-NEXT:    br label [[JOIN:%.*]]
 ; CHECK:       if:
 ; CHECK-NEXT:    [[V1:%.*]] = load i64, ptr [[P]], align 4, !range [[RNG8]]
 ; CHECK-NEXT:    call void @use.i64(i64 [[V1]])
 ; CHECK-NEXT:    br label [[JOIN]]
 ; CHECK:       join:
-; CHECK-NEXT:    [[V2:%.*]] = load i64, ptr [[P]], align 4, !range [[RNG12]]
-; CHECK-NEXT:    call void @use.i64(i64 [[V2]])
+; CHECK-NEXT:    [[V2_PRE_PHI:%.*]] = phi i64 [ [[V1]], [[IF]] ], [ [[V2_PRE]], [[DOTJOIN_CRIT_EDGE]] ]
+; CHECK-NEXT:    call void @use.i64(i64 [[V2_PRE_PHI]])
 ; CHECK-NEXT:    ret void
 ;
   br i1 %c, label %if, label %join
@@ -516,8 +520,7 @@ join:
 ; CHECK: [[META6]] = !{}
 ; CHECK: [[META7]] = !{i64 10}
 ; CHECK: [[RNG8]] = !{i64 0, i64 10}
-; CHECK: [[RNG9]] = !{i32 0, i32 10}
-; CHECK: [[RNG10]] = !{i64 0, i64 10, i64 20, i64 30}
-; CHECK: [[RNG11]] = !{i64 10, i64 20}
-; CHECK: [[RNG12]] = !{i64 20, i64 30}
+; CHECK: [[RNG9]] = !{i64 0, i64 10, i64 20, i64 30}
+; CHECK: [[RNG10]] = !{i64 10, i64 20}
+; CHECK: [[RNG11]] = !{i64 20, i64 30}
 ;.

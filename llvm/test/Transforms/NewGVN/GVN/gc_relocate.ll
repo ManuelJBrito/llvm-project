@@ -51,8 +51,6 @@ define i1 @test_call(ptr addrspace(1) %in) gc "statepoint-example" {
 ; CHECK-NEXT:    [[BASE:%.*]] = call ptr addrspace(1) @llvm.experimental.gc.relocate.p1(token [[SAFEPOINT_TOKEN]], i32 0, i32 0)
 ; CHECK-NEXT:    [[DERIVED:%.*]] = call ptr addrspace(1) @llvm.experimental.gc.relocate.p1(token [[SAFEPOINT_TOKEN]], i32 0, i32 1)
 ; CHECK-NEXT:    [[SAFEPOINT_TOKEN2:%.*]] = call token (i64, i32, ptr, i32, i32, ...) @llvm.experimental.gc.statepoint.p0(i64 0, i32 0, ptr elementtype(void ()) @func, i32 0, i32 0, i32 0, i32 0) [ "gc-live"(ptr addrspace(1) [[BASE]], ptr addrspace(1) [[DERIVED]]) ]
-; CHECK-NEXT:    br label [[NEXT:%.*]]
-; CHECK:       next:
 ; CHECK-NEXT:    [[BASE_RELOC:%.*]] = call ptr addrspace(1) @llvm.experimental.gc.relocate.p1(token [[SAFEPOINT_TOKEN2]], i32 0, i32 0)
 ; CHECK-NEXT:    [[DERIVED_RELOC:%.*]] = call ptr addrspace(1) @llvm.experimental.gc.relocate.p1(token [[SAFEPOINT_TOKEN2]], i32 0, i32 1)
 ; CHECK-NEXT:    [[CMP1:%.*]] = icmp eq ptr addrspace(1) [[BASE_RELOC]], null

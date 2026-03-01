@@ -13,11 +13,9 @@ define void @snork(i32 noundef %arg) {
 ; CHECK-NEXT:    [[TMP3]] = add i64 [[TMP2]], 1
 ; CHECK-NEXT:    [[TMP4:%.*]] = icmp slt i64 [[TMP3]], [[TMP]]
 ; CHECK-NEXT:    br i1 [[TMP4]], label [[BB1]], label [[BB7:%.*]]
-; CHECK:       bb5:
+; CHECK:       bb7:
 ; CHECK-NEXT:    [[TMP6:%.*]] = icmp sgt i64 [[TMP]], 1
 ; CHECK-NEXT:    br i1 [[TMP6]], label [[BB7]], label [[BB9:%.*]]
-; CHECK:       bb7:
-; CHECK-NEXT:    br label [[BB5:%.*]]
 ; CHECK:       bb9:
 ; CHECK-NEXT:    unreachable
 ;

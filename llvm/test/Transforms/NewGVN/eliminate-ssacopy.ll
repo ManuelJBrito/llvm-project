@@ -16,9 +16,10 @@ define void @g(i1 %arg, i1 %arg2, i1 %arg3) {
 ; CHECK:       for.cond.preheader:
 ; CHECK-NEXT:    unreachable
 ; CHECK:       for.cond1thread-pre-split:
-; CHECK-NEXT:    br label [[FOR_END4_SPLIT:%.*]]
-; CHECK:       for.end4.split:
 ; CHECK-NEXT:    br i1 [[ARG2:%.*]], label [[FOR_COND6_PREHEADER:%.*]], label [[IF_END11:%.*]]
+; CHECK:       for.end4.split.if.end11_crit_edge:
+; CHECK-NEXT:    [[DOTPRE:%.*]] = load i32, ptr @b, align 4
+; CHECK-NEXT:    br label [[IF_END12:%.*]]
 ; CHECK:       for.cond6.preheader:
 ; CHECK-NEXT:    br i1 [[ARG3:%.*]], label [[FOR_COND6_PREHEADER3:%.*]], label [[IF_END11_LOOPEXIT:%.*]]
 ; CHECK:       for.cond6.preheader3:
@@ -26,9 +27,9 @@ define void @g(i1 %arg, i1 %arg2, i1 %arg3) {
 ; CHECK:       if.end11.loopexit:
 ; CHECK-NEXT:    [[STOREMERGE_LCSSA:%.*]] = phi i32 [ 0, [[FOR_COND6_PREHEADER]] ], [ 1, [[FOR_COND6_PREHEADER3]] ]
 ; CHECK-NEXT:    store i32 [[STOREMERGE_LCSSA]], ptr @b, align 4
-; CHECK-NEXT:    br label [[IF_END11]]
+; CHECK-NEXT:    br label [[IF_END12]]
 ; CHECK:       if.end11:
-; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr @b, align 4
+; CHECK-NEXT:    [[TMP0:%.*]] = phi i32 [ [[STOREMERGE_LCSSA]], [[IF_END11_LOOPEXIT]] ], [ [[DOTPRE]], [[IF_END11]] ]
 ; CHECK-NEXT:    [[TMP1:%.*]] = load i8, ptr @a, align 1
 ; CHECK-NEXT:    [[CONV:%.*]] = sext i8 [[TMP1]] to i32
 ; CHECK-NEXT:    [[CMP12:%.*]] = icmp eq i32 [[TMP0]], [[CONV]]

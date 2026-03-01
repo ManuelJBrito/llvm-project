@@ -116,8 +116,8 @@ define i64 @load_as_scalar(ptr %loc, <2 x i32> %v) {
 ; CHECK-LABEL: define i64 @load_as_scalar
 ; CHECK-SAME: (ptr [[LOC:%.*]], <2 x i32> [[V:%.*]]) {
 ; CHECK-NEXT:    store <2 x i32> [[V]], ptr [[LOC]], align 8
-; CHECK-NEXT:    [[REF:%.*]] = load i64, ptr [[LOC]], align 4
-; CHECK-NEXT:    ret i64 [[REF]]
+; CHECK-NEXT:    [[TMP1:%.*]] = bitcast <2 x i32> [[V]] to i64
+; CHECK-NEXT:    ret i64 [[TMP1]]
 ;
   store <2 x i32> %v, ptr  %loc
   %gep = getelementptr inbounds [4 x float], ptr %loc, i64 0
@@ -130,8 +130,9 @@ define i9 @load_as_scalar_larger(ptr %loc, <4 x i6> %v) {
 ; CHECK-LABEL: define i9 @load_as_scalar_larger
 ; CHECK-SAME: (ptr [[LOC:%.*]], <4 x i6> [[V:%.*]]) {
 ; CHECK-NEXT:    store <4 x i6> [[V]], ptr [[LOC]], align 4
-; CHECK-NEXT:    [[REF:%.*]] = load i9, ptr [[LOC]], align 2
-; CHECK-NEXT:    ret i9 [[REF]]
+; CHECK-NEXT:    [[TMP1:%.*]] = bitcast <4 x i6> [[V]] to i24
+; CHECK-NEXT:    [[TMP2:%.*]] = trunc i24 [[TMP1]] to i9
+; CHECK-NEXT:    ret i9 [[TMP2]]
 ;
   store <4 x i6> %v, ptr  %loc
   %gep = getelementptr i9, ptr %loc, i64 0
@@ -144,8 +145,9 @@ define i4 @load_as_scalar_smaller(ptr %loc, <4 x i6> %v) {
 ; CHECK-LABEL: define i4 @load_as_scalar_smaller
 ; CHECK-SAME: (ptr [[LOC:%.*]], <4 x i6> [[V:%.*]]) {
 ; CHECK-NEXT:    store <4 x i6> [[V]], ptr [[LOC]], align 4
-; CHECK-NEXT:    [[REF:%.*]] = load i4, ptr [[LOC]], align 1
-; CHECK-NEXT:    ret i4 [[REF]]
+; CHECK-NEXT:    [[TMP1:%.*]] = bitcast <4 x i6> [[V]] to i24
+; CHECK-NEXT:    [[TMP2:%.*]] = trunc i24 [[TMP1]] to i4
+; CHECK-NEXT:    ret i4 [[TMP2]]
 ;
   store <4 x i6> %v, ptr  %loc
   %gep = getelementptr i4, ptr %loc, i64 0
@@ -175,8 +177,8 @@ define i64 @load_vec_same_size_different_type1(ptr %loc, <4 x i32> %v) {
 ; CHECK-SAME: (ptr [[LOC:%.*]], <4 x i32> [[V:%.*]]) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    store <4 x i32> [[V]], ptr [[LOC]], align 16
-; CHECK-NEXT:    [[REF:%.*]] = load <2 x i64>, ptr [[LOC]], align 16
-; CHECK-NEXT:    [[R:%.*]] = extractelement <2 x i64> [[REF]], i32 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast <4 x i32> [[V]] to <2 x i64>
+; CHECK-NEXT:    [[R:%.*]] = extractelement <2 x i64> [[TMP0]], i32 1
 ; CHECK-NEXT:    ret i64 [[R]]
 ;
   entry:
@@ -192,8 +194,8 @@ define double @load_vec_same_size_different_type2(ptr %loc, <4 x i32> %v) {
 ; CHECK-SAME: (ptr [[LOC:%.*]], <4 x i32> [[V:%.*]]) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    store <4 x i32> [[V]], ptr [[LOC]], align 16
-; CHECK-NEXT:    [[REF:%.*]] = load <2 x double>, ptr [[LOC]], align 16
-; CHECK-NEXT:    [[R:%.*]] = extractelement <2 x double> [[REF]], i32 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast <4 x i32> [[V]] to <2 x double>
+; CHECK-NEXT:    [[R:%.*]] = extractelement <2 x double> [[TMP0]], i32 1
 ; CHECK-NEXT:    ret double [[R]]
 ;
   entry:
@@ -209,8 +211,10 @@ define i32 @load_subvector_same_type(ptr %loc, <4 x i32> %v) {
 ; CHECK-SAME: (ptr [[LOC:%.*]], <4 x i32> [[V:%.*]]) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    store <4 x i32> [[V]], ptr [[LOC]], align 16
-; CHECK-NEXT:    [[REF:%.*]] = load <2 x i32>, ptr [[LOC]], align 8
-; CHECK-NEXT:    [[R:%.*]] = extractelement <2 x i32> [[REF]], i32 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast <4 x i32> [[V]] to i128
+; CHECK-NEXT:    [[TMP1:%.*]] = trunc i128 [[TMP0]] to i64
+; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i64 [[TMP1]] to <2 x i32>
+; CHECK-NEXT:    [[R:%.*]] = extractelement <2 x i32> [[TMP2]], i32 1
 ; CHECK-NEXT:    ret i32 [[R]]
 ;
   entry:
@@ -226,8 +230,10 @@ define i64 @load_subvector_different_type(ptr %loc, <8 x i32> %v) {
 ; CHECK-SAME: (ptr [[LOC:%.*]], <8 x i32> [[V:%.*]]) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    store <8 x i32> [[V]], ptr [[LOC]], align 32
-; CHECK-NEXT:    [[REF:%.*]] = load <2 x i64>, ptr [[LOC]], align 16
-; CHECK-NEXT:    [[R:%.*]] = extractelement <2 x i64> [[REF]], i32 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast <8 x i32> [[V]] to i256
+; CHECK-NEXT:    [[TMP1:%.*]] = trunc i256 [[TMP0]] to i128
+; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i128 [[TMP1]] to <2 x i64>
+; CHECK-NEXT:    [[R:%.*]] = extractelement <2 x i64> [[TMP2]], i32 1
 ; CHECK-NEXT:    ret i64 [[R]]
 ;
   entry:
@@ -243,8 +249,10 @@ define i16 @load_subvector_different_type2(ptr %loc, <8 x i32> %v) {
 ; CHECK-SAME: (ptr [[LOC:%.*]], <8 x i32> [[V:%.*]]) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    store <8 x i32> [[V]], ptr [[LOC]], align 32
-; CHECK-NEXT:    [[REF:%.*]] = load <2 x i16>, ptr [[LOC]], align 4
-; CHECK-NEXT:    [[R:%.*]] = extractelement <2 x i16> [[REF]], i32 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast <8 x i32> [[V]] to i256
+; CHECK-NEXT:    [[TMP1:%.*]] = trunc i256 [[TMP0]] to i32
+; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i32 [[TMP1]] to <2 x i16>
+; CHECK-NEXT:    [[R:%.*]] = extractelement <2 x i16> [[TMP2]], i32 1
 ; CHECK-NEXT:    ret i16 [[R]]
 ;
   entry:
@@ -260,8 +268,10 @@ define i4 @load_subvector_different_type3(ptr %loc, <8 x i8> %v) {
 ; CHECK-SAME: (ptr [[LOC:%.*]], <8 x i8> [[V:%.*]]) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    store <8 x i8> [[V]], ptr [[LOC]], align 8
-; CHECK-NEXT:    [[REF:%.*]] = load <3 x i4>, ptr [[LOC]], align 2
-; CHECK-NEXT:    [[R:%.*]] = extractelement <3 x i4> [[REF]], i32 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast <8 x i8> [[V]] to i64
+; CHECK-NEXT:    [[TMP1:%.*]] = trunc i64 [[TMP0]] to i12
+; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i12 [[TMP1]] to <3 x i4>
+; CHECK-NEXT:    [[R:%.*]] = extractelement <3 x i4> [[TMP2]], i32 1
 ; CHECK-NEXT:    ret i4 [[R]]
 ;
   entry:
@@ -277,8 +287,10 @@ define i12 @load_subvector_different_type4(ptr %loc, <8 x i8> %v) {
 ; CHECK-SAME: (ptr [[LOC:%.*]], <8 x i8> [[V:%.*]]) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    store <8 x i8> [[V]], ptr [[LOC]], align 8
-; CHECK-NEXT:    [[REF:%.*]] = load <2 x i12>, ptr [[LOC]], align 4
-; CHECK-NEXT:    [[R:%.*]] = extractelement <2 x i12> [[REF]], i32 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast <8 x i8> [[V]] to i64
+; CHECK-NEXT:    [[TMP1:%.*]] = trunc i64 [[TMP0]] to i24
+; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i24 [[TMP1]] to <2 x i12>
+; CHECK-NEXT:    [[R:%.*]] = extractelement <2 x i12> [[TMP2]], i32 1
 ; CHECK-NEXT:    ret i12 [[R]]
 ;
   entry:
@@ -294,8 +306,10 @@ define i6 @load_subvector_different_type5(ptr %loc, <8 x i8> %v) {
 ; CHECK-SAME: (ptr [[LOC:%.*]], <8 x i8> [[V:%.*]]) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    store <8 x i8> [[V]], ptr [[LOC]], align 8
-; CHECK-NEXT:    [[REF:%.*]] = load <2 x i6>, ptr [[LOC]], align 2
-; CHECK-NEXT:    [[R:%.*]] = extractelement <2 x i6> [[REF]], i32 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast <8 x i8> [[V]] to i64
+; CHECK-NEXT:    [[TMP1:%.*]] = trunc i64 [[TMP0]] to i12
+; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i12 [[TMP1]] to <2 x i6>
+; CHECK-NEXT:    [[R:%.*]] = extractelement <2 x i6> [[TMP2]], i32 1
 ; CHECK-NEXT:    ret i6 [[R]]
 ;
   entry:

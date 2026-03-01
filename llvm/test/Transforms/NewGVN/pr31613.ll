@@ -17,8 +17,6 @@ define void @foo(i1 %arg, i1 %arg2) {
 ; CHECK:       bb4:
 ; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[BB18]], label [[BB7:%.*]]
 ; CHECK:       bb7:
-; CHECK-NEXT:    br label [[BB9:%.*]]
-; CHECK:       bb9:
 ; CHECK-NEXT:    br i1 [[ARG]], label [[BB2]], label [[BB11:%.*]]
 ; CHECK:       bb11:
 ; CHECK-NEXT:    br i1 [[ARG2:%.*]], label [[BB16:%.*]], label [[BB14:%.*]]

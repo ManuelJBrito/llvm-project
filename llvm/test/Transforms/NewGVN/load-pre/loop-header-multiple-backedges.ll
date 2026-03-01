@@ -1,5 +1,4 @@
 ; RUN: opt -S -passes=newgvn -newgvn-enable-pre=true -newgvn-enable-load-pre=true < %s | FileCheck %s
-; XFAIL: *
 ;
 ; Loop header load where the loop body branches into multiple paths that
 ; each may clobber the pointer, then reconverge at a single latch.  The
@@ -10,10 +9,10 @@
 ; through a pointer, with conditional paths for captures vs quiet moves.
 
 ; CHECK-LABEL: @body_diamond_clobber(
-; CHECK:      latch:
-; CHECK:        [[RELOAD:%.*]] = load i64, ptr %p
 ; CHECK:      loop:
-; CHECK-NEXT:   {{%.*}} = phi i64 [ [[RELOAD]], %latch ], [ %init, %entry ]
+; CHECK-NEXT:   {{%.*}} = phi i64 [ [[RELOAD:%.*]], %latch ], [ %init, %entry ]
+; CHECK:      latch:
+; CHECK-NEXT:   [[RELOAD]] = load i64, ptr %p
 
 define i64 @body_diamond_clobber(ptr %p, i64 %init, i32 %sel) {
 entry:

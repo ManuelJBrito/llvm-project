@@ -79,7 +79,7 @@ define i32 @_Z1ik(i32 %p) {
 ; CHECK-NEXT:    call void @llvm.assume(i1 [[CMP]])
 ; CHECK-NEXT:    br i1 true, label [[BB2:%.*]], label [[BB3:%.*]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    call void @llvm.assume(i1 false)
+; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    ret i32 15
 ; CHECK:       bb3:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1

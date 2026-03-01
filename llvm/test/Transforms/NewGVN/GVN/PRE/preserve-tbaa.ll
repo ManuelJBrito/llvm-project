@@ -12,9 +12,10 @@ define void @test(ptr %P, ptr %Q, i1 %arg) nounwind {
 ; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    br i1 [[ARG]], label %[[BB_NPH:.*]], label %[[FOR_END:.*]]
 ; CHECK:       [[BB_NPH]]:
+; CHECK-NEXT:    [[TMP33_PRE:%.*]] = load i16, ptr [[P]], align 2, !tbaa [[SHORT_TBAA0:![0-9]+]]
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
-; CHECK-NEXT:    [[TMP33:%.*]] = load i16, ptr [[P]], align 2, !tbaa [[SHORT_TBAA0:![0-9]+]]
+; CHECK-NEXT:    [[TMP33:%.*]] = phi i16 [ 0, %[[FOR_BODY]] ], [ [[TMP33_PRE]], %[[BB_NPH]] ]
 ; CHECK-NEXT:    store i16 [[TMP33]], ptr [[Q]], align 2
 ; CHECK-NEXT:    store i16 0, ptr [[P]], align 2, !tbaa [[SHORT_TBAA0]]
 ; CHECK-NEXT:    br i1 false, label %[[FOR_END]], label %[[FOR_BODY]]

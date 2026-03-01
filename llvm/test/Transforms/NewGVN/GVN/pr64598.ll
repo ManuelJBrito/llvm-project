@@ -17,8 +17,6 @@ define i32 @main(i64 %x, ptr %d, ptr noalias %p) {
 ; CHECK-NEXT:    br i1 false, label %[[LOOP3_LATCH:.*]], label %[[FOR_BODY_LR_PH_I:.*]]
 ; CHECK:       [[FOR_BODY_LR_PH_I]]:
 ; CHECK-NEXT:    store i32 0, ptr [[P]], align 4
-; CHECK-NEXT:    br label %[[W_EXIT_LOOPEXIT:.*]]
-; CHECK:       [[W_EXIT_LOOPEXIT]]:
 ; CHECK-NEXT:    br label %[[LOOP3_LATCH]]
 ; CHECK:       [[LOOP3_LATCH]]:
 ; CHECK-NEXT:    [[T5_PRE:%.*]] = load ptr, ptr [[P]], align 8

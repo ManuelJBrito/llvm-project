@@ -19,9 +19,10 @@ define void @nipre(ptr noalias %p, ptr noalias %p2, i8 %jmp) {
 ; CHECK-NEXT:    store ptr addrspace(4) [[L2]], ptr [[P2]], align 8
 ; CHECK-NEXT:    br label [[TAIL]]
 ; CHECK:       c:
+; CHECK-NEXT:    [[L3_PRE:%.*]] = load ptr addrspace(4), ptr [[P]], align 8
 ; CHECK-NEXT:    br label [[TAIL]]
 ; CHECK:       tail:
-; CHECK-NEXT:    [[L3:%.*]] = load ptr addrspace(4), ptr [[P]], align 8
+; CHECK-NEXT:    [[L3:%.*]] = phi ptr addrspace(4) [ [[L3_PRE]], [[C]] ], [ [[L2]], [[B]] ], [ [[L1]], [[A]] ]
 ; CHECK-NEXT:    store ptr addrspace(4) [[L3]], ptr [[P2]], align 8
 ; CHECK-NEXT:    ret void
 ;

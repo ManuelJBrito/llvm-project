@@ -8,24 +8,22 @@
 define void @test1(ptr %ptr1, ptr %ptr2) {
 ; CHECK-LABEL: define void @test1(
 ; CHECK-SAME: ptr [[PTR1:%.*]], ptr [[PTR2:%.*]]) {
-; CHECK-NEXT:  entry:
-; CHECK-NEXT:    br label %loop.preheader
-; CHECK:       loop.preheader:
+; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    [[GEP1:%.*]] = getelementptr inbounds i32, ptr [[PTR1]], i64 1
-; CHECK-NEXT:    br label %loop
-; CHECK:       loop:
-; CHECK-NEXT:    [[PHI1:%.*]] = phi ptr [ [[GEP1]], %loop.preheader ], [ [[PHI2:%.*]], %loop.then ]
+; CHECK-NEXT:    br label %[[LOOP:.*]]
+; CHECK:       [[LOOP]]:
+; CHECK-NEXT:    [[PHI1:%.*]] = phi ptr [ [[GEP1]], %[[ENTRY]] ], [ [[PHI2:%.*]], %[[LOOP_THEN:.*]] ]
 ; CHECK-NEXT:    [[VAL1:%.*]] = load i32, ptr [[PHI1]], align 4
-; CHECK-NEXT:    br i1 false, label %loop.then, label %loop.if
-; CHECK:       loop.if:
+; CHECK-NEXT:    br i1 false, label %[[LOOP_THEN]], label %[[LOOP_IF:.*]]
+; CHECK:       [[LOOP_IF]]:
 ; CHECK-NEXT:    [[GEP2:%.*]] = getelementptr inbounds i32, ptr [[GEP1]], i64 1
 ; CHECK-NEXT:    [[VAL2:%.*]] = load i32, ptr [[GEP2]], align 4
-; CHECK-NEXT:    br label %loop.then
-; CHECK:       loop.then:
-; CHECK-NEXT:    [[PHI2]] = phi ptr [ poison, %loop ], [ [[GEP2]], %loop.if ]
+; CHECK-NEXT:    br label %[[LOOP_THEN]]
+; CHECK:       [[LOOP_THEN]]:
+; CHECK-NEXT:    [[PHI2]] = phi ptr [ poison, %[[LOOP]] ], [ [[GEP2]], %[[LOOP_IF]] ]
 ; CHECK-NEXT:    store i32 [[VAL1]], ptr [[PHI2]], align 4
 ; CHECK-NEXT:    store i32 0, ptr [[PTR1]], align 4
-; CHECK-NEXT:    br label %loop
+; CHECK-NEXT:    br label %[[LOOP]]
 ;
 entry:
   br label %loop.preheader

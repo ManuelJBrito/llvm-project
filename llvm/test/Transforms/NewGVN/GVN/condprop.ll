@@ -30,8 +30,6 @@ define i32 @test1() nounwind {
 ; CHECK-NEXT:    br label [[BB8]]
 ; CHECK:       bb8:
 ; CHECK-NEXT:    [[DOT0:%.*]] = phi i32 [ [[TMP0]], [[BB7]] ], [ [[TMP4]], [[BB6]] ], [ [[TMP3]], [[BB4]] ], [ 4, [[BB2]] ], [ 5, [[BB]] ]
-; CHECK-NEXT:    br label [[RETURN:%.*]]
-; CHECK:       return:
 ; CHECK-NEXT:    ret i32 [[DOT0]]
 ;
 entry:
@@ -1066,9 +1064,9 @@ define i1 @not_cond(i1 %c) {
 ; CHECK-NEXT:    [[C_NOT:%.*]] = xor i1 [[C:%.*]], true
 ; CHECK-NEXT:    br i1 [[C_NOT]], label [[IF:%.*]], label [[ELSE:%.*]]
 ; CHECK:       if:
-; CHECK-NEXT:    ret i1 [[C]]
+; CHECK-NEXT:    ret i1 false
 ; CHECK:       else:
-; CHECK-NEXT:    ret i1 [[C]]
+; CHECK-NEXT:    ret i1 true
 ;
   %c.not = xor i1 %c, true
   br i1 %c.not, label %if, label %else
@@ -1107,7 +1105,7 @@ define i1 @not_cond_logic1(i1 %c, i1 %d) {
 ; CHECK-NEXT:    [[AND:%.*]] = and i1 [[C_NOT]], [[D:%.*]]
 ; CHECK-NEXT:    br i1 [[AND]], label [[IF:%.*]], label [[ELSE:%.*]]
 ; CHECK:       if:
-; CHECK-NEXT:    ret i1 [[C]]
+; CHECK-NEXT:    ret i1 false
 ; CHECK:       else:
 ; CHECK-NEXT:    ret i1 [[C]]
 ;
@@ -1130,7 +1128,7 @@ define i1 @not_cond_logic2(i1 %c, i1 %d) {
 ; CHECK:       if:
 ; CHECK-NEXT:    ret i1 [[C]]
 ; CHECK:       else:
-; CHECK-NEXT:    ret i1 [[C]]
+; CHECK-NEXT:    ret i1 true
 ;
   %c.not = xor i1 %c, true
   %or = or i1 %c.not, %d

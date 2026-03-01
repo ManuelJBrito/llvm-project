@@ -8,15 +8,18 @@ define i32 @loadpre_critical_edge(ptr align 8 dereferenceable_or_null(48) %arg, 
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq ptr [[ARG:%.*]], null
 ; CHECK-NEXT:    br i1 [[CMP]], label [[NULL_EXIT:%.*]], label [[ENTRY_HEADER_CRIT_EDGE:%.*]]
+; CHECK:       entry.header_crit_edge:
+; CHECK-NEXT:    [[V_PRE:%.*]] = load i32, ptr [[ARG]], align 4
+; CHECK-NEXT:    br label [[HEADER:%.*]]
 ; CHECK:       header:
-; CHECK-NEXT:    [[IV:%.*]] = phi i32 [ 0, [[ENTRY:%.*]] ], [ [[IV_NEXT:%.*]], [[ENTRY_HEADER_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[V:%.*]] = phi i32 [ [[SUM:%.*]], [[HEADER]] ], [ [[V_PRE]], [[ENTRY_HEADER_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[IV:%.*]] = phi i32 [ 0, [[ENTRY_HEADER_CRIT_EDGE]] ], [ [[IV_NEXT:%.*]], [[HEADER]] ]
 ; CHECK-NEXT:    [[NEW_V:%.*]] = call i32 @ro_foo(i32 [[IV]]) #[[ATTR1:[0-9]+]]
-; CHECK-NEXT:    [[V:%.*]] = load i32, ptr [[ARG]], align 4
-; CHECK-NEXT:    [[SUM:%.*]] = add i32 [[NEW_V]], [[V]]
+; CHECK-NEXT:    [[SUM]] = add i32 [[NEW_V]], [[V]]
 ; CHECK-NEXT:    store i32 [[SUM]], ptr [[ARG]], align 4
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], 1
 ; CHECK-NEXT:    [[COND:%.*]] = icmp eq i32 [[IV_NEXT]], [[N:%.*]]
-; CHECK-NEXT:    br i1 [[COND]], label [[EXIT:%.*]], label [[ENTRY_HEADER_CRIT_EDGE]]
+; CHECK-NEXT:    br i1 [[COND]], label [[EXIT:%.*]], label [[HEADER]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret i32 [[SUM]]
 ; CHECK:       null_exit:
@@ -51,12 +54,13 @@ define i32 @loadpre_basic(ptr align 8 dereferenceable_or_null(48) %arg, i32 %N) 
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq ptr [[ARG:%.*]], null
 ; CHECK-NEXT:    br i1 [[CMP]], label [[NULL_EXIT:%.*]], label [[PREHEADER:%.*]]
 ; CHECK:       preheader:
+; CHECK-NEXT:    [[V_PRE:%.*]] = load i32, ptr [[ARG]], align 4
 ; CHECK-NEXT:    br label [[HEADER:%.*]]
 ; CHECK:       header:
+; CHECK-NEXT:    [[V:%.*]] = phi i32 [ [[SUM:%.*]], [[HEADER]] ], [ [[V_PRE]], [[PREHEADER]] ]
 ; CHECK-NEXT:    [[IV:%.*]] = phi i32 [ 0, [[PREHEADER]] ], [ [[IV_NEXT:%.*]], [[HEADER]] ]
 ; CHECK-NEXT:    [[NEW_V:%.*]] = call i32 @ro_foo(i32 [[IV]]) #[[ATTR1]]
-; CHECK-NEXT:    [[V:%.*]] = load i32, ptr [[ARG]], align 4
-; CHECK-NEXT:    [[SUM:%.*]] = add i32 [[NEW_V]], [[V]]
+; CHECK-NEXT:    [[SUM]] = add i32 [[NEW_V]], [[V]]
 ; CHECK-NEXT:    store i32 [[SUM]], ptr [[ARG]], align 4
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], 1
 ; CHECK-NEXT:    [[COND:%.*]] = icmp eq i32 [[IV_NEXT]], [[N:%.*]]
@@ -100,12 +104,13 @@ define i32 @loadpre_maybe_null(ptr align 8 dereferenceable_or_null(48) %arg, i32
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq ptr [[ARG:%.*]], null
 ; CHECK-NEXT:    br i1 [[CMP]], label [[NULL_EXIT:%.*]], label [[PREHEADER]]
 ; CHECK:       preheader:
+; CHECK-NEXT:    [[V_PRE:%.*]] = load i32, ptr [[ARG]], align 4
 ; CHECK-NEXT:    br label [[HEADER:%.*]]
 ; CHECK:       header:
+; CHECK-NEXT:    [[V:%.*]] = phi i32 [ [[SUM:%.*]], [[HEADER]] ], [ [[V_PRE]], [[PREHEADER]] ]
 ; CHECK-NEXT:    [[IV:%.*]] = phi i32 [ 0, [[PREHEADER]] ], [ [[IV_NEXT:%.*]], [[HEADER]] ]
 ; CHECK-NEXT:    [[NEW_V:%.*]] = call i32 @ro_foo(i32 [[IV]]) #[[ATTR1]]
-; CHECK-NEXT:    [[V:%.*]] = load i32, ptr [[ARG]], align 4
-; CHECK-NEXT:    [[SUM:%.*]] = add i32 [[NEW_V]], [[V]]
+; CHECK-NEXT:    [[SUM]] = add i32 [[NEW_V]], [[V]]
 ; CHECK-NEXT:    store i32 [[SUM]], ptr [[ARG]], align 4
 ; CHECK-NEXT:    [[IV_NEXT]] = add i32 [[IV]], 1
 ; CHECK-NEXT:    [[COND:%.*]] = icmp eq i32 [[IV_NEXT]], [[N:%.*]]

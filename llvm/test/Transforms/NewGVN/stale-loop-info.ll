@@ -23,8 +23,6 @@ define hidden zeroext i1 @eggs(ptr %arg, i1 %arg2) unnamed_addr align 2 {
 ; CHECK-NEXT:    [[TMP:%.*]] = getelementptr inbounds [[STRUCT_WIBBLE_1028:%.*]], ptr [[ARG]], i64 0, i32 2, i32 0, i32 0, i64 0
 ; CHECK-NEXT:    br label [[BB6:%.*]]
 ; CHECK:       bb6:
-; CHECK-NEXT:    br label [[BB7:%.*]]
-; CHECK:       bb7:
 ; CHECK-NEXT:    br i1 undef, label [[BB11:%.*]], label [[BB8:%.*]]
 ; CHECK:       bb8:
 ; CHECK-NEXT:    [[TMP9:%.*]] = load ptr, ptr [[TMP]], align 8

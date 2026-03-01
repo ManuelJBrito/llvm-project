@@ -14,10 +14,8 @@ define void @test1(i1 %arg) {
 ; CHECK:       for.cond:
 ; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i32 [ 0, [[ENTRY:%.*]] ], [ [[Y_0:%.*]], [[FOR_INC6:%.*]] ]
 ; CHECK-NEXT:    [[Y_0]] = phi i32 [ 1, [[ENTRY]] ], [ [[INC7:%.*]], [[FOR_INC6]] ]
-; CHECK-NEXT:    br i1 %arg, label [[FOR_INC6]], label [[FOR_BODY_LR_PH:%.*]]
+; CHECK-NEXT:    br i1 [[ARG:%.*]], label [[FOR_INC6]], label [[FOR_BODY_LR_PH:%.*]]
 ; CHECK:       for.body.lr.ph:
-; CHECK-NEXT:    br label [[FOR_BODY4:%.*]]
-; CHECK:       for.body4:
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp ugt i32 [[PHIOFOPS]], [[Y_0]]
 ; CHECK-NEXT:    br i1 [[CMP]], label [[FOR_END:%.*]], label [[FOR_BODY4_1:%.*]]
 ; CHECK:       for.end:
@@ -123,12 +121,14 @@ define void @pr49873_cmp_simplification_dependency(ptr %ptr, i1 %c.0) {
 ; CHECK-NEXT:    br label [[LOOP_1:%.*]]
 ; CHECK:       loop.1:
 ; CHECK-NEXT:    br i1 [[C_0:%.*]], label [[LOOP_1_LATCH:%.*]], label [[LOOP_2:%.*]]
-; CHECK:       loop.2:
-; CHECK-NEXT:    [[I130:%.*]] = phi i32 [ [[I132:%.*]], [[LOOP_2]] ], [ 0, [[LOOP_1]] ]
-; CHECK-NEXT:    [[I132]] = add nuw i32 [[I130]], 1
+; CHECK:       loop.1.loop.2_crit_edge:
 ; CHECK-NEXT:    [[I133:%.*]] = load i32, ptr [[PTR:%.*]], align 4
+; CHECK-NEXT:    br label [[LOOP_3:%.*]]
+; CHECK:       loop.2:
+; CHECK-NEXT:    [[I130:%.*]] = phi i32 [ [[I132:%.*]], [[LOOP_3]] ], [ 0, [[LOOP_2]] ]
+; CHECK-NEXT:    [[I132]] = add nuw i32 [[I130]], 1
 ; CHECK-NEXT:    [[C_1:%.*]] = icmp ult i32 [[I132]], [[I133]]
-; CHECK-NEXT:    br i1 [[C_1]], label [[LOOP_2]], label [[LOOP_2_EXIT:%.*]]
+; CHECK-NEXT:    br i1 [[C_1]], label [[LOOP_3]], label [[LOOP_2_EXIT:%.*]]
 ; CHECK:       loop.2.exit:
 ; CHECK-NEXT:    br label [[LOOP_1_LATCH]]
 ; CHECK:       loop.1.latch:

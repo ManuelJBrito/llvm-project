@@ -639,13 +639,16 @@ define i32 @test13(ptr noalias nocapture readonly %x, ptr noalias nocapture %r, 
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i32 [[A:%.*]], 0
 ; CHECK-NEXT:    br i1 [[TOBOOL]], label [[IF_END:%.*]], label [[IF_THEN:%.*]]
+; CHECK:       entry.if.end_crit_edge:
+; CHECK-NEXT:    [[VV_PRE:%.*]] = load i32, ptr [[X:%.*]], align 4
+; CHECK-NEXT:    br label [[IF_END1:%.*]]
 ; CHECK:       if.then:
-; CHECK-NEXT:    [[UU:%.*]] = load i32, ptr [[X:%.*]], align 4
+; CHECK-NEXT:    [[UU:%.*]] = load i32, ptr [[X]], align 4
 ; CHECK-NEXT:    store i32 [[UU]], ptr [[R:%.*]], align 4
-; CHECK-NEXT:    br label [[IF_END]]
+; CHECK-NEXT:    br label [[IF_END1]]
 ; CHECK:       if.end:
+; CHECK-NEXT:    [[VV:%.*]] = phi i32 [ [[UU]], [[IF_THEN]] ], [ [[VV_PRE]], [[IF_END]] ]
 ; CHECK-NEXT:    call void @f()
-; CHECK-NEXT:    [[VV:%.*]] = load i32, ptr [[X]], align 4
 ; CHECK-NEXT:    ret i32 [[VV]]
 ;
 
@@ -716,13 +719,16 @@ define i32 @test15(ptr noalias nocapture readonly dereferenceable(8) align 4 %x,
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i32 [[A:%.*]], 0
 ; CHECK-NEXT:    br i1 [[TOBOOL]], label [[IF_END:%.*]], label [[IF_THEN:%.*]]
+; CHECK:       entry.if.end_crit_edge:
+; CHECK-NEXT:    [[VV_PRE:%.*]] = load i32, ptr [[X:%.*]], align 4
+; CHECK-NEXT:    br label [[IF_END1:%.*]]
 ; CHECK:       if.then:
-; CHECK-NEXT:    [[UU:%.*]] = load i32, ptr [[X:%.*]], align 4
+; CHECK-NEXT:    [[UU:%.*]] = load i32, ptr [[X]], align 4
 ; CHECK-NEXT:    store i32 [[UU]], ptr [[R:%.*]], align 4
-; CHECK-NEXT:    br label [[IF_END]]
+; CHECK-NEXT:    br label [[IF_END1]]
 ; CHECK:       if.end:
+; CHECK-NEXT:    [[VV:%.*]] = phi i32 [ [[UU]], [[IF_THEN]] ], [ [[VV_PRE]], [[IF_END]] ]
 ; CHECK-NEXT:    call void @f()
-; CHECK-NEXT:    [[VV:%.*]] = load i32, ptr [[X]], align 4
 ; CHECK-NEXT:    ret i32 [[VV]]
 ;
 

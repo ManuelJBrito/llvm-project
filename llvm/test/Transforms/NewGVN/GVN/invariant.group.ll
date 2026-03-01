@@ -494,7 +494,7 @@ define void @testNotGlobal() {
 ; CHECK-NEXT:    call void @foo2(ptr [[A]], i8 [[B]])
 ; CHECK-NEXT:    call void @bar(i8 [[B]])
 ; CHECK-NEXT:    call void @fooBit(ptr [[A]], i1 true)
-; CHECK-NEXT:    [[TMP1:%.*]] = load i1, ptr [[A]], align 1, !invariant.group [[META0]]
+; CHECK-NEXT:    [[TMP1:%.*]] = trunc i8 [[B]] to i1
 ; CHECK-NEXT:    call void @fooBit(ptr [[A]], i1 [[TMP1]])
 ; CHECK-NEXT:    call void @fooBit(ptr [[A]], i1 [[TMP1]])
 ; CHECK-NEXT:    ret void
