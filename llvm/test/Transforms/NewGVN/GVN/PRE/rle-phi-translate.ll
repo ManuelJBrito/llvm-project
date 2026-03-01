@@ -101,10 +101,10 @@ define i32 @test3(i1 %cond, ptr %b, ptr %c) nounwind {
 ; CHECK-NEXT:    store i32 82, ptr [[C1]], align 4
 ; CHECK-NEXT:    br label %[[BB2]]
 ; CHECK:       [[BB2]]:
+; CHECK-NEXT:    [[DV:%.*]] = phi i32 [ 82, %[[BB1]] ], [ 4, %[[BB]] ]
 ; CHECK-NEXT:    [[D:%.*]] = phi ptr [ [[C]], %[[BB1]] ], [ [[B]], %[[BB]] ]
 ; CHECK-NEXT:    [[I:%.*]] = phi i32 [ 7, %[[BB1]] ], [ 17, %[[BB]] ]
 ; CHECK-NEXT:    [[D1:%.*]] = getelementptr i32, ptr [[D]], i32 [[I]]
-; CHECK-NEXT:    [[DV:%.*]] = load i32, ptr [[D1]], align 4
 ; CHECK-NEXT:    ret i32 [[DV]]
 ;
 entry:
@@ -136,16 +136,18 @@ define i32 @test4(i1 %cond, ptr %b, ptr %c) nounwind {
 ; CHECK-NEXT:    br i1 [[COND]], label %[[BB:.*]], label %[[BB1:.*]]
 ; CHECK:       [[BB]]:
 ; CHECK-NEXT:    store i32 4, ptr [[B]], align 4
+; CHECK-NEXT:    [[D1_PHI_TRANS_INSERT:%.*]] = getelementptr i32, ptr [[B]], i32 0
+; CHECK-NEXT:    [[DV_PRE:%.*]] = load i32, ptr [[D1_PHI_TRANS_INSERT]], align 4
 ; CHECK-NEXT:    br label %[[BB2:.*]]
 ; CHECK:       [[BB1]]:
 ; CHECK-NEXT:    [[C1:%.*]] = getelementptr i32, ptr [[C]], i32 7
 ; CHECK-NEXT:    store i32 82, ptr [[C1]], align 4
 ; CHECK-NEXT:    br label %[[BB2]]
 ; CHECK:       [[BB2]]:
+; CHECK-NEXT:    [[DV:%.*]] = phi i32 [ 82, %[[BB1]] ], [ [[DV_PRE]], %[[BB]] ]
 ; CHECK-NEXT:    [[D:%.*]] = phi ptr [ [[C]], %[[BB1]] ], [ [[B]], %[[BB]] ]
 ; CHECK-NEXT:    [[I:%.*]] = phi i32 [ 7, %[[BB1]] ], [ 0, %[[BB]] ]
 ; CHECK-NEXT:    [[D1:%.*]] = getelementptr i32, ptr [[D]], i32 [[I]]
-; CHECK-NEXT:    [[DV:%.*]] = load i32, ptr [[D1]], align 4
 ; CHECK-NEXT:    ret i32 [[DV]]
 ;
 entry:
@@ -180,15 +182,17 @@ define void @test5(i32 %N, ptr nocapture %G) nounwind ssp {
 ; CHECK-LABEL: define void @test5(
 ; CHECK-SAME: i32 [[N:%.*]], ptr captures(none) [[G:%.*]]) #[[ATTR1:[0-9]+]] {
 ; CHECK-NEXT:  [[BB_NPH:.*]]:
+; CHECK-NEXT:    [[ARRAYIDX6_PHI_TRANS_INSERT:%.*]] = getelementptr double, ptr [[G]], i64 0
+; CHECK-NEXT:    [[TMP7_PRE:%.*]] = load double, ptr [[ARRAYIDX6_PHI_TRANS_INSERT]], align 4
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
+; CHECK-NEXT:    [[TMP7:%.*]] = phi double [ [[ADD:%.*]], %[[FOR_BODY]] ], [ [[TMP7_PRE]], %[[BB_NPH]] ]
 ; CHECK-NEXT:    [[INDVAR:%.*]] = phi i64 [ 0, %[[BB_NPH]] ], [ [[TMP:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[ARRAYIDX6:%.*]] = getelementptr double, ptr [[G]], i64 [[INDVAR]]
 ; CHECK-NEXT:    [[TMP]] = add i64 [[INDVAR]], 1
 ; CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr double, ptr [[G]], i64 [[TMP]]
 ; CHECK-NEXT:    [[TMP3:%.*]] = load double, ptr [[ARRAYIDX]], align 4
-; CHECK-NEXT:    [[TMP7:%.*]] = load double, ptr [[ARRAYIDX6]], align 4
-; CHECK-NEXT:    [[ADD:%.*]] = fadd double [[TMP3]], [[TMP7]]
+; CHECK-NEXT:    [[ADD]] = fadd double [[TMP3]], [[TMP7]]
 ; CHECK-NEXT:    store double [[ADD]], ptr [[ARRAYIDX]], align 4
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp eq i64 [[TMP]], 999
 ; CHECK-NEXT:    br i1 [[EXITCOND]], label %[[FOR_END:.*]], label %[[FOR_BODY]]

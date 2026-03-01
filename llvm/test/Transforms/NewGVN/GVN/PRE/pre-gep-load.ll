@@ -14,6 +14,8 @@ define double @foo(i32 %stat, i32 %i, ptr %p) {
 ; CHECK:       entry.sw.bb2_crit_edge:
 ; CHECK-NEXT:    [[DOTPRE1:%.*]] = sext i32 [[I:%.*]] to i64
 ; CHECK-NEXT:    [[DOTPRE:%.*]] = load ptr, ptr [[P:%.*]], align 8
+; CHECK-NEXT:    [[ARRAYIDX5_PHI_TRANS_INSERT:%.*]] = getelementptr inbounds double, ptr [[DOTPRE]], i64 [[DOTPRE1]]
+; CHECK-NEXT:    [[DOTPRE2:%.*]] = load double, ptr [[ARRAYIDX5_PHI_TRANS_INSERT]], align 8
 ; CHECK-NEXT:    br label [[SW_BB2:%.*]]
 ; CHECK:       sw.bb:
 ; CHECK-NEXT:    [[IDXPROM:%.*]] = sext i32 [[I]] to i64
@@ -28,10 +30,10 @@ define double @foo(i32 %stat, i32 %i, ptr %p) {
 ; CHECK:       if.end:
 ; CHECK-NEXT:    br label [[SW_BB2]]
 ; CHECK:       sw.bb2:
+; CHECK-NEXT:    [[TMP2:%.*]] = phi double [ [[DOTPRE2]], [[ENTRY_SW_BB2_CRIT_EDGE]] ], [ [[TMP1]], [[IF_END]] ]
 ; CHECK-NEXT:    [[TMP3:%.*]] = phi ptr [ [[DOTPRE]], [[ENTRY_SW_BB2_CRIT_EDGE]] ], [ [[TMP0]], [[IF_END]] ]
 ; CHECK-NEXT:    [[IDXPROM3_PRE_PHI:%.*]] = phi i64 [ [[IDXPROM]], [[IF_END]] ], [ [[DOTPRE1]], [[ENTRY_SW_BB2_CRIT_EDGE]] ]
 ; CHECK-NEXT:    [[ARRAYIDX5:%.*]] = getelementptr inbounds double, ptr [[TMP3]], i64 [[IDXPROM3_PRE_PHI]]
-; CHECK-NEXT:    [[TMP2:%.*]] = load double, ptr [[ARRAYIDX5]], align 8
 ; CHECK-NEXT:    [[SUB6:%.*]] = fsub double 3.000000e+00, [[TMP2]]
 ; CHECK-NEXT:    store double [[SUB6]], ptr [[ARRAYIDX5]], align 8
 ; CHECK-NEXT:    br label [[RETURN]]

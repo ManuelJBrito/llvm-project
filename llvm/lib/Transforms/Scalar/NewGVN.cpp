@@ -4427,6 +4427,21 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
     auto *LoadPtrPHI = dyn_cast<PHINode>(LoadPtr);
     bool PhiTranslatePtr = LoadPtrPHI && LoadPtrPHI->getParent() == LoadBB;
 
+    // When the load pointer is a GEP defined in LoadBB with PHI operands,
+    // phi-translate the GEP per-predecessor by substituting the PHI's
+    // incoming values and searching for an existing GEP with those operands.
+    auto *LoadPtrGEP = dyn_cast<GetElementPtrInst>(LoadPtr);
+    bool PhiTranslateGEP = false;
+    if (!PhiTranslatePtr && LoadPtrGEP && LoadPtrGEP->getParent() == LoadBB) {
+      for (Value *Op : LoadPtrGEP->operands()) {
+        if (auto *PHI = dyn_cast<PHINode>(Op))
+          if (PHI->getParent() == LoadBB) {
+            PhiTranslateGEP = true;
+            break;
+          }
+      }
+    }
+
     for (auto *PredBB : predecessors(LoadBB)) {
       Value *AvailVal = nullptr;
 
@@ -4436,6 +4451,42 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
       if (PhiTranslatePtr) {
         PredLoadPtr = LoadPtrPHI->getIncomingValueForBlock(PredBB);
         PredMemLoc = MemoryLocation(PredLoadPtr, MemLoc.Size, MemLoc.AATags);
+      } else if (PhiTranslateGEP) {
+        // Substitute PHI incoming values in GEP operands, then search
+        // for an existing GEP instruction with the translated operands.
+        SmallVector<Value *, 4> TransOps;
+        for (Value *Op : LoadPtrGEP->operands()) {
+          if (auto *PHI = dyn_cast<PHINode>(Op))
+            if (PHI->getParent() == LoadBB) {
+              TransOps.push_back(PHI->getIncomingValueForBlock(PredBB));
+              continue;
+            }
+          TransOps.push_back(Op);
+        }
+        // ConstantData (null, undef, integers) doesn't track users.
+        if (!isa<ConstantData>(TransOps[0])) {
+          for (User *U : TransOps[0]->users()) {
+            auto *CandGEP = dyn_cast<GetElementPtrInst>(U);
+            if (!CandGEP || CandGEP == LoadPtrGEP)
+              continue;
+            if (CandGEP->getSourceElementType() !=
+                    LoadPtrGEP->getSourceElementType() ||
+                CandGEP->getNumOperands() != LoadPtrGEP->getNumOperands())
+              continue;
+            bool Match = true;
+            for (unsigned i = 0; i < CandGEP->getNumOperands(); i++) {
+              if (CandGEP->getOperand(i) != TransOps[i]) {
+                Match = false;
+                break;
+              }
+            }
+            if (Match && DT->dominates(CandGEP, PredBB->getTerminator())) {
+              PredLoadPtr = CandGEP;
+              PredMemLoc = MemLoc.getWithNewPtr(CandGEP);
+              break;
+            }
+          }
+        }
       }
 
       MemoryAccess *IncomingMA =
@@ -4573,6 +4624,21 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
         goto try_loop_pre;
     }
 
+    if (NumUnavail == 0) {
+      // All predecessors are available — the load is fully redundant.
+      // This happens when GEP phi-translation reveals per-predecessor
+      // availability that the main value numbering couldn't find.
+      PHINode *PHI = PHINode::Create(Load->getType(), AvailableValues.size(),
+                                     Load->getName() + ".pre.phi");
+      PHI->insertBefore(LoadBB->begin());
+      for (auto &[Pred, Val] : AvailableValues)
+        PHI->addIncoming(Val, Pred);
+      Load->replaceAllUsesWith(PHI);
+      InstructionsToErase.insert(Load);
+      ++NumGVNInstrDeleted;
+      return true;
+    }
+
     if (NumUnavail != 1)
       return false;
     assert(UnavailPred && "expected one unavailable predecessor");
@@ -4590,9 +4656,13 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
         PredPtr = PtrPHI->getIncomingValueForBlock(UnavailPred);
     } else if (auto *GEP = dyn_cast<GetElementPtrInst>(LoadPtr)) {
       // Rematerialize the GEP in the unavailable predecessor if all its
-      // operands dominate UnavailPred (matching GVN's phi-translation).
+      // operands (after PHI translation) dominate UnavailPred.
       if (GEP->getParent() == LoadBB) {
         for (Value *Op : GEP->operands()) {
+          // Translate PHI operands defined in LoadBB.
+          if (auto *PHI = dyn_cast<PHINode>(Op))
+            if (PHI->getParent() == LoadBB)
+              Op = PHI->getIncomingValueForBlock(UnavailPred);
           if (auto *OpI = dyn_cast<Instruction>(Op)) {
             if (!DT->dominates(OpI, UnavailPred->getTerminator())) {
               LLVM_DEBUG(dbgs() << "  Load PRE: GEP op " << *OpI
@@ -4648,7 +4718,15 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
 
     // Rematerialize GEP if needed.
     if (NeedGEPClone) {
-      auto *ClonedGEP = cast<GetElementPtrInst>(LoadPtr)->clone();
+      auto *OrigGEP = cast<GetElementPtrInst>(LoadPtr);
+      auto *ClonedGEP = OrigGEP->clone();
+      // Translate PHI operands for the insertion predecessor.
+      for (unsigned i = 0; i < ClonedGEP->getNumOperands(); i++) {
+        if (auto *PHI = dyn_cast<PHINode>(OrigGEP->getOperand(i)))
+          if (PHI->getParent() == LoadBB)
+            ClonedGEP->setOperand(
+                i, PHI->getIncomingValueForBlock(UnavailPred));
+      }
       ClonedGEP->setName(LoadPtr->getName() + ".phi.trans.insert");
       ClonedGEP->insertBefore(InsertBB->getTerminator()->getIterator());
       PredPtr = ClonedGEP;

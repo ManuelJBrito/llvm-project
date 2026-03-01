@@ -10,10 +10,10 @@ define void @tinkywinky(i1 %patatino) {
 ; CHECK:       if.then:
 ; CHECK-NEXT:    br label [[L:%.*]]
 ; CHECK:       L:
-; CHECK-NEXT:    [[TMP1_PRE:%.*]] = load i32, ptr null, align 4
+; CHECK-NEXT:    [[TMP1_PRE:%.*]] = phi i32 [ [[TMP1:%.*]], [[IF_END]] ], [ 8, [[IF_THEN]] ]
 ; CHECK-NEXT:    br label [[IF_END]]
 ; CHECK:       if.end:
-; CHECK-NEXT:    [[TMP1:%.*]] = phi i32 [ [[TMP1_PRE]], [[L]] ], [ 8, [[TMP0:%.*]] ]
+; CHECK-NEXT:    [[TMP1]] = phi i32 [ [[TMP1_PRE]], [[L]] ], [ 8, [[TMP0:%.*]] ]
 ; CHECK-NEXT:    [[BF_LOAD1:%.*]] = load i32, ptr @b, align 4
 ; CHECK-NEXT:    [[BF_VALUE:%.*]] = and i32 [[TMP1]], 536870911
 ; CHECK-NEXT:    [[BF_CLEAR:%.*]] = and i32 [[BF_LOAD1]], -536870912

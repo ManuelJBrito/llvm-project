@@ -73,15 +73,17 @@ define i32 @test3(ptr %p, ptr %q, ptr %Hack, i1 %C) {
 ; CHECK-NEXT:    store ptr [[B]], ptr [[HACK:%.*]], align 8
 ; CHECK-NEXT:    br i1 [[C:%.*]], label [[BLOCK2:%.*]], label [[BLOCK3:%.*]]
 ; CHECK:       block2:
+; CHECK-NEXT:    [[P3_PHI_TRANS_INSERT:%.*]] = getelementptr i32, ptr [[Q]], i32 1
+; CHECK-NEXT:    [[PRE_PRE:%.*]] = load i32, ptr [[P3_PHI_TRANS_INSERT]], align 4
 ; CHECK-NEXT:    br label [[BLOCK4:%.*]]
 ; CHECK:       block3:
 ; CHECK-NEXT:    [[A:%.*]] = getelementptr i32, ptr [[P:%.*]], i32 1
 ; CHECK-NEXT:    store i32 0, ptr [[A]], align 4
 ; CHECK-NEXT:    br label [[BLOCK4]]
 ; CHECK:       block4:
+; CHECK-NEXT:    [[PRE:%.*]] = phi i32 [ 0, [[BLOCK3]] ], [ [[PRE_PRE]], [[BLOCK2]] ]
 ; CHECK-NEXT:    [[P2:%.*]] = phi ptr [ [[P]], [[BLOCK3]] ], [ [[Q]], [[BLOCK2]] ]
 ; CHECK-NEXT:    [[P3:%.*]] = getelementptr i32, ptr [[P2]], i32 1
-; CHECK-NEXT:    [[PRE:%.*]] = load i32, ptr [[P3]], align 4
 ; CHECK-NEXT:    ret i32 [[PRE]]
 ;
 block1:
@@ -111,17 +113,19 @@ define i32 @test4(ptr %p, ptr %q, ptr %Hack, i1 %C) {
 ; CHECK-NEXT:  block1:
 ; CHECK-NEXT:    br i1 [[C:%.*]], label [[BLOCK2:%.*]], label [[BLOCK3:%.*]]
 ; CHECK:       block2:
+; CHECK-NEXT:    [[P3_PHI_TRANS_INSERT:%.*]] = getelementptr i32, ptr [[Q:%.*]], i32 1
+; CHECK-NEXT:    [[PRE_PRE:%.*]] = load i32, ptr [[P3_PHI_TRANS_INSERT]], align 4
 ; CHECK-NEXT:    br label [[BLOCK4:%.*]]
 ; CHECK:       block3:
-; CHECK-NEXT:    [[B:%.*]] = getelementptr i32, ptr [[Q:%.*]], i32 1
+; CHECK-NEXT:    [[B:%.*]] = getelementptr i32, ptr [[Q]], i32 1
 ; CHECK-NEXT:    store ptr [[B]], ptr [[HACK:%.*]], align 8
 ; CHECK-NEXT:    [[A:%.*]] = getelementptr i32, ptr [[P:%.*]], i32 1
 ; CHECK-NEXT:    store i32 0, ptr [[A]], align 4
 ; CHECK-NEXT:    br label [[BLOCK4]]
 ; CHECK:       block4:
+; CHECK-NEXT:    [[PRE:%.*]] = phi i32 [ 0, [[BLOCK3]] ], [ [[PRE_PRE]], [[BLOCK2]] ]
 ; CHECK-NEXT:    [[P2:%.*]] = phi ptr [ [[P]], [[BLOCK3]] ], [ [[Q]], [[BLOCK2]] ]
 ; CHECK-NEXT:    [[P3:%.*]] = getelementptr i32, ptr [[P2]], i32 1
-; CHECK-NEXT:    [[PRE:%.*]] = load i32, ptr [[P3]], align 4
 ; CHECK-NEXT:    ret i32 [[PRE]]
 ;
 block1:
@@ -151,17 +155,19 @@ define i32 @test4_nuw(ptr %p, ptr %q, ptr %Hack, i1 %C) {
 ; CHECK-NEXT:  block1:
 ; CHECK-NEXT:    br i1 [[C:%.*]], label [[BLOCK2:%.*]], label [[BLOCK3:%.*]]
 ; CHECK:       block2:
+; CHECK-NEXT:    [[P3_PHI_TRANS_INSERT:%.*]] = getelementptr nuw i32, ptr [[Q:%.*]], i32 1
+; CHECK-NEXT:    [[PRE_PRE:%.*]] = load i32, ptr [[P3_PHI_TRANS_INSERT]], align 4
 ; CHECK-NEXT:    br label [[BLOCK4:%.*]]
 ; CHECK:       block3:
-; CHECK-NEXT:    [[B:%.*]] = getelementptr i32, ptr [[Q:%.*]], i32 1
+; CHECK-NEXT:    [[B:%.*]] = getelementptr i32, ptr [[Q]], i32 1
 ; CHECK-NEXT:    store ptr [[B]], ptr [[HACK:%.*]], align 8
 ; CHECK-NEXT:    [[A:%.*]] = getelementptr i32, ptr [[P:%.*]], i32 1
 ; CHECK-NEXT:    store i32 0, ptr [[A]], align 4
 ; CHECK-NEXT:    br label [[BLOCK4]]
 ; CHECK:       block4:
+; CHECK-NEXT:    [[PRE:%.*]] = phi i32 [ 0, [[BLOCK3]] ], [ [[PRE_PRE]], [[BLOCK2]] ]
 ; CHECK-NEXT:    [[P2:%.*]] = phi ptr [ [[P]], [[BLOCK3]] ], [ [[Q]], [[BLOCK2]] ]
 ; CHECK-NEXT:    [[P3:%.*]] = getelementptr nuw i32, ptr [[P2]], i32 1
-; CHECK-NEXT:    [[PRE:%.*]] = load i32, ptr [[P3]], align 4
 ; CHECK-NEXT:    ret i32 [[PRE]]
 ;
 block1:
@@ -256,15 +262,17 @@ define void @test6(i32 %N, ptr nocapture %G) nounwind ssp {
 ; CHECK-NEXT:    br i1 [[TMP1]], label [[BB_NPH:%.*]], label [[RETURN:%.*]]
 ; CHECK:       bb.nph:
 ; CHECK-NEXT:    [[TMP:%.*]] = zext i32 [[TMP0]] to i64
+; CHECK-NEXT:    [[SCEVGEP7_PHI_TRANS_INSERT:%.*]] = getelementptr double, ptr [[G:%.*]], i64 0
+; CHECK-NEXT:    [[DOTPRE:%.*]] = load double, ptr [[SCEVGEP7_PHI_TRANS_INSERT]], align 8
 ; CHECK-NEXT:    br label [[BB:%.*]]
 ; CHECK:       bb:
+; CHECK-NEXT:    [[TMP2:%.*]] = phi double [ [[TMP4:%.*]], [[BB]] ], [ [[DOTPRE]], [[BB_NPH]] ]
 ; CHECK-NEXT:    [[INDVAR:%.*]] = phi i64 [ 0, [[BB_NPH]] ], [ [[TMP6:%.*]], [[BB]] ]
 ; CHECK-NEXT:    [[TMP6]] = add i64 [[INDVAR]], 1
-; CHECK-NEXT:    [[SCEVGEP:%.*]] = getelementptr double, ptr [[G:%.*]], i64 [[TMP6]]
+; CHECK-NEXT:    [[SCEVGEP:%.*]] = getelementptr double, ptr [[G]], i64 [[TMP6]]
 ; CHECK-NEXT:    [[SCEVGEP7:%.*]] = getelementptr double, ptr [[G]], i64 [[INDVAR]]
-; CHECK-NEXT:    [[TMP2:%.*]] = load double, ptr [[SCEVGEP7]], align 8
 ; CHECK-NEXT:    [[TMP3:%.*]] = load double, ptr [[SCEVGEP]], align 8
-; CHECK-NEXT:    [[TMP4:%.*]] = fadd double [[TMP2]], [[TMP3]]
+; CHECK-NEXT:    [[TMP4]] = fadd double [[TMP2]], [[TMP3]]
 ; CHECK-NEXT:    store double [[TMP4]], ptr [[SCEVGEP]], align 8
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp eq i64 [[TMP6]], [[TMP]]
 ; CHECK-NEXT:    br i1 [[EXITCOND]], label [[RETURN]], label [[BB]]
@@ -372,15 +380,17 @@ define i32 @test8(ptr %p, ptr %q, ptr %Hack, i1 %C) {
 ; CHECK-NEXT:  block1:
 ; CHECK-NEXT:    br i1 [[C:%.*]], label [[BLOCK2:%.*]], label [[BLOCK3:%.*]]
 ; CHECK:       block2:
+; CHECK-NEXT:    [[P3_PHI_TRANS_INSERT:%.*]] = getelementptr i32, ptr [[Q:%.*]], i32 1
+; CHECK-NEXT:    [[PRE_PRE:%.*]] = load i32, ptr [[P3_PHI_TRANS_INSERT]], align 4
 ; CHECK-NEXT:    br label [[BLOCK4:%.*]]
 ; CHECK:       block3:
 ; CHECK-NEXT:    [[A:%.*]] = getelementptr i32, ptr [[P:%.*]], i32 1
 ; CHECK-NEXT:    store i32 0, ptr [[A]], align 4
 ; CHECK-NEXT:    br label [[BLOCK4]]
 ; CHECK:       block4:
-; CHECK-NEXT:    [[P2:%.*]] = phi ptr [ [[P]], [[BLOCK3]] ], [ [[Q:%.*]], [[BLOCK2]] ]
+; CHECK-NEXT:    [[PRE:%.*]] = phi i32 [ 0, [[BLOCK3]] ], [ [[PRE_PRE]], [[BLOCK2]] ]
+; CHECK-NEXT:    [[P2:%.*]] = phi ptr [ [[P]], [[BLOCK3]] ], [ [[Q]], [[BLOCK2]] ]
 ; CHECK-NEXT:    [[P3:%.*]] = getelementptr i32, ptr [[P2]], i32 1
-; CHECK-NEXT:    [[PRE:%.*]] = load i32, ptr [[P3]], align 4
 ; CHECK-NEXT:    ret i32 [[PRE]]
 ;
 block1:
@@ -480,10 +490,13 @@ define void @test10(i32 %N, ptr nocapture %G) nounwind ssp {
 ; CHECK:       bb.nph:
 ; CHECK-NEXT:    [[TMP:%.*]] = sext i32 [[TMP0]] to i64
 ; CHECK-NEXT:    [[TMP8:%.*]] = add i64 [[TMP]], -1
+; CHECK-NEXT:    [[SCEVGEP_PHI_TRANS_INSERT:%.*]] = getelementptr double, ptr [[G:%.*]], i64 0
+; CHECK-NEXT:    [[DOTPRE:%.*]] = load double, ptr [[SCEVGEP_PHI_TRANS_INSERT]], align 8
 ; CHECK-NEXT:    br label [[BB:%.*]]
 ; CHECK:       bb:
+; CHECK-NEXT:    [[TMP5:%.*]] = phi double [ [[TMP6:%.*]], [[BB]] ], [ [[DOTPRE]], [[BB_NPH]] ]
 ; CHECK-NEXT:    [[INDVAR:%.*]] = phi i64 [ 0, [[BB_NPH]] ], [ [[TMP11:%.*]], [[BB]] ]
-; CHECK-NEXT:    [[SCEVGEP:%.*]] = getelementptr double, ptr [[G:%.*]], i64 [[INDVAR]]
+; CHECK-NEXT:    [[SCEVGEP:%.*]] = getelementptr double, ptr [[G]], i64 [[INDVAR]]
 ; CHECK-NEXT:    [[TMP9:%.*]] = add i64 [[INDVAR]], 2
 ; CHECK-NEXT:    [[SCEVGEP10:%.*]] = getelementptr double, ptr [[G]], i64 [[TMP9]]
 ; CHECK-NEXT:    [[TMP11]] = add i64 [[INDVAR]], 1
@@ -491,8 +504,7 @@ define void @test10(i32 %N, ptr nocapture %G) nounwind ssp {
 ; CHECK-NEXT:    [[TMP2:%.*]] = load double, ptr [[SCEVGEP12]], align 8
 ; CHECK-NEXT:    [[TMP3:%.*]] = load double, ptr [[SCEVGEP10]], align 8
 ; CHECK-NEXT:    [[TMP4:%.*]] = fadd double [[TMP2]], [[TMP3]]
-; CHECK-NEXT:    [[TMP5:%.*]] = load double, ptr [[SCEVGEP]], align 8
-; CHECK-NEXT:    [[TMP6:%.*]] = fadd double [[TMP4]], [[TMP5]]
+; CHECK-NEXT:    [[TMP6]] = fadd double [[TMP4]], [[TMP5]]
 ; CHECK-NEXT:    store double [[TMP6]], ptr [[SCEVGEP12]], align 8
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp eq i64 [[TMP11]], [[TMP8]]
 ; CHECK-NEXT:    br i1 [[EXITCOND]], label [[RETURN]], label [[BB]]

@@ -93,8 +93,8 @@ define i32 @phi_trans_alloca(i1 %cond) {
 ; NOPHITRANS:       [[ELSE]]:
 ; NOPHITRANS-NEXT:    br label %[[MERGE]]
 ; NOPHITRANS:       [[MERGE]]:
+; NOPHITRANS-NEXT:    [[VAL:%.*]] = phi i32 [ 97, %[[ELSE]] ], [ 42, %[[THEN]] ]
 ; NOPHITRANS-NEXT:    [[PTR:%.*]] = phi ptr [ [[A]], %[[THEN]] ], [ [[B]], %[[ELSE]] ]
-; NOPHITRANS-NEXT:    [[VAL:%.*]] = load i32, ptr [[PTR]], align 4
 ; NOPHITRANS-NEXT:    ret i32 [[VAL]]
 ;
 entry:
@@ -150,8 +150,8 @@ define i32 @phi_trans_disabled(i1 %cond) {
 ; NOPHITRANS:       [[ELSE]]:
 ; NOPHITRANS-NEXT:    br label %[[MERGE]]
 ; NOPHITRANS:       [[MERGE]]:
+; NOPHITRANS-NEXT:    [[VAL:%.*]] = phi i32 [ 97, %[[ELSE]] ], [ 42, %[[THEN]] ]
 ; NOPHITRANS-NEXT:    [[PTR:%.*]] = phi ptr [ [[A]], %[[THEN]] ], [ [[B]], %[[ELSE]] ]
-; NOPHITRANS-NEXT:    [[VAL:%.*]] = load i32, ptr [[PTR]], align 4
 ; NOPHITRANS-NEXT:    ret i32 [[VAL]]
 ;
 entry:

@@ -563,15 +563,17 @@ define void @test13() {
 ; CHECK-NEXT:    br label [[BB1:%.*]]
 ; CHECK:       bb1:
 ; CHECK-NEXT:    [[TMP:%.*]] = load i8, ptr null, align 1
+; CHECK-NEXT:    [[TMP6_PHI_TRANS_INSERT:%.*]] = getelementptr i8, ptr null, i64 1
+; CHECK-NEXT:    [[TMP10_PRE:%.*]] = load i8, ptr [[TMP6_PHI_TRANS_INSERT]], align 1
 ; CHECK-NEXT:    br label [[BB3:%.*]]
 ; CHECK:       bb3:
-; CHECK-NEXT:    [[PHIOFOPS:%.*]] = phi i8 [ [[TMP]], [[BB1]] ], [ [[TMP10:%.*]], [[BB3]] ]
+; CHECK-NEXT:    [[TMP10:%.*]] = phi i8 [ [[PHIOFOPS:%.*]], [[BB3]] ], [ [[TMP10_PRE]], [[BB1]] ]
+; CHECK-NEXT:    [[PHIOFOPS]] = phi i8 [ [[TMP]], [[BB1]] ], [ [[TMP10]], [[BB3]] ]
 ; CHECK-NEXT:    [[TMP4:%.*]] = phi ptr [ null, [[BB1]] ], [ [[TMP6:%.*]], [[BB3]] ]
 ; CHECK-NEXT:    [[TMP5:%.*]] = phi i32 [ undef, [[BB1]] ], [ [[TMP9:%.*]], [[BB3]] ]
 ; CHECK-NEXT:    [[TMP6]] = getelementptr i8, ptr [[TMP4]], i64 1
 ; CHECK-NEXT:    [[TMP8:%.*]] = sext i8 [[PHIOFOPS]] to i32
 ; CHECK-NEXT:    [[TMP9]] = mul i32 [[TMP5]], [[TMP8]]
-; CHECK-NEXT:    [[TMP10]] = load i8, ptr [[TMP6]], align 1
 ; CHECK-NEXT:    [[TMP11:%.*]] = icmp eq i8 [[TMP10]], 0
 ; CHECK-NEXT:    br i1 [[TMP11]], label [[BB12:%.*]], label [[BB3]]
 ; CHECK:       bb12:

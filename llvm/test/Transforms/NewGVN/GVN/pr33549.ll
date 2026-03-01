@@ -5,8 +5,7 @@
 
 ; Function Attrs: norecurse nounwind
 define void @testshl() local_unnamed_addr {
-; CHECK-LABEL: define void @testshl(
-; CHECK-SAME: ) local_unnamed_addr {
+; CHECK-LABEL: define void @testshl() local_unnamed_addr {
 ; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
@@ -17,17 +16,19 @@ define void @testshl() local_unnamed_addr {
 ; CHECK-NEXT:    br i1 [[CMP229]], label %[[FOR_BODY3_PREHEADER:.*]], label %[[FOR_INC8]]
 ; CHECK:       [[FOR_BODY3_PREHEADER]]:
 ; CHECK-NEXT:    [[DIV:%.*]] = sdiv i32 [[SHR]], 2
+; CHECK-NEXT:    [[ARRAYIDX4_PHI_TRANS_INSERT:%.*]] = getelementptr inbounds [32 x i32], ptr @Data, i32 0, i32 [[DIV]]
+; CHECK-NEXT:    [[DOTPRE:%.*]] = load i32, ptr [[ARRAYIDX4_PHI_TRANS_INSERT]], align 4, !tbaa [[INT_TBAA3:![0-9]+]]
 ; CHECK-NEXT:    br label %[[FOR_BODY3:.*]]
 ; CHECK:       [[FOR_BODY3]]:
+; CHECK-NEXT:    [[TMP1:%.*]] = phi i32 [ [[ADD7:%.*]], %[[FOR_BODY3]] ], [ [[DOTPRE]], %[[FOR_BODY3_PREHEADER]] ]
 ; CHECK-NEXT:    [[I_030:%.*]] = phi i32 [ [[INC:%.*]], %[[FOR_BODY3]] ], [ [[DIV]], %[[FOR_BODY3_PREHEADER]] ]
 ; CHECK-NEXT:    [[ADD:%.*]] = add nsw i32 [[I_030]], [[SHR]]
 ; CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [32 x i32], ptr @Data, i32 0, i32 [[ADD]]
 ; CHECK-NEXT:    [[ARRAYIDX4:%.*]] = getelementptr inbounds [32 x i32], ptr @Data, i32 0, i32 [[I_030]]
-; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr [[ARRAYIDX]], align 4, !tbaa [[INT_TBAA3:![0-9]+]]
-; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr [[ARRAYIDX4]], align 4, !tbaa [[INT_TBAA3]]
+; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr [[ARRAYIDX]], align 4, !tbaa [[INT_TBAA3]]
 ; CHECK-NEXT:    [[SUB:%.*]] = sub nsw i32 [[TMP1]], [[TMP0]]
 ; CHECK-NEXT:    store i32 [[SUB]], ptr [[ARRAYIDX]], align 4, !tbaa [[INT_TBAA3]]
-; CHECK-NEXT:    [[ADD7:%.*]] = add nsw i32 [[TMP1]], [[TMP0]]
+; CHECK-NEXT:    [[ADD7]] = add nsw i32 [[TMP1]], [[TMP0]]
 ; CHECK-NEXT:    store i32 [[ADD7]], ptr [[ARRAYIDX4]], align 4, !tbaa [[INT_TBAA3]]
 ; CHECK-NEXT:    [[INC]] = add nsw i32 [[I_030]], 1
 ; CHECK-NEXT:    [[CMP2:%.*]] = icmp slt i32 [[I_030]], 15

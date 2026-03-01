@@ -341,8 +341,8 @@ define void @non_local_non_dominating(i1 %c, ptr %p) {
 ; CHECK-NEXT:    call void @use.i64(i64 [[V2]])
 ; CHECK-NEXT:    br label [[JOIN]]
 ; CHECK:       join:
-; CHECK-NEXT:    [[V3:%.*]] = load i64, ptr [[P]], align 4, !range [[RNG11:![0-9]+]]
-; CHECK-NEXT:    call void @use.i64(i64 [[V3]])
+; CHECK-NEXT:    [[V3_PRE_PHI:%.*]] = phi i64 [ [[V2]], [[ELSE]] ], [ [[V1]], [[IF]] ]
+; CHECK-NEXT:    call void @use.i64(i64 [[V3_PRE_PHI]])
 ; CHECK-NEXT:    ret void
 ;
   br i1 %c, label %if, label %else
@@ -522,5 +522,4 @@ join:
 ; CHECK: [[RNG8]] = !{i64 0, i64 10}
 ; CHECK: [[RNG9]] = !{i64 0, i64 10, i64 20, i64 30}
 ; CHECK: [[RNG10]] = !{i64 10, i64 20}
-; CHECK: [[RNG11]] = !{i64 20, i64 30}
 ;.

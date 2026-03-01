@@ -10,13 +10,15 @@ define dso_local void @test1(ptr nocapture readonly %aa, ptr nocapture %bb) loca
 ; CHECK-NEXT:    [[IDX2:%.*]] = getelementptr inbounds i32, ptr [[AA]], i64 1
 ; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr [[IDX2]], align 4
 ; CHECK-NEXT:    store i32 [[TMP0]], ptr [[IDX]], align 4
+; CHECK-NEXT:    [[IDX4_PHI_TRANS_INSERT:%.*]] = getelementptr inbounds i32, ptr [[AA]], i64 0
+; CHECK-NEXT:    [[DOTPRE:%.*]] = load i32, ptr [[IDX4_PHI_TRANS_INSERT]], align 4, !llvm.access.group [[ACC_GRP0:![0-9]+]]
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
+; CHECK-NEXT:    [[TMP1:%.*]] = phi i32 [ [[MUL:%.*]], %[[FOR_BODY]] ], [ [[DOTPRE]], %[[ENTRY]] ]
 ; CHECK-NEXT:    [[INDVARS_IV:%.*]] = phi i64 [ 0, %[[ENTRY]] ], [ [[INDVARS_IV_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[IDX4:%.*]] = getelementptr inbounds i32, ptr [[AA]], i64 [[INDVARS_IV]]
-; CHECK-NEXT:    [[TMP1:%.*]] = load i32, ptr [[IDX4]], align 4, !llvm.access.group [[ACC_GRP0:![0-9]+]]
 ; CHECK-NEXT:    [[TMP2:%.*]] = load i32, ptr [[IDX]], align 4, !llvm.access.group [[ACC_GRP0]]
-; CHECK-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP2]], [[TMP1]]
+; CHECK-NEXT:    [[MUL]] = mul nsw i32 [[TMP2]], [[TMP1]]
 ; CHECK-NEXT:    store i32 [[MUL]], ptr [[IDX4]], align 4, !llvm.access.group [[ACC_GRP0]]
 ; CHECK-NEXT:    [[INDVARS_IV_NEXT]] = add nuw nsw i64 [[INDVARS_IV]], 1
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp ne i64 [[INDVARS_IV_NEXT]], 100
