@@ -619,23 +619,20 @@ define void @test14(ptr %ptr1, ptr noalias %ptr2, i1 %b1, i1 %b2) {
 ; CHECK-NEXT:    br label [[LOOP:%.*]]
 ; CHECK:       loop:
 ; CHECK-NEXT:    br i1 [[B1:%.*]], label [[LOOP_IF1_CRIT_EDGE:%.*]], label [[THEN:%.*]]
-; CHECK:       loop.if1_crit_edge:
-; CHECK-NEXT:    [[VAL2:%.*]] = load i32, ptr [[GEP2]], align 4
-; CHECK-NEXT:    br label [[IF1:%.*]]
 ; CHECK:       if1:
-; CHECK-NEXT:    [[VAL2_PRE_PHI:%.*]] = phi i32 [ [[VAL3:%.*]], [[LOOP_END:%.*]] ], [ [[VAL2]], [[LOOP_IF1_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[VAL2:%.*]] = load i32, ptr [[GEP2]], align 4
 ; CHECK-NEXT:    store i32 0, ptr [[GEP1]], align 4
 ; CHECK-NEXT:    br label [[THEN]]
 ; CHECK:       then:
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq ptr [[GEP2]], [[PTR2:%.*]]
-; CHECK-NEXT:    br i1 [[CMP]], label [[LOOP_END]], label [[IF2:%.*]]
+; CHECK-NEXT:    br i1 [[CMP]], label [[LOOP_END:%.*]], label [[IF2:%.*]]
 ; CHECK:       if2:
 ; CHECK-NEXT:    br label [[LOOP_END]]
 ; CHECK:       loop.end:
 ; CHECK-NEXT:    [[PHI3:%.*]] = phi ptr [ [[PTR2]], [[THEN]] ], [ [[PTR1]], [[IF2]] ]
-; CHECK-NEXT:    [[VAL3]] = load i32, ptr [[GEP2]], align 4
+; CHECK-NEXT:    [[VAL3:%.*]] = load i32, ptr [[GEP2]], align 4
 ; CHECK-NEXT:    store i32 [[VAL3]], ptr [[PHI3]], align 4
-; CHECK-NEXT:    br i1 [[B2:%.*]], label [[LOOP]], label [[IF1]]
+; CHECK-NEXT:    br i1 [[B2:%.*]], label [[LOOP]], label [[LOOP_IF1_CRIT_EDGE]]
 ;
 entry:
   %gep1 = getelementptr inbounds i32, ptr %ptr1, i32 1

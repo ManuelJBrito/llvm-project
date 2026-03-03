@@ -114,6 +114,7 @@
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/PredicateInfo.h"
+#include "llvm/Transforms/Utils/SSAUpdater.h"
 #include "llvm/Transforms/Utils/VNCoercion.h"
 #include <algorithm>
 #include <cassert>
@@ -156,6 +157,8 @@ STATISTIC(NumGVNPREInstrInserted, "Number of scalar instructions PRE inserted");
 STATISTIC(NumGVNPREEdgesSplit, "Number of critical edges split for PRE");
 STATISTIC(NumGVNPHITranslations,
           "Number of loads eliminated via PHI translation");
+STATISTIC(NumGVNPRETransitiveAvail,
+          "Number of predecessors resolved via transitive availability");
 DEBUG_COUNTER(VNCounter, "newgvn-vn",
               "Controls which instructions are value numbered");
 DEBUG_COUNTER(PHIOfOpsCounter, "newgvn-phi",
@@ -197,6 +200,11 @@ static cl::opt<bool> NewGVNEnableAssumePropagation(
 static cl::opt<bool>
     NewGVNEnableTruncEquality("newgvn-enable-trunc-equality", cl::init(true),
                                cl::Hidden);
+static cl::opt<uint32_t> NewGVNMaxBBSpeculations(
+    "newgvn-max-block-speculations", cl::Hidden, cl::init(600),
+    cl::desc("Max number of blocks to speculate on when checking transitive "
+             "availability for load PRE (default = 600)"));
+
 static cl::opt<std::string> NewGVNAssumption(
     "newgvn-assumption", cl::init("optimistic"), cl::Hidden,
     cl::desc("Assumption model: optimistic, balanced, or pessimistic"));
@@ -539,6 +547,10 @@ class NewGVN {
   AliasAnalysis *AA = nullptr;
   MemorySSA *MSSA = nullptr;
   MemorySSAWalker *MSSAWalker = nullptr;
+  // Use context-sensitive capture analysis (like GVN's memdep) so that
+  // calls which haven't yet captured a pointer don't block optimization.
+  std::unique_ptr<EarliestEscapeAnalysis> EEA;
+  std::unique_ptr<BatchAAResults> BAA;
   AssumptionCache *AC = nullptr;
   const DataLayout &DL;
 
@@ -714,7 +726,10 @@ public:
         PredInfo(
             std::make_unique<PredicateInfo>(F, *DT, *AC, ExpressionAllocator)),
         SQ(DL, TLI, DT, AC, /*CtxI=*/nullptr, /*UseInstrInfo=*/false,
-           /*CanUseUndef=*/false) {}
+           /*CanUseUndef=*/false) {
+    EEA = std::make_unique<EarliestEscapeAnalysis>(*DT);
+    BAA = std::make_unique<BatchAAResults>(*AA, EEA.get());
+  }
 
   bool runGVN();
 
@@ -1503,7 +1518,7 @@ const Expression *NewGVN::performSymbolicStoreEvaluation(Instruction *I) const {
   // Get the expression, if any, for the RHS of the MemoryDef.
   const MemoryAccess *StoreRHS = StoreAccess->getDefiningAccess();
   if (EnableStoreRefinement)
-    StoreRHS = MSSAWalker->getClobberingMemoryAccess(StoreAccess);
+    StoreRHS = MSSAWalker->getClobberingMemoryAccess(StoreAccess, *BAA);
   // If we bypassed the use-def chains, make sure we add a use.
   StoreRHS = lookupMemoryLeader(StoreRHS);
   if (StoreRHS != StoreAccess->getDefiningAccess())
@@ -1665,7 +1680,7 @@ const Expression *NewGVN::performSymbolicLoadEvaluation(Instruction *I) {
     return createConstantExpression(PoisonValue::get(LI->getType()));
   MemoryAccess *OriginalAccess = getMemoryAccess(I);
   MemoryAccess *DefiningAccess =
-      MSSAWalker->getClobberingMemoryAccess(OriginalAccess);
+      MSSAWalker->getClobberingMemoryAccess(OriginalAccess, *BAA);
 
   if (!MSSA->isLiveOnEntryDef(DefiningAccess)) {
     if (auto *MD = dyn_cast<MemoryDef>(DefiningAccess)) {
@@ -1784,7 +1799,7 @@ NewGVN::ExprResult NewGVN::performSymbolicCallEvaluation(Instruction *I) const {
         createCallExpression(CI, TOPClass->getMemoryLeader()));
   } else if (AA->onlyReadsMemory(CI)) {
     if (auto *MA = MSSA->getMemoryAccess(CI)) {
-      auto *DefiningAccess = MSSAWalker->getClobberingMemoryAccess(MA);
+      auto *DefiningAccess = MSSAWalker->getClobberingMemoryAccess(MA, *BAA);
       return ExprResult::some(createCallExpression(CI, DefiningAccess));
     } else // MSSA determined that CI does not access memory.
       return ExprResult::some(
@@ -2878,7 +2893,7 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
   auto *MemAccess = getMemoryAccess(I);
   MemoryPhi *MemPhiOp = nullptr;
   if (MemAccess) {
-    MemoryAccess *Clobber = MSSAWalker->getClobberingMemoryAccess(MemAccess);
+    MemoryAccess *Clobber = MSSAWalker->getClobberingMemoryAccess(MemAccess, *BAA);
     MemPhiOp = dyn_cast<MemoryPhi>(Clobber);
     // If we walked past the raw defining access, register a dependency so
     // that the load is re-evaluated when the clobbering access changes.
@@ -3069,7 +3084,7 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
             TheMemPhi ? TheMemPhi->getIncomingValueForBlock(PredBB)
                       : MemAccess->getDefiningAccess();
         MemoryAccess *PredClobber =
-            MSSAWalker->getClobberingMemoryAccess(IncomingMA, PredMemLoc);
+            MSSAWalker->getClobberingMemoryAccess(IncomingMA, PredMemLoc, *BAA);
 
         if (!MSSA->isLiveOnEntryDef(PredClobber)) {
           if (auto *MD = dyn_cast<MemoryDef>(PredClobber)) {
@@ -3749,6 +3764,15 @@ bool NewGVN::runGVN() {
   bool Changed = false;
   NumFuncArgs = F.arg_size();
   MSSAWalker = MSSA->getWalker();
+
+  // Reset MSSA walker cache so our EarliestEscapeAnalysis-based BatchAA
+  // is used instead of stale results from MSSA's optimizeUses() pass
+  // (which used SimpleCaptureAnalysis).
+  for (auto &BB : F)
+    for (auto &I : BB)
+      if (auto *MUD = MSSA->getMemoryAccess(&I))
+        MUD->resetOptimized();
+
   SingletonDeadExpression = new (ExpressionAllocator) DeadExpression();
 
   // Count number of instructions for sizing of hash tables, and come
@@ -4222,7 +4246,7 @@ bool NewGVN::performCrossTypeForwarding() {
       if (!OrigAccess)
         continue;
       MemoryAccess *DefAccess =
-          MSSAWalker->getClobberingMemoryAccess(OrigAccess);
+          MSSAWalker->getClobberingMemoryAccess(OrigAccess, *BAA);
       if (MSSA->isLiveOnEntryDef(DefAccess))
         continue;
       auto *MD = dyn_cast<MemoryDef>(DefAccess);
@@ -4318,9 +4342,9 @@ bool NewGVN::performCrossTypeForwarding() {
         if (!LIAccess || !DomAccess)
           continue;
         MemoryAccess *LIClobber =
-            MSSAWalker->getClobberingMemoryAccess(LIAccess);
+            MSSAWalker->getClobberingMemoryAccess(LIAccess, *BAA);
         MemoryAccess *DomClobber =
-            MSSAWalker->getClobberingMemoryAccess(DomAccess);
+            MSSAWalker->getClobberingMemoryAccess(DomAccess, *BAA);
         if (LIClobber != DomClobber)
           continue;
 
@@ -4352,35 +4376,119 @@ bool NewGVN::performPRE(Function &F) {
     return false;
   bool Changed = false;
 
-  // Collect blocks upfront. We cannot iterate the DT lazily because
-  // SplitCriticalEdge (called from performScalarPRE / performLoadPRE) can
-  // modify the dominator tree, invalidating a lazy depth_first iterator.
-  SmallVector<BasicBlock *, 32> DTBlocks;
-  for (auto *DTN : depth_first(DT->getRootNode()))
-    DTBlocks.push_back(DTN->getBlock());
+  // Iterate PRE until fixpoint: each round may insert loads that make
+  // previously-unavailable predecessors available for other loads
+  // (cascading PRE).  Value-numbered inserted loads are discovered
+  // via congruence class member lookup in subsequent rounds.
+  for (unsigned Iteration = 0; Iteration < 10; ++Iteration) {
+    bool RoundChanged = false;
 
-  for (BasicBlock *BB : DTBlocks) {
-    if (!ReachableBlocks.count(BB))
-      continue;
-    if (BB == &F.getEntryBlock())
-      continue;
-    if (pred_size(BB) < 2)
-      continue;
-    if (BB->isEHPad())
-      continue;
+    // Collect blocks upfront. We cannot iterate the DT lazily because
+    // SplitCriticalEdge (called from performScalarPRE / performLoadPRE) can
+    // modify the dominator tree, invalidating a lazy depth_first iterator.
+    SmallVector<BasicBlock *, 32> DTBlocks;
+    for (auto *DTN : depth_first(DT->getRootNode()))
+      DTBlocks.push_back(DTN->getBlock());
 
-    for (Instruction &I : make_early_inc_range(*BB)) {
-      if (InstructionsToErase.count(&I))
+    for (BasicBlock *BB : DTBlocks) {
+      if (!ReachableBlocks.count(BB))
         continue;
-      if (auto *LI = dyn_cast<LoadInst>(&I)) {
-        if (NewGVNEnableLoadPRE)
-          Changed |= performLoadPRE(LI);
-      } else {
-        Changed |= performScalarPRE(&I);
+      if (BB == &F.getEntryBlock())
+        continue;
+      if (BB->isEHPad())
+        continue;
+
+      for (Instruction &I : make_early_inc_range(*BB)) {
+        if (InstructionsToErase.count(&I))
+          continue;
+        if (auto *LI = dyn_cast<LoadInst>(&I)) {
+          if (NewGVNEnableLoadPRE)
+            RoundChanged |= performLoadPRE(LI);
+        } else {
+          if (pred_size(BB) < 2)
+            continue;
+          RoundChanged |= performScalarPRE(&I);
+        }
       }
     }
+
+    Changed |= RoundChanged;
+    if (!RoundChanged)
+      break;
+    LLVM_DEBUG(dbgs() << "PRE: iteration " << Iteration
+                      << " made changes, running another round\n");
   }
   return Changed;
+}
+
+/// Three-state availability for transitive availability analysis.
+/// Ported from GVN's AvailabilityState.
+enum class AvailabilityState : char {
+  Unavailable = 0,
+  Available = 1,
+  SpeculativelyAvailable = 2,
+};
+
+/// Check whether a value is transitively available in \p BB by walking
+/// predecessors backward. Seeds must be pre-populated in
+/// \p FullyAvailableBlocks (Available for known-good blocks, Unavailable
+/// for known-bad blocks). Ported from GVN's IsValueFullyAvailableInBlock.
+static bool isValueTransitivelyAvailable(
+    BasicBlock *BB,
+    DenseMap<BasicBlock *, AvailabilityState> &FullyAvailableBlocks) {
+  SmallVector<BasicBlock *, 32> Worklist;
+  std::optional<BasicBlock *> UnavailableBB;
+  unsigned NumSpeculations = 0;
+
+  Worklist.push_back(BB);
+  while (!Worklist.empty()) {
+    BasicBlock *CurrBB = Worklist.pop_back_val();
+    auto IV = FullyAvailableBlocks.try_emplace(
+        CurrBB, AvailabilityState::SpeculativelyAvailable);
+    AvailabilityState &State = IV.first->second;
+
+    // Already known?
+    if (!IV.second) {
+      if (State == AvailabilityState::Unavailable) {
+        UnavailableBB = CurrBB;
+        break;
+      }
+      continue;
+    }
+
+    // New block — check budget.
+    ++NumSpeculations;
+    if (NumSpeculations > NewGVNMaxBBSpeculations || pred_empty(CurrBB)) {
+      State = AvailabilityState::Unavailable;
+      UnavailableBB = CurrBB;
+      break;
+    }
+
+    // Recurse into predecessors.
+    Worklist.append(pred_begin(CurrBB), pred_end(CurrBB));
+  }
+
+  // Backpropagate: mark speculatively-available blocks reachable from
+  // the unavailable block as unavailable too.
+  auto MarkAsFixpoint =
+      [&](BasicBlock *B, AvailabilityState FixpointState) {
+        auto It = FullyAvailableBlocks.find(B);
+        if (It == FullyAvailableBlocks.end())
+          return;
+        if (It->second != AvailabilityState::SpeculativelyAvailable)
+          return;
+        It->second = FixpointState;
+        Worklist.append(succ_begin(B), succ_end(B));
+      };
+
+  if (UnavailableBB) {
+    Worklist.clear();
+    Worklist.append(succ_begin(*UnavailableBB), succ_end(*UnavailableBB));
+    while (!Worklist.empty())
+      MarkAsFixpoint(Worklist.pop_back_val(), AvailabilityState::Unavailable);
+  }
+
+  return !UnavailableBB;
 }
 
 bool NewGVN::performLoadPRE(LoadInst *Load) {
@@ -4390,8 +4498,10 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
   BasicBlock *LoadBB = Load->getParent();
 
   MemoryAccess *MA = getMemoryAccess(Load);
-  if (!MA)
+  if (!MA) {
+    LLVM_DEBUG(dbgs() << "  Load PRE: no MemoryAccess, skipping\n");
     return false;
+  }
 
   Value *LoadPtr = Load->getPointerOperand();
   MemoryLocation MemLoc = MemoryLocation::get(Load);
@@ -4404,10 +4514,6 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
   // predecessors. Find the available value per predecessor using MemorySSA.
   //===--------------------------------------------------------------------===//
   {
-    // Use the block's MemoryPhi for per-predecessor memory state when
-    // available; otherwise fall back to the load's own defining access
-    // (which is the same on all paths when there is no MemoryPhi).
-    MemoryPhi *MP = MSSA->getMemoryAccess(LoadBB);
     MemoryAccess *LoadDefMA = cast<MemoryUseOrDef>(MA)->getDefiningAccess();
 
     // If the load's defining access is a MemoryDef in the same block,
@@ -4417,32 +4523,70 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
       if (DefMD->getBlock() == LoadBB)
         return false;
 
+    // Determine the "phi block" — the effective merge point where the PRE
+    // PHI will be inserted and per-predecessor analysis runs.  Normally
+    // this is the load's own block.  When the load is in a single-pred
+    // block, walk back through the single-pred chain to find the first
+    // block with >= 2 predecessors (the actual merge point).
+    BasicBlock *PhiBB = LoadBB;
+    MemoryPhi *PhiMP = MSSA->getMemoryAccess(LoadBB);
+
+    if (pred_size(LoadBB) == 1) {
+      BasicBlock *WalkBB = *pred_begin(LoadBB);
+      while (pred_size(WalkBB) == 1)
+        WalkBB = *pred_begin(WalkBB);
+      PhiBB = WalkBB;
+      PhiMP = MSSA->getMemoryAccess(WalkBB);
+      LLVM_DEBUG(dbgs() << "  Load PRE: phi block is " << PhiBB->getName()
+                        << " (load is in " << LoadBB->getName() << ")\n");
+
+      // Verify no memory clobbers between PhiBB and LoadBB.
+      // If LoadDefMA is a MemoryDef on the single-pred chain, the load
+      // depends on that specific def and can't be PRE'd at PhiBB.
+      if (auto *DefMD = dyn_cast<MemoryDef>(LoadDefMA)) {
+        if (!MSSA->isLiveOnEntryDef(DefMD) &&
+            !DT->properlyDominates(DefMD->getBlock(), PhiBB))
+          return false;
+      }
+
+      // The load pointer must dominate PhiBB (can't phi-translate across
+      // the single-pred gap).
+      if (auto *PtrInst = dyn_cast<Instruction>(LoadPtr)) {
+        if (!DT->properlyDominates(PtrInst->getParent(), PhiBB))
+          return false;
+      }
+    }
+
+    // The phi block must have at least 2 predecessors for PRE.
+    if (pred_size(PhiBB) < 2)
+      return false;
+
     SmallVector<std::pair<BasicBlock *, Value *>, 4> AvailableValues;
     BasicBlock *UnavailPred = nullptr;
     unsigned NumUnavail = 0;
 
-    // When the load pointer is a PHI defined in LoadBB, phi-translate it
+    // When the load pointer is a PHI defined in PhiBB, phi-translate it
     // per-predecessor so MSSA queries use the concrete pointer (AA can
     // resolve the concrete pointer but not the PHI).
     auto *LoadPtrPHI = dyn_cast<PHINode>(LoadPtr);
-    bool PhiTranslatePtr = LoadPtrPHI && LoadPtrPHI->getParent() == LoadBB;
+    bool PhiTranslatePtr = LoadPtrPHI && LoadPtrPHI->getParent() == PhiBB;
 
-    // When the load pointer is a GEP defined in LoadBB with PHI operands,
+    // When the load pointer is a GEP defined in PhiBB with PHI operands,
     // phi-translate the GEP per-predecessor by substituting the PHI's
     // incoming values and searching for an existing GEP with those operands.
     auto *LoadPtrGEP = dyn_cast<GetElementPtrInst>(LoadPtr);
     bool PhiTranslateGEP = false;
-    if (!PhiTranslatePtr && LoadPtrGEP && LoadPtrGEP->getParent() == LoadBB) {
+    if (!PhiTranslatePtr && LoadPtrGEP && LoadPtrGEP->getParent() == PhiBB) {
       for (Value *Op : LoadPtrGEP->operands()) {
         if (auto *PHI = dyn_cast<PHINode>(Op))
-          if (PHI->getParent() == LoadBB) {
+          if (PHI->getParent() == PhiBB) {
             PhiTranslateGEP = true;
             break;
           }
       }
     }
 
-    for (auto *PredBB : predecessors(LoadBB)) {
+    for (auto *PredBB : predecessors(PhiBB)) {
       Value *AvailVal = nullptr;
 
       // PHI-translate the load pointer for this predecessor.
@@ -4457,7 +4601,7 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
         SmallVector<Value *, 4> TransOps;
         for (Value *Op : LoadPtrGEP->operands()) {
           if (auto *PHI = dyn_cast<PHINode>(Op))
-            if (PHI->getParent() == LoadBB) {
+            if (PHI->getParent() == PhiBB) {
               TransOps.push_back(PHI->getIncomingValueForBlock(PredBB));
               continue;
             }
@@ -4490,77 +4634,81 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
       }
 
       MemoryAccess *IncomingMA =
-          MP ? MP->getIncomingValueForBlock(PredBB) : LoadDefMA;
+          PhiMP ? PhiMP->getIncomingValueForBlock(PredBB) : LoadDefMA;
       MemoryAccess *PredClobber =
-          MSSAWalker->getClobberingMemoryAccess(IncomingMA, PredMemLoc);
+          MSSAWalker->getClobberingMemoryAccess(IncomingMA, PredMemLoc, *BAA);
 
       LLVM_DEBUG(dbgs() << "  Load PRE: pred " << PredBB->getName()
                         << " IncomingMA=" << *IncomingMA
                         << " PredClobber=" << *PredClobber << "\n");
 
-      if (!MSSA->isLiveOnEntryDef(PredClobber)) {
-        if (auto *MD = dyn_cast<MemoryDef>(PredClobber)) {
-          Instruction *DepInst = MD->getMemoryInst();
-          if (!ReachableBlocks.count(DepInst->getParent())) {
-            // Clobber is in a block NewGVN considers unreachable.
-            // Unlike non-local load elimination (where the load itself
-            // would be unreachable), in load PRE the predecessor path
-            // is reachable at runtime.  Leave AvailVal as null so this
-            // predecessor is treated as unavailable.
-          } else if (auto *SI = dyn_cast<StoreInst>(DepInst)) {
-            if (SI->getValueOperand()->getType() == Load->getType() &&
-                AA->isMustAlias(MemoryLocation::get(SI), PredMemLoc))
-              AvailVal = SI->getValueOperand();
-          } else if (auto *LI = dyn_cast<LoadInst>(DepInst)) {
-            if (LI->getType() == Load->getType() &&
-                AA->isMustAlias(MemoryLocation::get(LI), PredMemLoc))
-              AvailVal = LI;
-          }
-        }
-      }
-
-      // Fallback 1: scan the load's congruence class for a member that
-      // dominates the predecessor.  Class members are loads (or stores)
-      // that NewGVN has determined produce the same value — this naturally
-      // handles aliased pointers (e.g. congruent GEPs) without needing
-      // explicit phi-translation.
-      if (!AvailVal) {
-        if (CongruenceClass *CC = ValueToClass.lookup(Load)) {
-          for (Value *Member : *CC) {
-            auto *LI = dyn_cast<LoadInst>(Member);
-            if (!LI || LI == Load)
+      // Primary: look up the per-predecessor expression, as phi-of-ops
+      // does. createLoadExpression with the predecessor's clobber
+      // produces the expression the load WOULD have on this path;
+      // the class lookup finds a dominating congruent value.
+      {
+        auto *LE = createLoadExpression(Load->getType(), PredLoadPtr,
+                                        Load, PredClobber);
+        if (auto *CC = getClassForExpression(LE)) {
+          for (auto *Member : *CC) {
+            if (Member == Load)
               continue;
-            if (InstructionsToErase.count(LI))
+            auto *MemberInst = dyn_cast<Instruction>(Member);
+            if (!MemberInst) {
+              AvailVal = Member; // constant
+              break;
+            }
+            if (InstructionsToErase.count(MemberInst))
               continue;
-            if (!DT->dominates(LI, PredBB->getTerminator()))
+            if (!DT->dominates(MemberInst, PredBB->getTerminator()))
               continue;
-            AvailVal = LI;
-            LLVM_DEBUG(dbgs() << "  Load PRE: found class member "
-                              << *LI << " for pred "
-                              << PredBB->getName() << "\n");
+            AvailVal = MemberInst;
             break;
           }
         }
+        if (auto *SI = dyn_cast_or_null<StoreInst>(AvailVal))
+          AvailVal = SI->getValueOperand();
+        if (AvailVal)
+          LLVM_DEBUG(dbgs() << "  Load PRE: expr lookup found "
+                            << *AvailVal << " for pred "
+                            << PredBB->getName() << "\n");
       }
 
-      // Fallback 2: cascading PRE — when the MSSA walker returns a
-      // MemoryPhi (can't resolve per-path), look for a value that
-      // represents `*LoadPtr` and dominates PredBB.  Two patterns:
-      //  (a) This load has a PHI user from a prior PRE round.
-      //  (b) Another load from LoadPtr was PRE'd earlier; its
-      //      replacement (a PHI or the load itself) dominates PredBB.
+      // Fallback: direct MemoryDef extraction (handles calls, stores
+      // to aliased pointers not in the same expression class, etc.)
+      if (!AvailVal && !MSSA->isLiveOnEntryDef(PredClobber)) {
+        if (auto *MD = dyn_cast<MemoryDef>(PredClobber)) {
+          Instruction *DepInst = MD->getMemoryInst();
+          if (ReachableBlocks.count(DepInst->getParent())) {
+            if (auto *SI = dyn_cast<StoreInst>(DepInst)) {
+              if (SI->getValueOperand()->getType() == Load->getType() &&
+                  AA->isMustAlias(MemoryLocation::get(SI), PredMemLoc))
+                AvailVal = SI->getValueOperand();
+            } else if (auto *LI = dyn_cast<LoadInst>(DepInst)) {
+              if (LI->getType() == Load->getType() &&
+                  AA->isMustAlias(MemoryLocation::get(LI), PredMemLoc))
+                AvailVal = LI;
+            }
+          }
+        }
+      }
+
+      // Fallback: cascading PRE — look for a PRE-inserted PHI or
+      // another load from the same pointer that dominates PredBB.
       if (!AvailVal && isa<MemoryPhi>(PredClobber)) {
-        // (a) PHI user of this load.
+        // (a) PHI user of this load from a prior PRE round.
+        // Skip PHIs that ARE the load's pointer operand — that would
+        // create a recurrence equating *p with p (the loaded value
+        // with the address), which is a miscompilation.
         for (User *U : Load->users()) {
           auto *PHI = dyn_cast<PHINode>(U);
           if (!PHI)
             continue;
+          if (PHI == LoadPtr)
+            continue;
           if (!DT->dominates(PHI, PredBB->getTerminator()))
             continue;
           AvailVal = PHI;
-          LLVM_DEBUG(dbgs() << "  Load PRE: found PHI user "
-                            << *PHI << " for pred "
-                            << PredBB->getName() << "\n");
           break;
         }
         // (b) Another load from same pointer, or its PRE replacement.
@@ -4569,34 +4717,25 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
             auto *LI = dyn_cast<LoadInst>(U);
             if (!LI || LI == Load || LI->getType() != Load->getType())
               continue;
+            if (LI->getFunction() != Load->getFunction())
+              continue;
             if (!AA->isMustAlias(MemoryLocation::get(LI), MemLoc))
               continue;
-            // If this load dominates PredBB and is live, use it.
             if (!InstructionsToErase.count(LI) &&
                 DT->dominates(LI, PredBB->getTerminator())) {
               AvailVal = LI;
               break;
             }
-            // If this load was PRE'd (marked for deletion), check if
-            // its replacement PHI dominates PredBB.
             if (InstructionsToErase.count(LI) && LI->use_empty()) {
-              // The load was RAUW'd — find the PHI in its block.
               for (auto &Inst : *LI->getParent()) {
                 auto *PHI = dyn_cast<PHINode>(&Inst);
-                if (!PHI)
-                  break; // PHIs are at the start.
-                if (PHI->getType() != Load->getType())
-                  continue;
-                if (!DT->dominates(PHI, PredBB->getTerminator()))
-                  continue;
+                if (!PHI) break;
+                if (PHI->getType() != Load->getType()) continue;
+                if (!DT->dominates(PHI, PredBB->getTerminator())) continue;
                 AvailVal = PHI;
-                LLVM_DEBUG(dbgs() << "  Load PRE: found PRE'd load's PHI "
-                                  << *PHI << " for pred "
-                                  << PredBB->getName() << "\n");
                 break;
               }
-              if (AvailVal)
-                break;
+              if (AvailVal) break;
             }
           }
         }
@@ -4620,6 +4759,214 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
       }
       AvailableValues.push_back({PredBB, AvailVal});
 
+    }
+
+    // Transitive availability: when multiple predecessors are unavailable,
+    // check whether the value is available on ALL paths reaching each
+    // unavailable predecessor (ported from GVN's IsValueFullyAvailableInBlock).
+    if (NumUnavail > 1) {
+      LLVM_DEBUG(dbgs() << "  Load PRE: trying transitive availability, "
+                        << NumUnavail << " unavailable preds\n");
+      // Seed the availability map from congruence class members.
+      DenseMap<BasicBlock *, AvailabilityState> FullyAvailableBlocks;
+      DenseMap<BasicBlock *, Value *> TransitiveValues;
+
+      // Seed from already-available predecessors.
+      for (auto &[Pred, Val] : AvailableValues) {
+        if (Val) {
+          FullyAvailableBlocks[Pred] = AvailabilityState::Available;
+          TransitiveValues[Pred] = Val;
+        }
+      }
+
+      // Seed from congruence class members: loads in the same class that
+      // are in other blocks provide availability at those blocks.
+      if (CongruenceClass *CC = ValueToClass.lookup(Load)) {
+        for (Value *Member : *CC) {
+          auto *LI = dyn_cast<LoadInst>(Member);
+          if (!LI || LI == Load)
+            continue;
+          if (InstructionsToErase.count(LI))
+            continue;
+          BasicBlock *MemberBB = LI->getParent();
+          if (!ReachableBlocks.count(MemberBB))
+            continue;
+          if (!FullyAvailableBlocks.count(MemberBB)) {
+            FullyAvailableBlocks[MemberBB] = AvailabilityState::Available;
+            TransitiveValues[MemberBB] = LI;
+          }
+        }
+      }
+
+      // Also seed from stores that define this load's value.
+      if (auto *DefMD = dyn_cast<MemoryDef>(
+              cast<MemoryUseOrDef>(MA)->getDefiningAccess())) {
+        if (!MSSA->isLiveOnEntryDef(DefMD))
+        if (auto *SI = dyn_cast<StoreInst>(DefMD->getMemoryInst())) {
+          if (SI->getValueOperand()->getType() == Load->getType()) {
+            BasicBlock *StoreBB = SI->getParent();
+            if (!FullyAvailableBlocks.count(StoreBB)) {
+              FullyAvailableBlocks[StoreBB] = AvailabilityState::Available;
+              TransitiveValues[StoreBB] = SI->getValueOperand();
+            }
+          }
+        }
+      }
+
+      // Seed from MemoryPhi incoming-edge resolution: when the per-predecessor
+      // walk returned a MemoryPhi as clobber, resolve each incoming edge of
+      // that MemoryPhi to find stores/loads that provide the value on
+      // individual paths.  This is the key seed source — without it, loads
+      // at merge points with MemoryPhi clobbers have no seeds.
+      {
+        // Walk each unavailable predecessor's MemoryPhi resolution.
+        for (auto &[Pred, Val] : AvailableValues) {
+          if (Val)
+            continue; // Already available.
+          MemoryAccess *IncomingMA =
+              PhiMP ? PhiMP->getIncomingValueForBlock(Pred) : LoadDefMA;
+          MemoryAccess *PredClobber =
+              MSSAWalker->getClobberingMemoryAccess(IncomingMA, MemLoc, *BAA);
+          auto *ClobberPhi = dyn_cast<MemoryPhi>(PredClobber);
+          if (!ClobberPhi)
+            continue;
+          // Resolve each incoming edge of this MemoryPhi.
+          for (unsigned i = 0; i < ClobberPhi->getNumIncomingValues(); ++i) {
+            MemoryAccess *IncMA = ClobberPhi->getIncomingValue(i);
+            BasicBlock *IncBB = ClobberPhi->getIncomingBlock(i);
+            if (!ReachableBlocks.count(IncBB))
+              continue;
+            MemoryAccess *IncClobber =
+                MSSAWalker->getClobberingMemoryAccess(IncMA, MemLoc, *BAA);
+            if (MSSA->isLiveOnEntryDef(IncClobber)) {
+              // No store to this location on this path — value comes from
+              // the function entry (initial memory state).  Find a load
+              // from the same location whose clobber is also liveOnEntry;
+              // that load reads the same initial value.
+              BasicBlock *EntryBB = &Load->getFunction()->getEntryBlock();
+              if (!FullyAvailableBlocks.count(EntryBB)) {
+                // Search for a live-on-entry load from the same location.
+                Value *EntryVal = nullptr;
+                if (!isa<ConstantData>(LoadPtr)) {
+                  for (User *U : LoadPtr->users()) {
+                    auto *LI = dyn_cast<LoadInst>(U);
+                    if (!LI || LI == Load)
+                      continue;
+                    if (LI->getFunction() != Load->getFunction())
+                      continue;
+                    if (LI->getType() != Load->getType())
+                      continue;
+                    if (InstructionsToErase.count(LI))
+                      continue;
+                    // Check that this load also sees liveOnEntry.
+                    MemoryAccess *LMA = getMemoryAccess(LI);
+                    if (!LMA)
+                      continue;
+                    MemoryAccess *LClobber =
+                        MSSAWalker->getClobberingMemoryAccess(LMA, *BAA);
+                    if (MSSA->isLiveOnEntryDef(LClobber)) {
+                      EntryVal = LI;
+                      break;
+                    }
+                  }
+                }
+                if (EntryVal) {
+                  // Seed the block containing the load, not EntryBB.
+                  // The load witnesses the initial memory value but may not
+                  // dominate EntryBB (e.g. it could be in a sibling branch).
+                  BasicBlock *ValBB =
+                      cast<Instruction>(EntryVal)->getParent();
+                  if (!FullyAvailableBlocks.count(ValBB)) {
+                    FullyAvailableBlocks[ValBB] =
+                        AvailabilityState::Available;
+                    TransitiveValues[ValBB] = EntryVal;
+                  }
+                }
+              }
+              continue;
+            }
+            if (auto *IncDef = dyn_cast<MemoryDef>(IncClobber)) {
+              Instruction *DepInst = IncDef->getMemoryInst();
+              if (!DepInst || !ReachableBlocks.count(DepInst->getParent()))
+                continue;
+              Value *AvailValue = nullptr;
+              if (auto *SI = dyn_cast<StoreInst>(DepInst)) {
+                if (SI->getValueOperand()->getType() == Load->getType() &&
+                    AA->isMustAlias(MemoryLocation::get(SI), MemLoc))
+                  AvailValue = SI->getValueOperand();
+              } else if (auto *LI = dyn_cast<LoadInst>(DepInst)) {
+                if (LI->getType() == Load->getType() &&
+                    AA->isMustAlias(MemoryLocation::get(LI), MemLoc))
+                  AvailValue = LI;
+              }
+              if (AvailValue) {
+                BasicBlock *AvailBB = DepInst->getParent();
+                if (!FullyAvailableBlocks.count(AvailBB)) {
+                  FullyAvailableBlocks[AvailBB] =
+                      AvailabilityState::Available;
+                  TransitiveValues[AvailBB] = AvailValue;
+                }
+              } else {
+                // This path has an explicit clobber (may-alias write).
+                BasicBlock *ClobBB = DepInst->getParent();
+                if (!FullyAvailableBlocks.count(ClobBB))
+                  FullyAvailableBlocks[ClobBB] =
+                      AvailabilityState::Unavailable;
+              }
+            }
+          }
+        }
+      }
+
+      // Try to resolve each unavailable predecessor.
+      unsigned Resolved = 0;
+      for (auto &[Pred, Val] : AvailableValues) {
+        if (Val)
+          continue; // Already available.
+        if (isValueTransitivelyAvailable(Pred, FullyAvailableBlocks))
+          ++Resolved;
+      }
+
+      LLVM_DEBUG(dbgs() << "  Transitive availability: " << Resolved
+                        << " of " << NumUnavail << " resolved ("
+                        << TransitiveValues.size() << " seeds)\n");
+      if (Resolved == 0 || (NumUnavail - Resolved) > 1)
+        goto try_loop_pre;
+
+      // Transitive availability resolved enough predecessors.
+      // Use SSAUpdater to construct values for the resolved predecessors.
+      SSAUpdater SSAUpdate;
+      SSAUpdate.Initialize(Load->getType(), Load->getName());
+
+      for (auto &[BB, Val] : TransitiveValues) {
+        if (auto *Inst = dyn_cast<Instruction>(Val)) {
+          if (InstructionsToErase.count(Inst))
+            continue;
+        }
+        SSAUpdate.AddAvailableValue(BB, Val);
+      }
+
+      // Now resolve each unavailable predecessor using SSAUpdater.
+      NumUnavail = 0;
+      UnavailPred = nullptr;
+      for (auto &[Pred, Val] : AvailableValues) {
+        if (Val)
+          continue;
+        // Check if this pred was resolved by transitive availability.
+        auto It = FullyAvailableBlocks.find(Pred);
+        if (It != FullyAvailableBlocks.end() &&
+            It->second == AvailabilityState::Available) {
+          // SSAUpdater constructs the right value (possibly inserting PHIs).
+          Val = SSAUpdate.GetValueAtEndOfBlock(Pred);
+          ++NumGVNPRETransitiveAvail;
+          LLVM_DEBUG(dbgs() << "  Load PRE: transitive avail in "
+                            << Pred->getName() << " = " << *Val << "\n");
+        } else {
+          ++NumUnavail;
+          UnavailPred = Pred;
+        }
+      }
+
       if (NumUnavail > 1)
         goto try_loop_pre;
     }
@@ -4630,7 +4977,7 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
       // availability that the main value numbering couldn't find.
       PHINode *PHI = PHINode::Create(Load->getType(), AvailableValues.size(),
                                      Load->getName() + ".pre.phi");
-      PHI->insertBefore(LoadBB->begin());
+      PHI->insertBefore(PhiBB->begin());
       for (auto &[Pred, Val] : AvailableValues)
         PHI->addIncoming(Val, Pred);
       Load->replaceAllUsesWith(PHI);
@@ -4652,16 +4999,16 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
     Value *PredPtr = LoadPtr;
     bool NeedGEPClone = false;
     if (auto *PtrPHI = dyn_cast<PHINode>(LoadPtr)) {
-      if (PtrPHI->getParent() == LoadBB)
+      if (PtrPHI->getParent() == PhiBB)
         PredPtr = PtrPHI->getIncomingValueForBlock(UnavailPred);
     } else if (auto *GEP = dyn_cast<GetElementPtrInst>(LoadPtr)) {
       // Rematerialize the GEP in the unavailable predecessor if all its
       // operands (after PHI translation) dominate UnavailPred.
-      if (GEP->getParent() == LoadBB) {
+      if (GEP->getParent() == PhiBB) {
         for (Value *Op : GEP->operands()) {
-          // Translate PHI operands defined in LoadBB.
+          // Translate PHI operands defined in PhiBB.
           if (auto *PHI = dyn_cast<PHINode>(Op))
-            if (PHI->getParent() == LoadBB)
+            if (PHI->getParent() == PhiBB)
               Op = PHI->getIncomingValueForBlock(UnavailPred);
           if (auto *OpI = dyn_cast<Instruction>(Op)) {
             if (!DT->dominates(OpI, UnavailPred->getTerminator())) {
@@ -4677,9 +5024,9 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
                           << " in " << UnavailPred->getName() << "\n");
       }
     } else if (auto *PtrInst = dyn_cast<Instruction>(LoadPtr)) {
-      if (PtrInst->getParent() == LoadBB) {
-        LLVM_DEBUG(dbgs() << "  Load PRE: non-GEP ptr in LoadBB, rejected\n");
-        return false; // Non-PHI, non-GEP pointer defined in LoadBB.
+      if (PtrInst->getParent() == PhiBB) {
+        LLVM_DEBUG(dbgs() << "  Load PRE: non-GEP ptr in PhiBB, rejected\n");
+        return false; // Non-PHI, non-GEP pointer defined in PhiBB.
       }
     }
     if (!NeedGEPClone) {
@@ -4692,20 +5039,20 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
     // them would break canonical loop form.
     BasicBlock *InsertBB = UnavailPred;
     if (UnavailPred->getTerminator()->getNumSuccessors() > 1) {
-      // A natural loop backedge has the header (LoadBB) dominating the
+      // A natural loop backedge has the header (PhiBB) dominating the
       // latch (UnavailPred).  Only reject those — splitting them would
       // break canonical loop form.  The RPO-based isBackedge() gives
       // false positives for forward edges inside loop bodies.
-      if (DT->dominates(LoadBB, UnavailPred)) {
+      if (DT->dominates(PhiBB, UnavailPred)) {
         LLVM_DEBUG(dbgs() << "  Load PRE: critical backedge "
                           << UnavailPred->getName() << " -> "
-                          << LoadBB->getName() << ", falling through\n");
+                          << PhiBB->getName() << ", falling through\n");
         goto try_loop_pre;
       }
       MemorySSAUpdater MSSAU(MSSA);
       CriticalEdgeSplittingOptions Options(DT, /*LI=*/nullptr, &MSSAU);
       Options.unsetPreserveLoopSimplify();
-      InsertBB = SplitCriticalEdge(UnavailPred, LoadBB, Options);
+      InsertBB = SplitCriticalEdge(UnavailPred, PhiBB, Options);
       if (!InsertBB)
         return false;
       ++NumGVNPREEdgesSplit;
@@ -4723,9 +5070,9 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
       // Translate PHI operands for the insertion predecessor.
       for (unsigned i = 0; i < ClonedGEP->getNumOperands(); i++) {
         if (auto *PHI = dyn_cast<PHINode>(OrigGEP->getOperand(i)))
-          if (PHI->getParent() == LoadBB)
+          if (PHI->getParent() == PhiBB)
             ClonedGEP->setOperand(
-                i, PHI->getIncomingValueForBlock(UnavailPred));
+                i, PHI->getIncomingValueForBlock(InsertBB));
       }
       ClonedGEP->setName(LoadPtr->getName() + ".phi.trans.insert");
       ClonedGEP->insertBefore(InsertBB->getTerminator()->getIterator());
@@ -4753,14 +5100,23 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
       MSSAU.insertUse(cast<MemoryUse>(NewMA));
     }
 
+    // Value-number the inserted load into the original load's congruence
+    // class so that subsequent PRE candidates (processed later in the DFS
+    // walk or in the next iteration) discover it via class member lookup.
+    if (CongruenceClass *CC = ValueToClass.lookup(Load)) {
+      CC->insert(NewLoad);
+      ValueToClass[NewLoad] = CC;
+    }
+
     for (auto &AV : AvailableValues)
       if (!AV.second)
         AV.second = NewLoad;
 
-    // Build the PHI.
+    // Build the PHI at the phi block (which may differ from the load's block
+    // when the load is in a single-predecessor chain below the merge point).
     PHINode *PHI = PHINode::Create(Load->getType(), AvailableValues.size(),
                                    Load->getName() + ".pre.phi");
-    PHI->insertBefore(LoadBB->begin());
+    PHI->insertBefore(PhiBB->begin());
     for (auto &[Pred, Val] : AvailableValues)
       PHI->addIncoming(Val, Pred);
 
@@ -4779,7 +5135,7 @@ try_loop_pre:
   //         is outside the loop → hoist to preheader.
   //===--------------------------------------------------------------------===//
   {
-    MemoryAccess *Clobber = MSSAWalker->getClobberingMemoryAccess(MA);
+    MemoryAccess *Clobber = MSSAWalker->getClobberingMemoryAccess(MA, *BAA);
     BasicBlock *Preheader = nullptr;
     bool HasBackedge = false;
 

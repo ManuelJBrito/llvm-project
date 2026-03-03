@@ -1705,14 +1705,16 @@ define i8 @phi_trans5(ptr %p) {
 ; CHECK-NEXT:    [[Y:%.*]] = load i8, ptr [[X]], align 1
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[I:%.*]] = phi i32 [ 4, %[[ENTRY]] ], [ 3, %[[CONT:.*]] ]
+; CHECK-NEXT:    [[Y2:%.*]] = phi i8 [ [[Y2_PRE:%.*]], %[[CONT:.*]] ], [ [[Y]], %[[ENTRY]] ]
+; CHECK-NEXT:    [[I:%.*]] = phi i32 [ 4, %[[ENTRY]] ], [ 3, %[[CONT]] ]
 ; CHECK-NEXT:    [[X2:%.*]] = getelementptr i8, ptr [[P]], i32 [[I]]
-; CHECK-NEXT:    [[Y2:%.*]] = load i8, ptr [[X2]], align 1
 ; CHECK-NEXT:    [[COND:%.*]] = call i1 @cond2()
 ; CHECK-NEXT:    br i1 [[COND]], label %[[CONT]], label %[[OUT:.*]]
 ; CHECK:       [[CONT]]:
 ; CHECK-NEXT:    [[Z:%.*]] = getelementptr i8, ptr [[X2]], i32 -1
 ; CHECK-NEXT:    store i32 50462976, ptr [[Z]], align 4
+; CHECK-NEXT:    [[X2_PHI_TRANS_INSERT:%.*]] = getelementptr i8, ptr [[P]], i32 3
+; CHECK-NEXT:    [[Y2_PRE]] = load i8, ptr [[X2_PHI_TRANS_INSERT]], align 1
 ; CHECK-NEXT:    br label %[[LOOP]]
 ; CHECK:       [[OUT]]:
 ; CHECK-NEXT:    [[R:%.*]] = add i8 [[Y]], [[Y2]]
@@ -2788,8 +2790,7 @@ define void @test_escape1() nounwind {
 ; CHECK-NEXT:    [[X:%.*]] = alloca ptr, align 8
 ; CHECK-NEXT:    store ptr getelementptr inbounds ([5 x ptr], ptr @_ZTV1X, i64 0, i64 2), ptr [[X]], align 8
 ; CHECK-NEXT:    call void @use() #[[ATTR3]]
-; CHECK-NEXT:    [[DEAD:%.*]] = load ptr, ptr [[X]], align 8
-; CHECK-NEXT:    call void @use3(ptr [[X]], ptr [[DEAD]]) #[[ATTR3]]
+; CHECK-NEXT:    call void @use3(ptr [[X]], ptr getelementptr inbounds ([5 x ptr], ptr @_ZTV1X, i64 0, i64 2)) #[[ATTR3]]
 ; CHECK-NEXT:    ret void
 ;
   %x = alloca ptr, align 8

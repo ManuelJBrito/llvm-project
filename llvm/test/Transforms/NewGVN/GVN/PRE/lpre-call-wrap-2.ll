@@ -16,7 +16,7 @@ target datalayout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f3
 define void @bi_windup(ptr %outbuf, i8 zeroext %bi_buf) nounwind {
 ; CHECK-LABEL: define void @bi_windup(
 ; CHECK-SAME: ptr [[OUTBUF:%.*]], i8 zeroext [[BI_BUF:%.*]]) #[[ATTR0:[0-9]+]] {
-; CHECK-NEXT:  [[ENTRY:.*:]]
+; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr @outcnt, align 4
 ; CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr [[OUTBUF]], i32 [[TMP0]]
 ; CHECK-NEXT:    store i8 [[BI_BUF]], ptr [[TMP1]], align 1
@@ -25,10 +25,11 @@ define void @bi_windup(ptr %outbuf, i8 zeroext %bi_buf) nounwind {
 ; CHECK-NEXT:    br i1 [[TMP3]], label %[[BB:.*]], label %[[BB1:.*]]
 ; CHECK:       [[BB]]:
 ; CHECK-NEXT:    call void @flush_outbuf() #[[ATTR0]]
+; CHECK-NEXT:    [[TMP4:%.*]] = load i32, ptr @outcnt, align 4
 ; CHECK-NEXT:    br label %[[BB1]]
 ; CHECK:       [[BB1]]:
-; CHECK-NEXT:    [[TMP4:%.*]] = load i32, ptr @outcnt, align 4
-; CHECK-NEXT:    [[TMP5:%.*]] = getelementptr i8, ptr [[OUTBUF]], i32 [[TMP4]]
+; CHECK-NEXT:    [[DOTPRE_PHI:%.*]] = phi i32 [ [[TMP4]], %[[BB]] ], [ [[TMP2]], %[[ENTRY]] ]
+; CHECK-NEXT:    [[TMP5:%.*]] = getelementptr i8, ptr [[OUTBUF]], i32 [[DOTPRE_PHI]]
 ; CHECK-NEXT:    store i8 [[BI_BUF]], ptr [[TMP5]], align 1
 ; CHECK-NEXT:    ret void
 ;

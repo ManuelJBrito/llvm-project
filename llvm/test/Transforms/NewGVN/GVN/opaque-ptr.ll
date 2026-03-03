@@ -133,9 +133,9 @@ define i32 @phi_trans(i1 %c, ptr %p1, ptr %p2) {
 ; CHECK-NEXT:    call void @use(i32 [[V2]]) #[[ATTR0]]
 ; CHECK-NEXT:    br label [[JOIN]]
 ; CHECK:       join:
+; CHECK-NEXT:    [[V:%.*]] = phi i32 [ [[V2]], [[ELSE]] ], [ [[V1]], [[IF]] ]
 ; CHECK-NEXT:    [[PHI:%.*]] = phi ptr [ [[P1]], [[IF]] ], [ [[P2]], [[ELSE]] ]
 ; CHECK-NEXT:    [[GEP:%.*]] = getelementptr i32, ptr [[PHI]], i64 1
-; CHECK-NEXT:    [[V:%.*]] = load i32, ptr [[GEP]], align 4
 ; CHECK-NEXT:    ret i32 [[V]]
 ;
   br i1 %c, label %if, label %else
@@ -171,11 +171,13 @@ define i32 @phi_trans_different_types(i1 %c, ptr %p1, ptr %p2) {
 ; CHECK-NEXT:    [[GEP2:%.*]] = getelementptr i64, ptr [[P2:%.*]], i64 1
 ; CHECK-NEXT:    [[V2:%.*]] = load i32, ptr [[GEP2]], align 4
 ; CHECK-NEXT:    call void @use.i32(i32 [[V2]]) #[[ATTR0]]
+; CHECK-NEXT:    [[GEP_PHI_TRANS_INSERT:%.*]] = getelementptr i32, ptr [[P2]], i64 1
+; CHECK-NEXT:    [[V_PRE:%.*]] = load i32, ptr [[GEP_PHI_TRANS_INSERT]], align 4
 ; CHECK-NEXT:    br label [[JOIN]]
 ; CHECK:       join:
+; CHECK-NEXT:    [[V:%.*]] = phi i32 [ [[V_PRE]], [[ELSE]] ], [ [[V1]], [[IF]] ]
 ; CHECK-NEXT:    [[PHI:%.*]] = phi ptr [ [[P1]], [[IF]] ], [ [[P2]], [[ELSE]] ]
 ; CHECK-NEXT:    [[GEP:%.*]] = getelementptr i32, ptr [[PHI]], i64 1
-; CHECK-NEXT:    [[V:%.*]] = load i32, ptr [[GEP]], align 4
 ; CHECK-NEXT:    ret i32 [[V]]
 ;
   br i1 %c, label %if, label %else

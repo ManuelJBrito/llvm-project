@@ -205,14 +205,16 @@ define void @test5(i32 %N, ptr nocapture %G) nounwind ssp {
 ; CHECK-NEXT:    br i1 [[TMP1]], label [[BB_NPH:%.*]], label [[RETURN:%.*]]
 ; CHECK:       bb.nph:
 ; CHECK-NEXT:    [[TMP:%.*]] = zext i32 [[TMP0]] to i64
+; CHECK-NEXT:    [[SCEVGEP7_PHI_TRANS_INSERT:%.*]] = getelementptr double, ptr [[G:%.*]], i64 0
+; CHECK-NEXT:    [[DOTPRE:%.*]] = load double, ptr [[SCEVGEP7_PHI_TRANS_INSERT]], align 8
 ; CHECK-NEXT:    br label [[BB:%.*]]
 ; CHECK:       bb:
+; CHECK-NEXT:    [[TMP2:%.*]] = phi double [ [[TMP3:%.*]], [[BB]] ], [ [[DOTPRE]], [[BB_NPH]] ]
 ; CHECK-NEXT:    [[INDVAR:%.*]] = phi i64 [ 0, [[BB_NPH]] ], [ [[TMP6:%.*]], [[BB]] ]
 ; CHECK-NEXT:    [[TMP6]] = add i64 [[INDVAR]], 1
-; CHECK-NEXT:    [[SCEVGEP:%.*]] = getelementptr double, ptr [[G:%.*]], i64 [[TMP6]]
+; CHECK-NEXT:    [[SCEVGEP:%.*]] = getelementptr double, ptr [[G]], i64 [[TMP6]]
 ; CHECK-NEXT:    [[SCEVGEP7:%.*]] = getelementptr double, ptr [[G]], i64 [[INDVAR]]
-; CHECK-NEXT:    [[TMP2:%.*]] = load double, ptr [[SCEVGEP7]], align 8
-; CHECK-NEXT:    [[TMP3:%.*]] = load double, ptr [[SCEVGEP]], align 8
+; CHECK-NEXT:    [[TMP3]] = load double, ptr [[SCEVGEP]], align 8
 ; CHECK-NEXT:    [[TMP4:%.*]] = fadd double [[TMP2]], [[TMP3]]
 ; CHECK-NEXT:    store double [[TMP4]], ptr [[SCEVGEP7]], align 8
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp eq i64 [[TMP6]], [[TMP]]
@@ -689,14 +691,17 @@ define i32 @test14(ptr noalias nocapture readonly %x, ptr noalias nocapture %r, 
 ; CHECK-LABEL: @test14(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i32 [[A:%.*]], 0
-; CHECK-NEXT:    br i1 [[TOBOOL]], label [[IF_END:%.*]], label [[IF_THEN:%.*]]
+; CHECK-NEXT:    br i1 [[TOBOOL]], label [[ENTRY_CRIT:%.*]], label [[IF_THEN:%.*]]
+; CHECK:       entry.if.end_crit_edge:
+; CHECK-NEXT:    [[VV_PRE:%.*]] = load i32, ptr [[X:%.*]], align 4
+; CHECK-NEXT:    br label [[IF_END:%.*]]
 ; CHECK:       if.then:
-; CHECK-NEXT:    [[UU:%.*]] = load i32, ptr [[X:%.*]], align 4
+; CHECK-NEXT:    [[UU:%.*]] = load i32, ptr [[X]], align 4
 ; CHECK-NEXT:    store i32 [[UU]], ptr [[R:%.*]], align 4
 ; CHECK-NEXT:    br label [[IF_END]]
 ; CHECK:       if.end:
+; CHECK-NEXT:    [[VV:%.*]] = phi i32 [ [[UU]], [[IF_THEN]] ], [ [[VV_PRE]], [[ENTRY_CRIT]] ]
 ; CHECK-NEXT:    call void @f()
-; CHECK-NEXT:    [[VV:%.*]] = load i32, ptr [[X]], align 4
 ; CHECK-NEXT:    ret i32 [[VV]]
 ;
 
@@ -772,14 +777,17 @@ define i32 @test16(ptr noalias nocapture readonly dereferenceable(8) align 4 %x,
 ; CHECK-LABEL: @test16(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i32 [[A:%.*]], 0
-; CHECK-NEXT:    br i1 [[TOBOOL]], label [[IF_END:%.*]], label [[IF_THEN:%.*]]
+; CHECK-NEXT:    br i1 [[TOBOOL]], label [[ENTRY_CRIT:%.*]], label [[IF_THEN:%.*]]
+; CHECK:       entry.if.end_crit_edge:
+; CHECK-NEXT:    [[VV_PRE:%.*]] = load i32, ptr [[X:%.*]], align 4
+; CHECK-NEXT:    br label [[IF_END:%.*]]
 ; CHECK:       if.then:
-; CHECK-NEXT:    [[UU:%.*]] = load i32, ptr [[X:%.*]], align 4
+; CHECK-NEXT:    [[UU:%.*]] = load i32, ptr [[X]], align 4
 ; CHECK-NEXT:    store i32 [[UU]], ptr [[R:%.*]], align 4
 ; CHECK-NEXT:    br label [[IF_END]]
 ; CHECK:       if.end:
+; CHECK-NEXT:    [[VV:%.*]] = phi i32 [ [[UU]], [[IF_THEN]] ], [ [[VV_PRE]], [[ENTRY_CRIT]] ]
 ; CHECK-NEXT:    call void @f()
-; CHECK-NEXT:    [[VV:%.*]] = load i32, ptr [[X]], align 4
 ; CHECK-NEXT:    ret i32 [[VV]]
 ;
 
@@ -1164,13 +1172,16 @@ define i32 @test24(ptr noalias %p, ptr noalias %q, i1 %c) {
 ; CHECK-LABEL: @test24(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    br i1 [[C:%.*]], label [[IF_END:%.*]], label [[IF_THEN:%.*]]
+; CHECK:       entry.if.end_crit_edge:
+; CHECK-NEXT:    [[L_PRE:%.*]] = load i32, ptr [[P:%.*]], align 4
+; CHECK-NEXT:    br label [[IF_END1:%.*]]
 ; CHECK:       if.then:
-; CHECK-NEXT:    call void @opaque(ptr [[P:%.*]])
+; CHECK-NEXT:    call void @opaque(ptr [[P]])
 ; CHECK-NEXT:    [[IDENTICAL_L:%.*]] = load i32, ptr [[P]], align 4
 ; CHECK-NEXT:    store i32 [[IDENTICAL_L]], ptr [[Q:%.*]], align 4
-; CHECK-NEXT:    br label [[IF_END]]
+; CHECK-NEXT:    br label [[IF_END1]]
 ; CHECK:       if.end:
-; CHECK-NEXT:    [[L:%.*]] = load i32, ptr [[P]], align 4
+; CHECK-NEXT:    [[L:%.*]] = phi i32 [ [[IDENTICAL_L]], [[IF_THEN]] ], [ [[L_PRE]], [[IF_END]] ]
 ; CHECK-NEXT:    ret i32 [[L]]
 ;
 entry:

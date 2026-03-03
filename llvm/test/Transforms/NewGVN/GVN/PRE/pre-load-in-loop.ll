@@ -17,14 +17,16 @@ define void @test1(i32 %N, ptr nocapture %G) nounwind ssp {
 ; CHECK-NEXT:    br i1 [[TMP1]], label %[[BB_NPH:.*]], label %[[RETURN:.*]]
 ; CHECK:       [[BB_NPH]]:
 ; CHECK-NEXT:    [[TMP:%.*]] = zext i32 [[TMP0]] to i64
+; CHECK-NEXT:    [[SCEVGEP7_PHI_TRANS_INSERT:%.*]] = getelementptr double, ptr [[G]], i64 0
+; CHECK-NEXT:    [[DOTPRE:%.*]] = load double, ptr [[SCEVGEP7_PHI_TRANS_INSERT]], align 8
 ; CHECK-NEXT:    br label %[[BB:.*]]
 ; CHECK:       [[BB]]:
+; CHECK-NEXT:    [[TMP2:%.*]] = phi double [ [[TMP3:%.*]], %[[BB]] ], [ [[DOTPRE]], %[[BB_NPH]] ]
 ; CHECK-NEXT:    [[INDVAR:%.*]] = phi i64 [ 0, %[[BB_NPH]] ], [ [[TMP6:%.*]], %[[BB]] ]
 ; CHECK-NEXT:    [[TMP6]] = add i64 [[INDVAR]], 1
 ; CHECK-NEXT:    [[SCEVGEP:%.*]] = getelementptr double, ptr [[G]], i64 [[TMP6]]
 ; CHECK-NEXT:    [[SCEVGEP7:%.*]] = getelementptr double, ptr [[G]], i64 [[INDVAR]]
-; CHECK-NEXT:    [[TMP2:%.*]] = load double, ptr [[SCEVGEP7]], align 8
-; CHECK-NEXT:    [[TMP3:%.*]] = load double, ptr [[SCEVGEP]], align 8
+; CHECK-NEXT:    [[TMP3]] = load double, ptr [[SCEVGEP]], align 8
 ; CHECK-NEXT:    [[TMP4:%.*]] = fadd double [[TMP2]], [[TMP3]]
 ; CHECK-NEXT:    store double [[TMP4]], ptr [[SCEVGEP7]], align 8
 ; CHECK-NEXT:    [[EXITCOND:%.*]] = icmp eq i64 [[TMP6]], [[TMP]]

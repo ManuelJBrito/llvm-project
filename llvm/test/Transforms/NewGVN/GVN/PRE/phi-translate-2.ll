@@ -64,13 +64,17 @@ define void @test2(i64 %i) {
 ; CHECK:       if.then:
 ; CHECK-NEXT:    [[CALL:%.*]] = tail call i64 (...) @goo()
 ; CHECK-NEXT:    store i64 [[CALL]], ptr @g2, align 8
+; CHECK-NEXT:    [[ARRAYIDX3_PHI_TRANS_INSERT:%.*]] = getelementptr inbounds [100 x i64], ptr @a, i64 0, i64 3
+; CHECK-NEXT:    [[T2_PRE:%.*]] = load i64, ptr [[ARRAYIDX3_PHI_TRANS_INSERT]], align 8
+; CHECK-NEXT:    [[ARRAYIDX4_PHI_TRANS_INSERT:%.*]] = getelementptr inbounds [100 x i64], ptr @b, i64 0, i64 3
+; CHECK-NEXT:    [[T3_PRE:%.*]] = load i64, ptr [[ARRAYIDX4_PHI_TRANS_INSERT]], align 8
 ; CHECK-NEXT:    br label [[IF_END]]
 ; CHECK:       if.end:
-; CHECK-NEXT:    [[I_ADDR_0:%.*]] = phi i64 [ 3, [[IF_THEN]] ], [ [[I]], [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[T3:%.*]] = phi i64 [ [[T3_PRE]], [[IF_THEN]] ], [ [[T1]], [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[T2:%.*]] = phi i64 [ [[T2_PRE]], [[IF_THEN]] ], [ [[T0]], [[ENTRY]] ]
+; CHECK-NEXT:    [[I_ADDR_0:%.*]] = phi i64 [ 3, [[IF_THEN]] ], [ [[I]], [[ENTRY]] ]
 ; CHECK-NEXT:    [[ARRAYIDX3:%.*]] = getelementptr inbounds [100 x i64], ptr @a, i64 0, i64 [[I_ADDR_0]]
-; CHECK-NEXT:    [[T2:%.*]] = load i64, ptr [[ARRAYIDX3]], align 8
 ; CHECK-NEXT:    [[ARRAYIDX4:%.*]] = getelementptr inbounds [100 x i64], ptr @b, i64 0, i64 [[I_ADDR_0]]
-; CHECK-NEXT:    [[T3:%.*]] = load i64, ptr [[ARRAYIDX4]], align 8
 ; CHECK-NEXT:    [[MUL5:%.*]] = mul nsw i64 [[T3]], [[T2]]
 ; CHECK-NEXT:    store i64 [[MUL5]], ptr @g3, align 8
 ; CHECK-NEXT:    ret void

@@ -162,13 +162,14 @@ define i32 @test4(i1 %cnd, ptr %p) {
 ; CHECK-NEXT:    call void @hold(i32 [[V1]])
 ; CHECK-NEXT:    br label [[HEADER:%.*]]
 ; CHECK:       header:
-; CHECK-NEXT:    [[V2:%.*]] = load i32, ptr [[P]], align 4
+; CHECK-NEXT:    [[V2:%.*]] = phi i32 [ [[V2_PRE:%.*]], [[BB2:%.*]] ], [ [[V1]], [[BB1:%.*]] ], [ [[V1]], [[ENTRY:%.*]] ]
 ; CHECK-NEXT:    call void @hold(i32 [[V2]])
-; CHECK-NEXT:    br i1 [[CND:%.*]], label [[BB1:%.*]], label [[BB2:%.*]]
+; CHECK-NEXT:    br i1 [[CND:%.*]], label [[BB1]], label [[BB2]]
 ; CHECK:       bb1:
 ; CHECK-NEXT:    br label [[HEADER]]
 ; CHECK:       bb2:
 ; CHECK-NEXT:    call void @clobber()
+; CHECK-NEXT:    [[V2_PRE]] = load i32, ptr [[P]], align 4
 ; CHECK-NEXT:    br label [[HEADER]]
 ;
 entry:
@@ -198,10 +199,9 @@ define i32 @test5(i1 %cnd, ptr %p) {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[V1:%.*]] = load i32, ptr [[P:%.*]], align 4
 ; CHECK-NEXT:    call void @hold(i32 [[V1]])
-; CHECK-NEXT:    [[V2_PRE:%.*]] = load i32, ptr [[P]], align 4
 ; CHECK-NEXT:    br label [[HEADER:%.*]]
 ; CHECK:       header:
-; CHECK-NEXT:    [[V2_PRE2:%.*]] = phi i32 [ [[V1]], [[MERGE:%.*]] ], [ [[V2_PRE]], [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[V2_PRE2:%.*]] = phi i32 [ [[V1]], [[MERGE:%.*]] ], [ [[V1]], [[ENTRY:%.*]] ]
 ; CHECK-NEXT:    call void @hold(i32 [[V2_PRE2]])
 ; CHECK-NEXT:    br i1 [[CND:%.*]], label [[BB1:%.*]], label [[BB2:%.*]]
 ; CHECK:       bb1:

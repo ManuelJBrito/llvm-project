@@ -452,11 +452,12 @@ define i32 @test_pointer_phi_select_simp_store_clobber_6(ptr %a, ptr %b, ptr %c,
 ; CHECK-NEXT:    [[RES_0:%.*]] = load i32, ptr [[MIN_SELECT]], align 4
 ; CHECK-NEXT:    br label %[[EXIT:.*]]
 ; CHECK:       [[ELSE]]:
+; CHECK-NEXT:    [[RES_2_PRE:%.*]] = load i32, ptr [[A]], align 4
 ; CHECK-NEXT:    br label %[[EXIT]]
 ; CHECK:       [[EXIT]]:
+; CHECK-NEXT:    [[RES_2:%.*]] = phi i32 [ [[RES_2_PRE]], %[[ELSE]] ], [ [[RES_0]], %[[THEN]] ]
 ; CHECK-NEXT:    [[P:%.*]] = phi ptr [ [[MIN_SELECT]], %[[THEN]] ], [ [[A]], %[[ELSE]] ]
 ; CHECK-NEXT:    [[V:%.*]] = phi i32 [ [[RES_0]], %[[THEN]] ], [ 10, %[[ELSE]] ]
-; CHECK-NEXT:    [[RES_2:%.*]] = load i32, ptr [[P]], align 4
 ; CHECK-NEXT:    ret i32 [[RES_2]]
 ;
 entry:

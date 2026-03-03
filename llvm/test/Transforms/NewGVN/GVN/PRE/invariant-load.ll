@@ -77,10 +77,11 @@ define i32 @test4(i1 %cnd, ptr %p, ptr %q) {
 ; CHECK-NEXT:    br i1 [[CND]], label [[BB1:%.*]], label [[BB2:%.*]]
 ; CHECK:       bb1:
 ; CHECK-NEXT:    store i32 5, ptr [[Q]], align 4
+; CHECK-NEXT:    [[V2_PRE:%.*]] = load i32, ptr [[P]], align 4
 ; CHECK-NEXT:    br label [[BB2]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    [[V2:%.*]] = load i32, ptr [[P]], align 4
-; CHECK-NEXT:    [[RES:%.*]] = sub i32 [[V1]], [[V2]]
+; CHECK-NEXT:    [[V2_PRE_PHI:%.*]] = phi i32 [ [[V2_PRE]], [[BB1]] ], [ [[V1]], [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[RES:%.*]] = sub i32 [[V1]], [[V2_PRE_PHI]]
 ; CHECK-NEXT:    ret i32 [[RES]]
 ;
 ; %v2 is redundant, but GVN currently doesn't catch that
@@ -162,11 +163,12 @@ define i32 @test8(i1 %cnd, ptr %p) {
 ; CHECK-NEXT:    br i1 [[CND]], label [[TAKEN:%.*]], label [[MERGE:%.*]]
 ; CHECK:       taken:
 ; CHECK-NEXT:    [[P2:%.*]] = call ptr (...) @bar(ptr [[P]])
+; CHECK-NEXT:    [[V2_PRE:%.*]] = load i32, ptr [[P2]], align 4
 ; CHECK-NEXT:    br label [[MERGE]]
 ; CHECK:       merge:
-; CHECK-NEXT:    [[P3:%.*]] = phi ptr [ [[P]], [[ENTRY:%.*]] ], [ [[P2]], [[TAKEN]] ]
-; CHECK-NEXT:    [[V2:%.*]] = load i32, ptr [[P3]], align 4, !invariant.load [[META0]]
-; CHECK-NEXT:    [[RES:%.*]] = sub i32 [[V1]], [[V2]]
+; CHECK-NEXT:    [[V2_PRE_PHI:%.*]] = phi i32 [ [[V2_PRE]], [[TAKEN]] ], [ [[V1]], [[ENTRY:%.*]] ]
+; CHECK-NEXT:    [[P3:%.*]] = phi ptr [ [[P]], [[ENTRY]] ], [ [[P2]], [[TAKEN]] ]
+; CHECK-NEXT:    [[RES:%.*]] = sub i32 [[V1]], [[V2_PRE_PHI]]
 ; CHECK-NEXT:    ret i32 [[RES]]
 ;
 entry:

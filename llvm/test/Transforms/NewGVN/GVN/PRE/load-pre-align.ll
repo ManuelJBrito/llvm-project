@@ -9,17 +9,17 @@ define i32 @test(i32 %n) nounwind {
 ; CHECK-LABEL: define i32 @test(
 ; CHECK-SAME: i32 [[N:%.*]]) #[[ATTR0:[0-9]+]] {
 ; CHECK-NEXT:  [[ENTRY:.*]]:
+; CHECK-NEXT:    [[TMP3:%.*]] = load i32, ptr @p, align 8
 ; CHECK-NEXT:    br label %[[FOR_COND:.*]]
 ; CHECK:       [[FOR_COND]]:
-; CHECK-NEXT:    [[I_0:%.*]] = phi i32 [ 0, %[[ENTRY]] ], [ [[INDVAR_NEXT:%.*]], %[[FOR_INC:.*]] ]
+; CHECK-NEXT:    [[TMP3_PRE_PHI:%.*]] = phi i32 [ [[DEC:%.*]], %[[FOR_INC:.*]] ], [ [[TMP3]], %[[ENTRY]] ]
+; CHECK-NEXT:    [[I_0:%.*]] = phi i32 [ 0, %[[ENTRY]] ], [ [[INDVAR_NEXT:%.*]], %[[FOR_INC]] ]
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp slt i32 [[I_0]], [[N]]
 ; CHECK-NEXT:    br i1 [[CMP]], label %[[FOR_BODY:.*]], label %[[FOR_COND_FOR_END_CRIT_EDGE:.*]]
 ; CHECK:       [[FOR_COND_FOR_END_CRIT_EDGE]]:
-; CHECK-NEXT:    [[TMP9_PRE:%.*]] = load i32, ptr @p, align 8
 ; CHECK-NEXT:    br label %[[FOR_END:.*]]
 ; CHECK:       [[FOR_BODY]]:
-; CHECK-NEXT:    [[TMP3:%.*]] = load i32, ptr @p, align 8
-; CHECK-NEXT:    [[DEC:%.*]] = add i32 [[TMP3]], -1
+; CHECK-NEXT:    [[DEC]] = add i32 [[TMP3_PRE_PHI]], -1
 ; CHECK-NEXT:    store i32 [[DEC]], ptr @p, align 4
 ; CHECK-NEXT:    [[CMP6:%.*]] = icmp slt i32 [[DEC]], 0
 ; CHECK-NEXT:    br i1 [[CMP6]], label %[[FOR_BODY_FOR_END_CRIT_EDGE:.*]], label %[[FOR_INC]]
@@ -29,7 +29,7 @@ define i32 @test(i32 %n) nounwind {
 ; CHECK-NEXT:    [[INDVAR_NEXT]] = add i32 [[I_0]], 1
 ; CHECK-NEXT:    br label %[[FOR_COND]]
 ; CHECK:       [[FOR_END]]:
-; CHECK-NEXT:    [[TMP9_PRE_PHI:%.*]] = phi i32 [ [[DEC]], %[[FOR_BODY_FOR_END_CRIT_EDGE]] ], [ [[TMP9_PRE]], %[[FOR_COND_FOR_END_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[TMP9_PRE_PHI:%.*]] = phi i32 [ [[DEC]], %[[FOR_BODY_FOR_END_CRIT_EDGE]] ], [ [[TMP3]], %[[FOR_COND_FOR_END_CRIT_EDGE]] ]
 ; CHECK-NEXT:    ret i32 [[TMP9_PRE_PHI]]
 ;
 entry:

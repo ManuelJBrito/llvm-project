@@ -20,13 +20,14 @@ define void @tinkywinky(i1 %arg) {
 ; CHECK-NEXT:    store i32 [[TMP1]], ptr [[D]], align 4
 ; CHECK-NEXT:    br label [[L:%.*]]
 ; CHECK:       L:
+; CHECK-NEXT:    [[DOTPRE]] = phi i32 [ [[DOTPRE_PRE:%.*]], [[IF_THEN:%.*]] ], [ [[TMP0]], [[FOR_BODY]] ]
 ; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp ne i32 [[TMP1]], 0
-; CHECK-NEXT:    br i1 [[TOBOOL]], label [[IF_THEN:%.*]], label [[IF_END]]
+; CHECK-NEXT:    br i1 [[TOBOOL]], label [[IF_THEN]], label [[IF_END]]
 ; CHECK:       if.then:
 ; CHECK-NEXT:    call void (ptr, ...) @printf(ptr @patatino)
+; CHECK-NEXT:    [[DOTPRE_PRE]] = load i32, ptr null, align 4
 ; CHECK-NEXT:    br label [[L]]
 ; CHECK:       if.end:
-; CHECK-NEXT:    [[DOTPRE]] = load i32, ptr null, align 4
 ; CHECK-NEXT:    br label [[FOR_COND]]
 ; CHECK:       while.cond:
 ; CHECK-NEXT:    br i1 [[ARG]], label [[WHILE_BODY:%.*]], label [[WHILE_END:%.*]]

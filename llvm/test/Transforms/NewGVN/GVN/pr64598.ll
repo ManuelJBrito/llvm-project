@@ -6,25 +6,29 @@ define i32 @main(i64 %x, ptr %d, ptr noalias %p) {
 ; CHECK-SAME: i64 [[X:%.*]], ptr [[D:%.*]], ptr noalias [[P:%.*]]) {
 ; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    [[T1_PRE_PRE_PRE:%.*]] = load ptr, ptr [[P]], align 8
+; CHECK-NEXT:    [[T2_PRE_PRE_PRE1:%.*]] = load ptr, ptr [[T1_PRE_PRE_PRE]], align 8, !tbaa [[ANYPTR_TBAA0:![0-9]+]]
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[T1_PRE_PRE_PRE_PHI:%.*]] = phi ptr [ [[T1_PRE_PRE_PHI:%.*]], %[[LOOP_LATCH:.*]] ], [ [[T1_PRE_PRE_PRE]], %[[ENTRY]] ]
+; CHECK-NEXT:    [[T2_PRE_PRE_PRE_PHI:%.*]] = phi ptr [ [[T2_PRE_PRE_PHI:%.*]], %[[LOOP_LATCH:.*]] ], [ [[T2_PRE_PRE_PRE1]], %[[ENTRY]] ]
+; CHECK-NEXT:    [[T1_PRE_PRE_PRE_PHI:%.*]] = phi ptr [ [[T1_PRE_PRE_PHI:%.*]], %[[LOOP_LATCH]] ], [ [[T1_PRE_PRE_PRE]], %[[ENTRY]] ]
 ; CHECK-NEXT:    br label %[[LOOP2:.*]]
 ; CHECK:       [[LOOP2]]:
-; CHECK-NEXT:    [[T1_PRE_PRE_PHI]] = phi ptr [ [[T1_PRE_PHI:%.*]], %[[LOOP2_LATCH:.*]] ], [ [[T1_PRE_PRE_PRE_PHI]], %[[LOOP]] ]
+; CHECK-NEXT:    [[T2_PRE_PRE_PHI]] = phi ptr [ [[T2_PRE_PRE_PRE:%.*]], %[[LOOP2_LATCH:.*]] ], [ [[T2_PRE_PRE_PRE_PHI]], %[[LOOP]] ]
+; CHECK-NEXT:    [[T1_PRE_PRE_PHI]] = phi ptr [ [[T5_PRE_PHI:%.*]], %[[LOOP2_LATCH]] ], [ [[T1_PRE_PRE_PRE_PHI]], %[[LOOP]] ]
 ; CHECK-NEXT:    br label %[[LOOP3:.*]]
 ; CHECK:       [[LOOP3]]:
-; CHECK-NEXT:    [[T1_PRE_PHI]] = phi ptr [ [[T5_PRE_PHI:%.*]], %[[LOOP3_LATCH:.*]] ], [ [[T1_PRE_PRE_PHI]], %[[LOOP2]] ]
-; CHECK-NEXT:    [[T2_PRE_PRE_PRE:%.*]] = load ptr, ptr [[T1_PRE_PHI]], align 8, !tbaa [[ANYPTR_TBAA0:![0-9]+]]
+; CHECK-NEXT:    [[T2_PRE_PRE_PRE]] = phi ptr [ [[T6_PRE_PHI:%.*]], %[[LOOP3_LATCH:.*]] ], [ [[T2_PRE_PRE_PHI]], %[[LOOP2]] ]
+; CHECK-NEXT:    [[T1_PRE_PHI:%.*]] = phi ptr [ [[T5_PRE_PHI]], %[[LOOP3_LATCH]] ], [ [[T1_PRE_PRE_PHI]], %[[LOOP2]] ]
 ; CHECK-NEXT:    [[T3_PRE_PRE_PRE:%.*]] = load ptr, ptr [[T2_PRE_PRE_PRE]], align 8
 ; CHECK-NEXT:    br i1 false, label %[[LOOP3_LATCH]], label %[[FOR_BODY_LR_PH_I:.*]]
 ; CHECK:       [[FOR_BODY_LR_PH_I]]:
 ; CHECK-NEXT:    store i32 0, ptr [[P]], align 4
 ; CHECK-NEXT:    [[T5_PRE:%.*]] = load ptr, ptr [[P]], align 8
+; CHECK-NEXT:    [[T6_PRE:%.*]] = load ptr, ptr [[T5_PRE]], align 8, !tbaa [[ANYPTR_TBAA0]]
 ; CHECK-NEXT:    br label %[[LOOP3_LATCH]]
 ; CHECK:       [[LOOP3_LATCH]]:
-; CHECK-NEXT:    [[T5_PRE_PHI]] = phi ptr [ [[T5_PRE]], %[[FOR_BODY_LR_PH_I]] ], [ [[T1_PRE_PHI]], %[[LOOP3]] ]
-; CHECK-NEXT:    [[T6:%.*]] = load ptr, ptr [[T5_PRE_PHI]], align 8, !tbaa [[ANYPTR_TBAA0]]
+; CHECK-NEXT:    [[T6_PRE_PHI]] = phi ptr [ [[T6_PRE]], %[[FOR_BODY_LR_PH_I]] ], [ [[T2_PRE_PRE_PRE]], %[[LOOP3]] ]
+; CHECK-NEXT:    [[T5_PRE_PHI]] = phi ptr [ [[T5_PRE]], %[[FOR_BODY_LR_PH_I]] ], [ [[T1_PRE_PRE_PHI]], %[[LOOP3]] ]
 ; CHECK-NEXT:    br i1 false, label %[[LOOP2_LATCH]], label %[[LOOP3]]
 ; CHECK:       [[LOOP2_LATCH]]:
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1

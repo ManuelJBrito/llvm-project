@@ -17,9 +17,7 @@ define i32 @test() nounwind ssp {
 ; CHECK-NEXT:    store i32 0, ptr [[SHOULDEXIT]], align 4
 ; CHECK-NEXT:    store i32 0, ptr [[TASKSIDLE]], align 4
 ; CHECK-NEXT:    call void @CTestInitialize(ptr [[TASKSIDLE]]) #[[ATTR1:[0-9]+]]
-; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr [[SHOULDEXIT]], align 4
-; CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i32 [[TMP0]], 0
-; CHECK-NEXT:    br i1 [[TOBOOL]], label %[[WHILE_BODY_LR_PH:.*]], label %[[WHILE_END:.*]]
+; CHECK-NEXT:    br i1 true, label %[[WHILE_BODY_LR_PH:.*]], label %[[WHILE_END:.*]]
 ; CHECK:       [[WHILE_BODY_LR_PH]]:
 ; CHECK-NEXT:    br label %[[WHILE_BODY:.*]]
 ; CHECK:       [[WHILE_BODY]]:

@@ -17,19 +17,19 @@
 define fastcc i32 @memoryphi_class_change(ptr %call2926, i1 %cmp2999) {
 ; CHECK-LABEL: define fastcc i32 @memoryphi_class_change(
 ; CHECK-SAME: ptr [[CALL2926:%.*]], i1 [[CMP2999:%.*]]) {
-; CHECK-NEXT:  [[ENTRY:.*:]]
+; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    store ptr [[CALL2926]], ptr null, align 8
 ; CHECK-NEXT:    br label %[[FOR_BODY2934:.*]]
 ; CHECK:       [[FOR_BODY2934]]:
+; CHECK-NEXT:    [[DOTPRE_PRE_PHI:%.*]] = phi ptr [ [[DOTPRE_PHI:%.*]], %[[IF_END3011:.*]] ], [ [[CALL2926]], %[[ENTRY]] ]
 ; CHECK-NEXT:    br i1 [[CMP2999]], label %[[IF_THEN3001:.*]], label %[[FOR_BODY2934_IF_END3011_CRIT_EDGE:.*]]
 ; CHECK:       [[FOR_BODY2934_IF_END3011_CRIT_EDGE]]:
-; CHECK-NEXT:    [[TMP0:%.*]] = load ptr, ptr null, align 8
-; CHECK-NEXT:    br label %[[IF_END3011:.*]]
+; CHECK-NEXT:    br label %[[IF_END3011]]
 ; CHECK:       [[IF_THEN3001]]:
 ; CHECK-NEXT:    store ptr null, ptr null, align 8
 ; CHECK-NEXT:    br label %[[IF_END3011]]
 ; CHECK:       [[IF_END3011]]:
-; CHECK-NEXT:    [[DOTPRE_PHI:%.*]] = phi ptr [ null, %[[IF_THEN3001]] ], [ [[TMP0]], %[[FOR_BODY2934_IF_END3011_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[DOTPRE_PHI]] = phi ptr [ null, %[[IF_THEN3001]] ], [ [[DOTPRE_PRE_PHI]], %[[FOR_BODY2934_IF_END3011_CRIT_EDGE]] ]
 ; CHECK-NEXT:    br label %[[FOR_BODY2934]]
 ;
 entry:
@@ -56,16 +56,16 @@ if.end3011:
 define fastcc ptr @phiofops_leader_appears_later(i1 %cond, i1 %cmp882, ptr %0) {
 ; CHECK-LABEL: define fastcc ptr @phiofops_leader_appears_later(
 ; CHECK-SAME: i1 [[COND:%.*]], i1 [[CMP882:%.*]], ptr [[TMP0:%.*]]) {
-; CHECK-NEXT:  [[ENTRY:.*:]]
+; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    [[TYPE:%.*]] = alloca ptr, align 8
 ; CHECK-NEXT:    store ptr null, ptr [[TYPE]], align 8
 ; CHECK-NEXT:    br label %[[WHILE_COND:.*]]
 ; CHECK:       [[WHILE_COND]]:
-; CHECK-NEXT:    br i1 [[COND]], label %[[SW_BB447:.*]], label %[[SW_BB858:.*]]
+; CHECK-NEXT:    [[DOTPRE_PRE_PHI:%.*]] = phi ptr [ null, %[[SW_BB447:.*]] ], [ null, %[[ENTRY]] ]
+; CHECK-NEXT:    br i1 [[COND]], label %[[SW_BB447]], label %[[SW_BB858:.*]]
 ; CHECK:       [[SW_BB858]]:
 ; CHECK-NEXT:    br i1 [[CMP882]], label %[[IF_ELSE887:.*]], label %[[SW_BB858_IF_END889_CRIT_EDGE:.*]]
 ; CHECK:       [[SW_BB858_IF_END889_CRIT_EDGE]]:
-; CHECK-NEXT:    [[DOTPRE:%.*]] = load ptr, ptr [[TYPE]], align 8
 ; CHECK-NEXT:    br label %[[IF_END889:.*]]
 ; CHECK:       [[SW_BB447]]:
 ; CHECK-NEXT:    store i32 0, ptr null, align 4
@@ -75,7 +75,7 @@ define fastcc ptr @phiofops_leader_appears_later(i1 %cond, i1 %cmp882, ptr %0) {
 ; CHECK-NEXT:    store ptr [[TMP0]], ptr [[TYPE]], align 8
 ; CHECK-NEXT:    br label %[[IF_END889]]
 ; CHECK:       [[IF_END889]]:
-; CHECK-NEXT:    [[DOTPRE_PHI:%.*]] = phi ptr [ [[TMP0]], %[[IF_ELSE887]] ], [ [[DOTPRE]], %[[SW_BB858_IF_END889_CRIT_EDGE]] ]
+; CHECK-NEXT:    [[DOTPRE_PHI:%.*]] = phi ptr [ [[TMP0]], %[[IF_ELSE887]] ], [ [[DOTPRE_PRE_PHI]], %[[SW_BB858_IF_END889_CRIT_EDGE]] ]
 ; CHECK-NEXT:    br i1 [[CMP882]], label %[[IF_ELSE898:.*]], label %[[IF_END900:.*]]
 ; CHECK:       [[IF_ELSE898]]:
 ; CHECK-NEXT:    store ptr null, ptr [[TYPE]], align 8
