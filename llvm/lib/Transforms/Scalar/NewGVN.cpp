@@ -148,6 +148,11 @@ STATISTIC(NumGVNSortedLeaderChanges, "Number of sorted leader changes");
 STATISTIC(NumGVNAvoidedSortedLeaderChanges,
           "Number of avoided sorted leader changes");
 STATISTIC(NumGVNDeadStores, "Number of redundant/dead stores eliminated");
+STATISTIC(NumGVNFRELoad, "Number of fully-redundant loads eliminated (FRE)");
+STATISTIC(NumGVNFREScalar,
+          "Number of fully-redundant scalar instructions eliminated (FRE)");
+STATISTIC(NumGVNInstrProcessed,
+          "Number of instructions processed during value numbering");
 STATISTIC(NumGVNPHIOfOpsCreated, "Number of PHI of ops created");
 STATISTIC(NumGVNPHIOfOpsEliminations,
           "Number of things eliminated using PHI of ops");
@@ -973,7 +978,9 @@ private:
   }
 
   bool isCycleFree(const Instruction *) const;
-  bool isBackedge(BasicBlock *From, BasicBlock *To) const;
+  bool isBackedge(const BasicBlock *From, const BasicBlock *To) const;
+  bool isKnownUnreachableEdge(const BasicBlock *From,
+                              const BasicBlock *To) const;
 
   // Debug counter info.  When verifying, we have to reset the value numbering
   // debug counter to the same state it started in to get the same results.
@@ -1016,10 +1023,25 @@ bool CallExpression::equals(const Expression &Other) const {
 }
 
 // Determine if the edge From->To is a backedge
-bool NewGVN::isBackedge(BasicBlock *From, BasicBlock *To) const {
+bool NewGVN::isBackedge(const BasicBlock *From, const BasicBlock *To) const {
   return From == To ||
          RPOOrdering.lookup(DT->getNode(From)) >=
              RPOOrdering.lookup(DT->getNode(To));
+}
+
+// In balanced mode, an edge is "known unreachable" only if the predecessor
+// has already been visited in the RPO pass (forward edge) and the edge was
+// not discovered as reachable. Back edges (predecessor not yet visited) are
+// conservatively assumed reachable since we don't know yet.
+// In optimistic/pessimistic modes, this just checks ReachableEdges directly.
+bool NewGVN::isKnownUnreachableEdge(const BasicBlock *From,
+                                    const BasicBlock *To) const {
+  if (ReachableEdges.count({const_cast<BasicBlock *>(From),
+                            const_cast<BasicBlock *>(To)}))
+    return false; // edge is reachable
+  if (NewGVNAssumption == "balanced" && isBackedge(From, To))
+    return false; // back edge: not yet visited, assume reachable
+  return true;    // known unreachable
 }
 
 #ifndef NDEBUG
@@ -1124,7 +1146,7 @@ PHIExpression *NewGVN::createPHIExpression(ArrayRef<ValPair> PHIOperands,
     if (auto *PHIOp = dyn_cast<PHINode>(I))
       if (isCopyOfPHI(P.first, PHIOp))
         return false;
-    if (!ReachableEdges.count({BB, PHIBlock}))
+    if (isKnownUnreachableEdge(BB, PHIBlock))
       return false;
     // In optimistic mode, things in TOPClass are equivalent to everything.
     if (IsOptimistic && ValueToClass.lookup(P.first) == TOPClass)
@@ -3220,7 +3242,8 @@ void NewGVN::initializeCongruenceClasses(Function &F) {
           MemoryPhiState.insert({MP, MPS_TOP});
         }
 
-        if (MD && isa<StoreInst>(MD->getMemoryInst()))
+        if (MD && isa<StoreInst>(MD->getMemoryInst()) &&
+            NewGVNAssumption == "optimistic")
           TOPClass->incStoreCount();
       }
 
@@ -3237,15 +3260,16 @@ void NewGVN::initializeCongruenceClasses(Function &F) {
       // them, and they just end up sitting in TOP.
       if (I.isTerminator() && I.getType()->isVoidTy())
         continue;
-      if (NewGVNAssumption == "pessimistic") {
-        // Pessimistic: each instruction starts in its own singleton class.
+      if (NewGVNAssumption == "optimistic") {
+        // Optimistic: all instructions start in TOPClass.
+        TOPClass->insert(&I);
+        ValueToClass[&I] = TOPClass;
+      } else {
+        // Balanced/Pessimistic: each instruction starts in its own singleton
+        // class. Balanced uses pessimistic values with optimistic reachability.
         auto *CC = createSingletonCongruenceClass(&I);
         if (isa<StoreInst>(&I))
           CC->incStoreCount();
-      } else {
-        // Optimistic/Balanced: all instructions start in TOPClass.
-        TOPClass->insert(&I);
-        ValueToClass[&I] = TOPClass;
       }
     }
   }
@@ -3366,7 +3390,7 @@ void NewGVN::valueNumberMemoryPhi(MemoryPhi *MP) {
            // everything and should be filtered. In balanced/pessimistic,
            // they are unprocessed values that must be kept for stability.
            (IsOptimistic ? !isMemoryAccessTOP(cast<MemoryAccess>(U)) : true) &&
-           ReachableEdges.count({MP->getIncomingBlock(U), PHIBlock});
+           !isKnownUnreachableEdge(MP->getIncomingBlock(U), PHIBlock);
   });
   // If all that is left is nothing, our memoryphi is poison. We keep it as
   // InitialClass.  Note: The only case this should happen is if we have at
@@ -3515,6 +3539,12 @@ void NewGVN::verifyMemoryCongruency() const {
     if (CC == TOPClass || CC->isDead())
       continue;
     if (CC->getStoreCount() != 0) {
+      // In balanced mode (singleton values + optimistic reachability), stores
+      // in unreachable blocks are never value-numbered. Their singleton classes
+      // have storeCount > 0 but no stored value or memory leader set. Skip.
+      if (auto *LeaderI = dyn_cast<Instruction>(CC->getLeader()))
+        if (!ReachableBlocks.count(LeaderI->getParent()))
+          continue;
       assert((CC->getStoredValue() || !isa<StoreInst>(CC->getLeader())) &&
              "Any class with a store as a leader should have a "
              "representative stored value");
@@ -3744,6 +3774,7 @@ void NewGVN::iterateTouchedInstructions() {
       } else {
         llvm_unreachable("Should have been a MemoryPhi or Instruction");
       }
+      ++NumGVNInstrProcessed;
       updateProcessedCount(V);
     }
     // Balanced/pessimistic converge in a single iteration — all blocks and
@@ -3819,8 +3850,8 @@ bool NewGVN::runGVN() {
   // instruction.
   ExpressionToClass.reserve(ICount);
 
-  if (NewGVNAssumption == "pessimistic" || NewGVNAssumption == "balanced") {
-    // Pessimistic/Balanced: all blocks and edges are reachable from the start.
+  if (NewGVNAssumption == "pessimistic") {
+    // Pessimistic: all blocks and edges are reachable from the start.
     for (auto *DTN : depth_first(DT->getRootNode())) {
       BasicBlock *BB = DTN->getBlock();
       ReachableBlocks.insert(BB);
@@ -3832,7 +3863,10 @@ bool NewGVN::runGVN() {
         ReachableEdges.insert({BB, Succ});
     }
   } else {
-    // Optimistic: only the entry block is initially reachable.
+    // Optimistic/Balanced: only the entry block is initially reachable.
+    // Reachability is discovered during the RPO pass. Balanced uses
+    // pessimistic values (singletons) but discovers reachability like
+    // optimistic; phi operands from back edges are conservatively included.
     const auto &InstRange = BlockInstRange.lookup(&F.getEntryBlock());
     TouchedInstructions.set(InstRange.first, InstRange.second);
     LLVM_DEBUG(dbgs() << "Block " << getBlockName(&F.getEntryBlock())
@@ -4983,6 +5017,7 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
       Load->replaceAllUsesWith(PHI);
       InstructionsToErase.insert(Load);
       ++NumGVNInstrDeleted;
+      ++NumGVNFRELoad;
       return true;
     }
 
@@ -5540,8 +5575,13 @@ bool NewGVN::eliminateInstructions(Function &F) {
         auto *I = cast<Instruction>(Member);
         assert(Leader != I && "About to accidentally remove our leader");
         replaceInstruction(I, Leader);
-        if (!PredInfo->getPredicateInfoFor(I))
+        if (!PredInfo->getPredicateInfoFor(I)) {
           ++NumGVNInstrDeleted;
+          if (isa<LoadInst>(I))
+            ++NumGVNFRELoad;
+          else
+            ++NumGVNFREScalar;
+        }
         AnythingReplaced = true;
 
       
@@ -5656,8 +5696,13 @@ bool NewGVN::eliminateInstructions(Function &F) {
                   DVR->replaceVariableLocationOp(DefI, DominatingLeader);
 
                 markInstructionForDeletion(DefI);
-                if (!PredInfo->getPredicateInfoFor(DefI))
+                if (!PredInfo->getPredicateInfoFor(DefI)) {
                   ++NumGVNInstrDeleted;
+                  if (isa<LoadInst>(DefI))
+                    ++NumGVNFRELoad;
+                  else
+                    ++NumGVNFREScalar;
+                }
               }
             }
             continue;
@@ -5742,6 +5787,10 @@ bool NewGVN::eliminateInstructions(Function &F) {
       if (wouldInstructionBeTriviallyDead(I)) {
         markInstructionForDeletion(I);
         ++NumGVNInstrDeleted;
+        if (isa<LoadInst>(I))
+          ++NumGVNFRELoad;
+        else
+          ++NumGVNFREScalar;
       }
 
     // Cleanup the congruence class.
