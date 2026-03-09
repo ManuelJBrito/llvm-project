@@ -14,7 +14,8 @@ define i32 @f(ptr %f) {
 ; CHECK-NEXT:    store i8 poison, ptr null, align 1
 ; CHECK-NEXT:    br i1 false, label [[BB1:%.*]], label [[BB2]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    ret i32 [[STOREMERGE]]
+; CHECK-NEXT:    [[STOREMERGE_PRE_PHI:%.*]] = phi i32 [ poison, [[BB1]] ], [ [[STOREMERGE]], [[BB0:%.*]] ]
+; CHECK-NEXT:    ret i32 [[STOREMERGE_PRE_PHI]]
 ;
 ; Load should be removed, since it's ignored.
 bb0:

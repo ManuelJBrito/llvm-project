@@ -560,28 +560,31 @@ bb8:                                              ; preds = %bb
 define void @test13() {
 ; CHECK-LABEL: @test13(
 ; CHECK-NEXT:  bb:
-; CHECK-NEXT:    br label [[BB1:%.*]]
-; CHECK:       bb1:
 ; CHECK-NEXT:    [[TMP:%.*]] = load i8, ptr null, align 1
 ; CHECK-NEXT:    [[TMP6_PHI_TRANS_INSERT:%.*]] = getelementptr i8, ptr null, i64 1
 ; CHECK-NEXT:    [[TMP10_PRE:%.*]] = load i8, ptr [[TMP6_PHI_TRANS_INSERT]], align 1
 ; CHECK-NEXT:    br label [[BB3:%.*]]
+; CHECK:       bb1:
+; CHECK-NEXT:    [[TMP10_PRE_PRE_PHI:%.*]] = phi i8 [ [[TMP10:%.*]], [[BB15:%.*]] ], [ [[TMP10]], [[BB12:%.*]] ], [ [[TMP10_PRE]], [[BB:%.*]] ]
+; CHECK-NEXT:    [[TMP_PRE_PHI:%.*]] = phi i8 [ [[PHIOFOPS:%.*]], [[BB15]] ], [ [[PHIOFOPS]], [[BB12]] ], [ [[TMP]], [[BB]] ]
+; CHECK-NEXT:    [[TMP6_PHI_TRANS_INSERT1:%.*]] = getelementptr i8, ptr null, i64 1
+; CHECK-NEXT:    br label [[BB4:%.*]]
 ; CHECK:       bb3:
-; CHECK-NEXT:    [[TMP10:%.*]] = phi i8 [ [[PHIOFOPS:%.*]], [[BB3]] ], [ [[TMP10_PRE]], [[BB1]] ]
-; CHECK-NEXT:    [[PHIOFOPS]] = phi i8 [ [[TMP]], [[BB1]] ], [ [[TMP10]], [[BB3]] ]
-; CHECK-NEXT:    [[TMP4:%.*]] = phi ptr [ null, [[BB1]] ], [ [[TMP6:%.*]], [[BB3]] ]
-; CHECK-NEXT:    [[TMP5:%.*]] = phi i32 [ undef, [[BB1]] ], [ [[TMP9:%.*]], [[BB3]] ]
+; CHECK-NEXT:    [[TMP10]] = phi i8 [ [[PHIOFOPS]], [[BB4]] ], [ [[TMP10_PRE_PRE_PHI]], [[BB3]] ]
+; CHECK-NEXT:    [[PHIOFOPS]] = phi i8 [ [[TMP_PRE_PHI]], [[BB3]] ], [ [[TMP10]], [[BB4]] ]
+; CHECK-NEXT:    [[TMP4:%.*]] = phi ptr [ null, [[BB3]] ], [ [[TMP6:%.*]], [[BB4]] ]
+; CHECK-NEXT:    [[TMP5:%.*]] = phi i32 [ undef, [[BB3]] ], [ [[TMP9:%.*]], [[BB4]] ]
 ; CHECK-NEXT:    [[TMP6]] = getelementptr i8, ptr [[TMP4]], i64 1
 ; CHECK-NEXT:    [[TMP8:%.*]] = sext i8 [[PHIOFOPS]] to i32
 ; CHECK-NEXT:    [[TMP9]] = mul i32 [[TMP5]], [[TMP8]]
 ; CHECK-NEXT:    [[TMP11:%.*]] = icmp eq i8 [[TMP10]], 0
-; CHECK-NEXT:    br i1 [[TMP11]], label [[BB12:%.*]], label [[BB3]]
+; CHECK-NEXT:    br i1 [[TMP11]], label [[BB12]], label [[BB4]]
 ; CHECK:       bb12:
 ; CHECK-NEXT:    [[TMP14:%.*]] = icmp eq i32 [[TMP9]], 0
-; CHECK-NEXT:    br i1 [[TMP14]], label [[BB1]], label [[BB15:%.*]]
+; CHECK-NEXT:    br i1 [[TMP14]], label [[BB3]], label [[BB15]]
 ; CHECK:       bb15:
 ; CHECK-NEXT:    call void (...) @bar()
-; CHECK-NEXT:    br label [[BB1]]
+; CHECK-NEXT:    br label [[BB3]]
 ;
 bb:
   br label %bb1

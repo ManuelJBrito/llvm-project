@@ -14,6 +14,7 @@ define signext i32 @ham(ptr %arg, ptr %arg1) {
 ; CHECK-NEXT:    br label [[BB2:%.*]]
 ; CHECK:       bb2:
 ; CHECK-NEXT:    [[PRE_PHI:%.*]] = phi ptr [ [[PRE_PRE_PHI:%.*]], [[BB22:%.*]] ], [ [[ARG1]], [[BB:%.*]] ]
+; CHECK-NEXT:    [[TMP172:%.*]] = phi ptr [ [[ARG1]], [[BB]] ], [ [[PRE_PRE_PHI]], [[BB22]] ]
 ; CHECK-NEXT:    [[PTR:%.*]] = phi ptr [ [[ARG:%.*]], [[BB]] ], [ [[NEXT:%.*]], [[BB22]] ]
 ; CHECK-NEXT:    [[CH:%.*]] = load i8, ptr [[PTR]], align 1
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp ne i8 [[CH]], 0
@@ -30,16 +31,16 @@ define signext i32 @ham(ptr %arg, ptr %arg1) {
 ; CHECK-NEXT:    [[P12:%.*]] = getelementptr inbounds i8, ptr [[PRE_PHI]], i64 8
 ; CHECK-NEXT:    store ptr [[P12]], ptr [[ALLOC]], align 8
 ; CHECK-NEXT:    [[P14:%.*]] = load ptr, ptr [[PRE_PHI]], align 8
-; CHECK-NEXT:    {{.*}} = call signext i32 (ptr, ...) @zot(ptr @global, ptr [[P14]])
+; CHECK-NEXT:    [[TMP15:%.*]] = call signext i32 (ptr, ...) @zot(ptr @global, ptr [[P14]])
 ; CHECK-NEXT:    br label [[BB22]]
 ; CHECK:       bb16:
-; CHECK-NEXT:    [[P17:%.*]] = load ptr, ptr [[ALLOC]], align 8
+; CHECK-NEXT:    [[P17:%.*]] = phi ptr [ [[TMP172]], [[BB6]] ], [ [[TMP172]], [[BB6]] ]
 ; CHECK-NEXT:    [[P18:%.*]] = getelementptr inbounds i8, ptr [[P17]], i64 8
 ; CHECK-NEXT:    store ptr [[P18]], ptr [[ALLOC]], align 8
-; CHECK-NEXT:    {{.*}} = getelementptr inbounds i8, ptr [[P17]], i64 4
+; CHECK-NEXT:    [[TMP19:%.*]] = getelementptr inbounds i8, ptr [[P17]], i64 4
 ; CHECK-NEXT:    br label [[BB22]]
 ; CHECK:       bb22:
-; CHECK-NEXT:    [[PRE_PRE_PHI]] = phi ptr [ [[P18]], [[BB16]] ], [ [[P12]], [[BB10]] ], [ [[PRE_PHI]], [[BB6]] ]
+; CHECK-NEXT:    [[PRE_PRE_PHI]] = phi ptr [ [[TMP172]], [[BB16]] ], [ [[PRE_PHI]], [[BB10]] ], [ [[TMP172]], [[BB6]] ]
 ; CHECK-NEXT:    br label [[BB2]]
 ; CHECK:       bb23:
 ; CHECK-NEXT:    call void @llvm.va_end.p0(ptr [[ALLOC]])

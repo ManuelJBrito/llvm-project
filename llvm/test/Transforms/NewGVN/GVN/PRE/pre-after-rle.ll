@@ -69,13 +69,12 @@ define void @fn2(ptr noalias %start, ptr %width, i32 %h, i32 %arg) {
 ; CHECK-NEXT:    store ptr [[GEP]], ptr [[START]], align 8
 ; CHECK-NEXT:    br label %[[PREHEADER]]
 ; CHECK:       [[PREHEADER]]:
+; CHECK-NEXT:    [[S1:%.*]] = phi ptr [ [[S1]], %[[BODY:.*]] ], [ [[GEP]], %[[ELSE]] ], [ [[CALL]], %[[IF]] ]
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp slt i32 1, [[H]]
-; CHECK-NEXT:    br i1 [[CMP]], label %[[PREHEADER_BODY_CRIT_EDGE:.*]], label %[[EXIT:.*]]
-; CHECK:       [[PREHEADER_BODY_CRIT_EDGE]]:
-; CHECK-NEXT:    [[S_PRE:%.*]] = load ptr, ptr [[START]], align 8
-; CHECK-NEXT:    br label %[[BODY:.*]]
+; CHECK-NEXT:    br i1 [[CMP]], label %[[BODY]], label %[[EXIT:.*]]
 ; CHECK:       [[BODY]]:
-; CHECK-NEXT:    [[J:%.*]] = phi i32 [ 0, %[[PREHEADER_BODY_CRIT_EDGE]] ], [ [[J_NEXT:%.*]], %[[BODY]] ]
+; CHECK-NEXT:    [[S_PRE:%.*]] = phi ptr [ [[S1]], %[[BODY]] ], [ [[S1]], %[[PREHEADER]] ]
+; CHECK-NEXT:    [[J:%.*]] = phi i32 [ 0, %[[PREHEADER]] ], [ [[J_NEXT:%.*]], %[[BODY]] ]
 ; CHECK-NEXT:    store i32 0, ptr [[S_PRE]], align 4
 ; CHECK-NEXT:    [[J_NEXT]] = add nuw nsw i32 [[J]], 1
 ; CHECK-NEXT:    [[W:%.*]] = load i32, ptr [[WIDTH]], align 8

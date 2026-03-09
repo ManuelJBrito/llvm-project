@@ -69,6 +69,7 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/DebugCounter.h"
+#include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/AssumeBundleBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
@@ -98,6 +99,7 @@ STATISTIC(NumPRELoad, "Number of loads PRE'd");
 STATISTIC(NumPRELoopLoad, "Number of loop loads PRE'd");
 STATISTIC(NumPRELoadMoved2CEPred,
           "Number of loads moved to predecessor of a critical edge in PRE");
+STATISTIC(NumPREEdgesSplit, "Number of critical edges split for PRE");
 
 STATISTIC(IsValueFullyAvailableInBlockNumSpeculationsMax,
           "Number of blocks speculated as available in "
@@ -146,8 +148,55 @@ static cl::list<std::string> SkipGVNFuncs(
     "skip-gvn-for-funcs", cl::Hidden, cl::CommaSeparated,
     cl::desc("Skip GVN for these functions (comma-separated)"));
 
+static cl::opt<std::string> GVNPairsFile("gvn-pairs-file", cl::init(""),
+                                         cl::Hidden);
+
 DEBUG_COUNTER(GVNEliminate, "gvn-eliminate",
               "Controls which GVN eliminations are performed");
+
+namespace {
+
+static std::string getValueName(const Value *V) {
+  if (V->hasName())
+    return V->getName().str();
+  if (const auto *CI = dyn_cast<ConstantInt>(V)) {
+    SmallString<40> Str;
+    CI->getValue().toString(Str, 10, false);
+    return std::string(Str.str());
+  }
+  std::string S;
+  raw_string_ostream OS(S);
+  V->printAsOperand(OS, false);
+  return S;
+}
+
+struct GVNRefPair {
+  std::string fn_name;
+  std::string src_name;
+  std::string tgt_name;
+
+  void write(json::OStream &J) const {
+    J.object([&] {
+      J.attribute("tool", "LLVM-GVN");
+      J.attribute("fn", fn_name);
+      J.attribute("src", src_name);
+      J.attribute("tgt", tgt_name);
+      J.attribute("univ", true);
+      J.attribute("status", "");
+      J.attribute("reason", "");
+    });
+  }
+};
+
+static SmallVector<GVNRefPair, 32> GVNRefPairs;
+
+static void recordGVNPair(StringRef FnName, const Value *Src, const Value *Tgt) {
+  if (GVNPairsFile.empty())
+    return;
+  GVNRefPairs.push_back({FnName.str(), getValueName(Src), getValueName(Tgt)});
+}
+
+} // anonymous namespace
 
 struct llvm::GVNPass::Expression {
   uint32_t Opcode;
@@ -2087,6 +2136,8 @@ bool GVNPass::processNonLocalLoad(LoadInst *Load) {
         I->setDebugLoc(Load->getDebugLoc());
     if (V->getType()->isPtrOrPtrVectorTy())
       MD->invalidateCachedPointerInfo(V);
+    if (!isa<PHINode>(V))
+      recordGVNPair(Load->getFunction()->getName(), Load, V);
     ++NumGVNInstr;
     ++NumGVNLoad;
     reportLoadElim(Load, V, ORE);
@@ -2222,6 +2273,7 @@ bool GVNPass::processLoad(LoadInst *L) {
   L->replaceAllUsesWith(AvailableValue);
   if (MSSAU)
     MSSAU->removeMemoryAccess(L);
+  recordGVNPair(L->getFunction()->getName(), L, AvailableValue);
   ++NumGVNInstr;
   ++NumGVNLoad;
   reportLoadElim(L, AvailableValue, ORE);
@@ -2701,6 +2753,7 @@ bool GVNPass::processInstruction(Instruction *I) {
       // Simplification can cause a special instruction to become not special.
       // For example, devirtualization to a willreturn function.
       ICF->removeUsersOf(I);
+      recordGVNPair(I->getFunction()->getName(), I, V);
       I->replaceAllUsesWith(V);
       Changed = true;
     }
@@ -2826,6 +2879,7 @@ bool GVNPass::processInstruction(Instruction *I) {
   // Remove it!
   if (!DebugCounter::shouldExecute(GVNEliminate))
     return false;
+  recordGVNPair(I->getFunction()->getName(), I, Repl);
   patchAndReplaceAllUsesWith(I, Repl);
   if (MD && Repl->getType()->isPtrOrPtrVectorTy())
     MD->invalidateCachedPointerInfo(Repl);
@@ -2906,6 +2960,20 @@ bool GVNPass::runImpl(Function &F, AssumptionCache &RunAC, DominatorTree &RunDT,
 
   if (MSSA && VerifyMemorySSA)
     MSSA->verifyMemorySSA();
+
+  if (!GVNPairsFile.empty()) {
+    std::error_code EC;
+    raw_fd_ostream FileOS(GVNPairsFile, EC);
+    if (EC) {
+      errs() << "Error opening output file: " << EC.message() << "\n";
+    } else {
+      json::OStream J(FileOS, 2);
+      J.array([&] {
+        for (const auto &P : GVNRefPairs)
+          P.write(J);
+      });
+    }
+  }
 
   return Changed;
 }
@@ -3180,6 +3248,7 @@ BasicBlock *GVNPass::splitCriticalEdges(BasicBlock *Pred, BasicBlock *Succ) {
       Pred, Succ,
       CriticalEdgeSplittingOptions(DT, LI, MSSAU).unsetPreserveLoopSimplify());
   if (BB) {
+    ++NumPREEdgesSplit;
     if (MD)
       MD->invalidateCachedPredecessors();
     InvalidBlockRPONumbers = true;
@@ -3196,9 +3265,12 @@ bool GVNPass::splitCriticalEdges() {
   bool Changed = false;
   do {
     std::pair<Instruction *, unsigned> Edge = ToSplit.pop_back_val();
-    Changed |= SplitCriticalEdge(Edge.first, Edge.second,
-                                 CriticalEdgeSplittingOptions(DT, LI, MSSAU)) !=
-               nullptr;
+    auto *NewBB = SplitCriticalEdge(Edge.first, Edge.second,
+                                    CriticalEdgeSplittingOptions(DT, LI, MSSAU));
+    if (NewBB) {
+      ++NumPREEdgesSplit;
+      Changed = true;
+    }
   } while (!ToSplit.empty());
   if (Changed) {
     if (MD)

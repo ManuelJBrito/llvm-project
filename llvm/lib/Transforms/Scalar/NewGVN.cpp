@@ -210,6 +210,28 @@ static cl::opt<uint32_t> NewGVNMaxBBSpeculations(
     cl::desc("Max number of blocks to speculate on when checking transitive "
              "availability for load PRE (default = 600)"));
 
+// Register-pressure heuristics (matching GVN's conservative behavior).
+static cl::opt<bool> NewGVNCascadingPRE(
+    "newgvn-cascading-pre", cl::Hidden, cl::init(true),
+    cl::desc("Iterate PRE to fixpoint (cascading PRE). When false, run "
+             "a single PRE round like GVN."));
+
+static cl::opt<bool> NewGVNSingleSuccWalk(
+    "newgvn-single-succ-walk", cl::Hidden, cl::init(true),
+    cl::desc("Reject load PRE when any block on the single-predecessor "
+             "chain has >1 successor (matches GVN)."));
+
+static cl::opt<uint32_t> NewGVNMaxPREEdgeSplits(
+    "newgvn-max-pre-edge-splits", cl::Hidden,
+    cl::init(std::numeric_limits<uint32_t>::max()),
+    cl::desc("Max critical edge splits per function during PRE. "
+             "Prevents pathological register pressure in wide CFGs."));
+
+static cl::opt<bool> NewGVNEnableTransitiveAvail(
+    "newgvn-enable-transitive-avail", cl::Hidden, cl::init(true),
+    cl::desc("Enable transitive availability analysis for load PRE. "
+             "Resolves multi-predecessor unavailability."));
+
 static cl::opt<std::string> NewGVNAssumption(
     "newgvn-assumption", cl::init("optimistic"), cl::Hidden,
     cl::desc("Assumption model: optimistic, balanced, or pessimistic"));
@@ -543,6 +565,33 @@ template <> struct llvm::DenseMapInfo<const Expression *> {
   }
 };
 
+struct refinement_pair {
+  static constexpr const char *StatusStr[] = {"SUCCESS", "", "INVALID",
+                                              "SKIP",  "TIMEOUT", "ERROR"};
+  static constexpr const char *TOOL_TAG = "LLVM-NewGVN";
+
+  std::string fn_name;
+  std::string src_name;
+  std::string tgt_name;
+  bool is_universal = true;
+
+  refinement_pair(std::string fn_name, std::string src_name,
+                  std::string tgt_name)
+      : fn_name(fn_name), src_name(src_name), tgt_name(tgt_name) {}
+
+  void write(llvm::json::OStream &J) const {
+    J.object([&] {
+      J.attribute("tool", TOOL_TAG);
+      J.attribute("fn", fn_name);
+      J.attribute("src", src_name);
+      J.attribute("tgt", tgt_name);
+      J.attribute("univ", is_universal);
+      J.attribute("status", "");
+      J.attribute("reason", "");
+    });
+  }
+};
+
 namespace {
 
 class NewGVN {
@@ -690,6 +739,10 @@ class NewGVN {
   using BlockEdge = BasicBlockEdge;
   DenseSet<BlockEdge> ReachableEdges;
   SmallPtrSet<const BasicBlock *, 8> ReachableBlocks;
+
+  // Per-function counter for critical edge splits during PRE.
+  // Used to enforce the NewGVNMaxPREEdgeSplits budget.
+  unsigned FuncEdgeSplits = 0;
 
   // This is a bitvector because, on larger functions, we may have
   // thousands of touched instructions at once (entire blocks,
@@ -919,6 +972,11 @@ private:
   bool performScalarPRE(Instruction *);
   void replaceInstruction(Instruction *, Value *);
   void markInstructionForDeletion(Instruction *);
+
+  // Pair recording for alive-red comparison (static to accumulate across functions).
+  static SmallVector<refinement_pair, 32> RefPairs;
+  void recordPair(const Value *Src, const Value *Tgt);
+  static std::string getValueName(const Value *V);
   void deleteInstructionsInBlock(BasicBlock *);
   Value *findPHIOfOpsLeader(const Expression *, const Instruction *,
                             const BasicBlock *) const;
@@ -1650,6 +1708,37 @@ NewGVN::performSymbolicLoadCoercion(Type *LoadType, Value *LoadPtr,
     }
   } else if (auto *DepMI = dyn_cast<MemIntrinsic>(DepInst)) {
     int Offset = analyzeLoadFromClobberingMemInst(LoadType, LoadPtr, DepMI, DL);
+    // If raw pointer analysis failed, retry with the leader of the memset
+    // destination.  NewGVN may have simplified the destination (e.g., folding
+    // a GEP with a constant index) so the leader can expose the relationship.
+    if (Offset < 0) {
+      if (auto *MSI = dyn_cast<MemSetInst>(DepMI)) {
+        Value *DestLeader = lookupOperandLeader(MSI->getDest());
+        if (DestLeader != MSI->getDest()) {
+          auto *SizeCst = dyn_cast<ConstantInt>(MSI->getLength());
+          if (SizeCst) {
+            uint64_t MemSizeInBits = SizeCst->getZExtValue() * 8;
+            uint64_t LoadSize =
+                DL.getTypeSizeInBits(LoadType).getFixedValue();
+            if ((MemSizeInBits & 7) == 0 && (LoadSize & 7) == 0) {
+              int64_t DestOff = 0, LoadOff = 0;
+              Value *DestBase =
+                  GetPointerBaseWithConstantOffset(DestLeader, DestOff, DL);
+              Value *LoadBase =
+                  GetPointerBaseWithConstantOffset(LoadPtr, LoadOff, DL);
+              if (DestBase == LoadBase) {
+                uint64_t StoreSize = MemSizeInBits / 8;
+                LoadSize /= 8;
+                if (DestOff <= LoadOff &&
+                    DestOff + (int64_t)StoreSize >=
+                        LoadOff + (int64_t)LoadSize)
+                  Offset = LoadOff - DestOff;
+              }
+            }
+          }
+        }
+      }
+    }
     if (Offset >= 0) {
       if (auto *PossibleConstant =
               getConstantMemInstValueForLoad(DepMI, Offset, LoadType, DL)) {
@@ -3896,8 +3985,15 @@ bool NewGVN::runGVN() {
   // Iterate PRE to a fixpoint: each round may insert loads that expose
   // new PRE opportunities (cascading PRE, e.g. loop header loads where
   // the backedge reload is itself partially redundant).
-  while (performPRE(F))
-    Changed = true;
+  // When NewGVNCascadingPRE is false, run a single round (matching GVN).
+  FuncEdgeSplits = 0;
+  if (NewGVNCascadingPRE) {
+    while (performPRE(F))
+      Changed = true;
+  } else {
+    if (performPRE(F))
+      Changed = true;
+  }
 
   // Delete all instructions marked for deletion.
   for (Instruction *ToErase : InstructionsToErase) {
@@ -3923,6 +4019,23 @@ bool NewGVN::runGVN() {
   }
 
   cleanupTables();
+
+  // Write refinement pairs file (direct substitutions only, no PRE/PHI pairs).
+  // RefPairs is static and accumulates across all functions in the module.
+  if (!PairsFile.empty()) {
+    std::error_code EC;
+    llvm::raw_fd_ostream FileOS(PairsFile, EC);
+    if (EC)
+      llvm::errs() << "Error opening pairs file: " << EC.message() << "\n";
+    else {
+      llvm::json::OStream J(FileOS, 2);
+      J.array([&] {
+        for (const auto &P : RefPairs)
+          P.write(J);
+      });
+    }
+  }
+
   return Changed;
 }
 
@@ -4567,8 +4680,19 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
 
     if (pred_size(LoadBB) == 1) {
       BasicBlock *WalkBB = *pred_begin(LoadBB);
-      while (pred_size(WalkBB) == 1)
+      // When NewGVNSingleSuccWalk is enabled (matching GVN), reject PRE
+      // if any block on the single-predecessor chain has >1 successor.
+      // Hoisting a load above a branch adds it to execution paths where
+      // it wasn't previously needed, extending the value's live range.
+      if (NewGVNSingleSuccWalk &&
+          WalkBB->getTerminator()->getNumSuccessors() != 1)
+        return false;
+      while (pred_size(WalkBB) == 1) {
         WalkBB = *pred_begin(WalkBB);
+        if (NewGVNSingleSuccWalk &&
+            WalkBB->getTerminator()->getNumSuccessors() != 1)
+          return false;
+      }
       PhiBB = WalkBB;
       PhiMP = MSSA->getMemoryAccess(WalkBB);
       LLVM_DEBUG(dbgs() << "  Load PRE: phi block is " << PhiBB->getName()
@@ -4798,7 +4922,7 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
     // Transitive availability: when multiple predecessors are unavailable,
     // check whether the value is available on ALL paths reaching each
     // unavailable predecessor (ported from GVN's IsValueFullyAvailableInBlock).
-    if (NumUnavail > 1) {
+    if (NumUnavail > 1 && NewGVNEnableTransitiveAvail) {
       LLVM_DEBUG(dbgs() << "  Load PRE: trying transitive availability, "
                         << NumUnavail << " unavailable preds\n");
       // Seed the availability map from congruence class members.
@@ -4989,7 +5113,7 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
         // Check if this pred was resolved by transitive availability.
         auto It = FullyAvailableBlocks.find(Pred);
         if (It != FullyAvailableBlocks.end() &&
-            It->second == AvailabilityState::Available) {
+            It->second != AvailabilityState::Unavailable) {
           // SSAUpdater constructs the right value (possibly inserting PHIs).
           Val = SSAUpdate.GetValueAtEndOfBlock(Pred);
           ++NumGVNPRETransitiveAvail;
@@ -5084,6 +5208,8 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
                           << PhiBB->getName() << ", falling through\n");
         goto try_loop_pre;
       }
+      if (FuncEdgeSplits >= NewGVNMaxPREEdgeSplits)
+        return false;
       MemorySSAUpdater MSSAU(MSSA);
       CriticalEdgeSplittingOptions Options(DT, /*LI=*/nullptr, &MSSAU);
       Options.unsetPreserveLoopSimplify();
@@ -5091,6 +5217,7 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
       if (!InsertBB)
         return false;
       ++NumGVNPREEdgesSplit;
+      ++FuncEdgeSplits;
       // Mark the new block reachable so post-processing doesn't delete it.
       ReachableBlocks.insert(InsertBB);
       for (auto &AV : AvailableValues)
@@ -5158,6 +5285,7 @@ bool NewGVN::performLoadPRE(LoadInst *Load) {
     Load->replaceAllUsesWith(PHI);
     markInstructionForDeletion(Load);
     ++NumGVNPRELoadsInserted;
+    ++NumGVNInstrDeleted;
     LLVM_DEBUG(dbgs() << "Load PRE: inserted " << *NewLoad << " in "
                       << getBlockName(InsertBB) << ", replaced with " << *PHI
                       << "\n");
@@ -5211,6 +5339,8 @@ try_loop_pre:
       if (isa<IndirectBrInst>(Preheader->getTerminator()) ||
           isa<CallBrInst>(Preheader->getTerminator()))
         return false;
+      if (FuncEdgeSplits >= NewGVNMaxPREEdgeSplits)
+        return false;
       MemorySSAUpdater MSSAU(MSSA);
       CriticalEdgeSplittingOptions Options(DT, /*LI=*/nullptr, &MSSAU);
       Options.unsetPreserveLoopSimplify();
@@ -5218,6 +5348,7 @@ try_loop_pre:
       if (!InsertBB)
         return false;
       ++NumGVNPREEdgesSplit;
+      ++FuncEdgeSplits;
       ReachableBlocks.insert(InsertBB);
     }
 
@@ -5243,6 +5374,7 @@ try_loop_pre:
     Load->replaceAllUsesWith(NewLoad);
     markInstructionForDeletion(Load);
     ++NumGVNPRELoadsInserted;
+    ++NumGVNInstrDeleted;
     LLVM_DEBUG(dbgs() << "Loop Load PRE: hoisted " << *Load << " to "
                       << getBlockName(InsertBB) << "\n");
     return true;
@@ -5338,6 +5470,10 @@ bool NewGVN::performScalarPRE(Instruction *I) {
   // Split critical edge if needed.
   BasicBlock *InsertBB = UnavailPred;
   if (UnavailPred->getTerminator()->getNumSuccessors() > 1) {
+    if (FuncEdgeSplits >= NewGVNMaxPREEdgeSplits) {
+      Clone->deleteValue();
+      return false;
+    }
     MemorySSAUpdater MSSAU(MSSA);
     CriticalEdgeSplittingOptions Options(DT, /*LI=*/nullptr, &MSSAU);
     Options.unsetPreserveLoopSimplify();
@@ -5347,6 +5483,7 @@ bool NewGVN::performScalarPRE(Instruction *I) {
       return false;
     }
     ++NumGVNPREEdgesSplit;
+    ++FuncEdgeSplits;
     ReachableBlocks.insert(InsertBB);
     for (auto &AV : AvailableValues)
       if (AV.first == UnavailPred)
@@ -5373,39 +5510,35 @@ bool NewGVN::performScalarPRE(Instruction *I) {
   I->replaceAllUsesWith(PHI);
   markInstructionForDeletion(I);
   ++NumGVNPREInstrInserted;
+  ++NumGVNInstrDeleted;
   LLVM_DEBUG(dbgs() << "Scalar PRE: inserted " << *Clone << " in "
                     << getBlockName(InsertBB) << ", replaced with " << *PHI
                     << "\n");
   return true;
 }
 
-struct refinement_pair {
-  static constexpr const char *StatusStr[] = {"SUCCESS", "", "INVALID",
-                                              "SKIP",  "TIMEOUT", "ERROR"};
-  static constexpr const char *TOOL_TAG = "LLVM-NewGVN";
-
-  std::string fn_name;
-  std::string src_name;
-  std::string tgt_name;
-  bool is_universal = true;
-
-  refinement_pair(std::string fn_name, std::string src_name,
-                  std::string tgt_name)
-      : fn_name(fn_name), src_name(src_name), tgt_name(tgt_name) {}
-
-  void write(llvm::json::OStream &J) const {
-    J.object([&] {
-      J.attribute("tool", TOOL_TAG);
-      J.attribute("fn", fn_name);
-      J.attribute("src", src_name);
-      J.attribute("tgt", tgt_name);
-      J.attribute("univ", is_universal);
-      J.attribute("status", "");
-      J.attribute("reason", "");
-    });
+std::string NewGVN::getValueName(const Value *V) {
+  if (V->hasName())
+    return V->getName().str();
+  if (const auto *CI = dyn_cast<ConstantInt>(V)) {
+    SmallString<40> Str;
+    CI->getValue().toString(Str, 10, /*Signed=*/false);
+    return std::string(Str.str());
   }
-};
+  std::string S;
+  raw_string_ostream OS(S);
+  V->printAsOperand(OS, false);
+  return S;
+}
 
+SmallVector<refinement_pair, 32> NewGVN::RefPairs;
+
+void NewGVN::recordPair(const Value *Src, const Value *Tgt) {
+  if (PairsFile.empty())
+    return;
+  RefPairs.emplace_back(F.getName().str(), getValueName(Src),
+                        getValueName(Tgt));
+}
 
 bool NewGVN::eliminateInstructions(Function &F) {
   // This is a non-standard eliminator. The normal way to eliminate is
@@ -5507,23 +5640,6 @@ bool NewGVN::eliminateInstructions(Function &F) {
     }
   }
 
-  SmallVector<refinement_pair, 32> RefPairs;
-  auto GetName = [](const Value *V) {
-    if (V->hasName())
-      return V->getName().str();
-
-    if (const llvm::ConstantInt *CI = llvm::dyn_cast<llvm::ConstantInt>(V)) {
-        llvm::SmallString<40> Str; 
-        CI->getValue().toString(Str, 10, /*Signed*/false); 
-        return std::string(Str.str());
-    }
-
-    std::string S;
-    raw_string_ostream OS(S);
-    V->printAsOperand(OS, false);
-    return S;
-  };
-
   // Map to store the use counts
   DenseMap<const Value *, unsigned int> UseCounts;
   for (auto *CC : reverse(CongruenceClasses)) {
@@ -5568,7 +5684,7 @@ bool NewGVN::eliminateInstructions(Function &F) {
         }
         std::string TargetName;
         if (!PredInfo->getPredicateInfoFor(Member))
-          RefPairs.emplace_back(F.getName().str(), GetName(Member), GetName(Leader));
+          recordPair(Member, Leader);
 
         LLVM_DEBUG(dbgs() << "Found replacement " << *(Leader) << " for "
                           << *Member << "\n");
@@ -5684,7 +5800,7 @@ bool NewGVN::eliminateInstructions(Function &F) {
               Value *DominatingLeader = EliminationStack.back();
               if (DominatingLeader != Def) {
                 if (!PredInfo->getPredicateInfoFor(DefI))
-                  RefPairs.emplace_back(F.getName().str(), GetName(DefI), GetName(DominatingLeader));
+                  recordPair(DefI, DominatingLeader);
                 // Even if the instruction is removed, we still need to update
                 // flags/metadata due to downstreams users of the leader.
                 patchReplacementInstruction(DefI, DominatingLeader);
@@ -5835,24 +5951,6 @@ bool NewGVN::eliminateInstructions(Function &F) {
       }
     }
   }
-  if (!PairsFile.empty()) {
-    errs() << "Found " << RefPairs.size() << " refinement pair(s)\n";
-
-    std::error_code EC;
-    llvm::raw_fd_ostream FileOS(PairsFile, EC);
-    if (EC) {
-      llvm::errs() << "Error opening output file: " << EC.message() << "\n";
-      return -1;
-    }
-
-    llvm::json::OStream J(FileOS, 2);
-    J.array([&] {
-      for (const auto &P : RefPairs) {
-        P.write(J);
-      }
-    });
-  }
-
   return AnythingReplaced;
 }
 
